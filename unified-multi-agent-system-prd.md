@@ -171,7 +171,7 @@ Track code size, cost, time, test coverage, and production reliability.
 - **MUST NOT:** Hardcode API keys in configuration files or code
 - **MUST:** Support integration with HashiCorp Vault or equivalent secret management
 
-**Access Control:**
+**Access Control:** (optional)
 - **MUST:** Implement role-based access control (RBAC)
 - **Required Roles:**
   - **Admin:** Manage agents, view all projects, modify system configuration
@@ -187,8 +187,8 @@ Track code size, cost, time, test coverage, and production reliability.
 
 **Secrets Management:**
 - **MUST:** Never commit secrets to version control
-- **MUST:** Provide integration with external secret management systems
-- **MUST:** Rotate API keys on schedule or on-demand
+- **MUST:** Provide integration with external secret management systems (optional)
+- **MUST:** Rotate API keys on schedule or on-demand (optional)
 
 **Least Privilege:**
 - **MUST:** Agents operate with minimum required permissions
@@ -2653,6 +2653,7 @@ Each tier can restart the one below, creating a resilient chain for hierarchical
 - Minimalism: "The best code is the code never written" - minimize everything
 - Specialization: "Different aspects need different expertise" - multiple specialized agents
 
+
 **Decision Needed:**
 - **Option A:** Minimalism First - All agents follow the ladder principle, specialized agents only invoked when ladder fails
 - **Option B:** Specialization First - Specialized agents make decisions, minimalism applied during implementation
@@ -3084,7 +3085,7 @@ $ system-cli debug context --session session-789 --step 42
 ### 9.1 Seamless Agent Handoff
 
 **Why This Matters:**
-AI agents have token limits (context windows). When an agent exhausts its tokens mid-task, work must transfer to a fresh agent without losing context or requiring human intervention. The system must support seamless handoff between agents (e.g., Alice → Bob) with zero or minimal changes.
+AI agents have token limits (context windows). When an agent exhausts its tokens mid-task, work must transfer to a fresh agent without losing context or requiring human intervention. The system must support seamless handoff between agents (e.g., Claude → Bob) with zero or minimal changes.
 
 **Requirements:**
 - **Automatic Handoff**: Detect token exhaustion and trigger handoff automatically
@@ -3095,10 +3096,10 @@ AI agents have token limits (context windows). When an agent exhausts its tokens
 
 **How It Works:**
 
-The hook-based architecture makes handoff trivial because **work is tied to the hook, not the agent**. When Alice exhausts tokens:
+The hook-based architecture makes handoff trivial because **work is tied to the hook, not the agent**. When Claude exhausts tokens:
 
-1. **Detection**: System detects Alice approaching token limit (e.g., 90% usage)
-2. **State Commit**: Alice commits current state to hook
+1. **Detection**: System detects Claude approaching token limit (e.g., 90% usage)
+2. **State Commit**: Claude commits current state to hook
 3. **Handoff Trigger**: System spawns Bob with same hook
 4. **Context Recovery**: Bob reads hook state and continues work
 5. **Seamless Transition**: From user perspective, work never stopped
@@ -3120,7 +3121,7 @@ Handoff Process:
    
 2. System detects token exhaustion imminent
 
-3. Alice commits final state:
+3. Claude commits final state:
    ```
    # Hook State (.state.json)
    {
@@ -4316,7 +4317,7 @@ Real-time visibility into:
 - Works across multiple AI runtimes
 - Context recovery from any previous session
 
-### Phase 5: Federation (Optional)
+### Phase 5: Federation
 **Duration:** 8-10 weeks
 
 **What is the Federation Layer?**
