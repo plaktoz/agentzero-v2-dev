@@ -1,6 +1,7 @@
 # Technical Design Specification: Unified Multi-Agent Development System (Part 3)
 
-**Continuation from TECHNICAL-DESIGN-SPEC-PART2.md**
+**Continuation from [TECHNICAL-DESIGN-SPEC-PART2.md](TECHNICAL-DESIGN-SPEC-PART2.md)**
+**Design decisions and exception flows:** [UMAS-TECH-DESIGN-SPEC.md](UMAS-TECH-DESIGN-SPEC.md)
 
 ---
 
@@ -77,7 +78,13 @@ class WorkerAgent:
                 session_id=self.session_id,
                 agent_id=self.config.agent_id,
                 event_type="session_ended",
+                # Completion signal: commit with [umas:done] prefix so Scheduler
+                # detects task completion via hook or database poll.
+                # See UMAS-TECH-DESIGN-SPEC.md §3.3 Agent Signalling Protocol
                 data={"status": "completed", "result": result},
+            )
+            await self._commit_state(
+                message=f"[umas:done] {self.task.id}"
             )
             
             return result
@@ -121,20 +128,29 @@ class WorkerAgent:
         return result
     
     async def _trigger_handoff(self) -> None:
-        """Trigger handoff to fresh agent."""
+        """Trigger handoff to fresh agent.
         
-        # Commit current state
-        await self._commit_state_for_handoff()
+        Signalling protocol (see UMAS-TECH-DESIGN-SPEC.md §3.3):
+          - Commit worktree with message "[umas:checkpoint] <summary>" to persist state
+          - Append handoff_request event to .umas/events.jsonl for Scheduler to detect
+          - Scheduler spawns successor agent with compressed context (~15k tokens)
+        """
         
-        # Log handoff event
+        # Commit current state with UMAS checkpoint signal
+        await self._commit_state_for_handoff(
+            message=f"[umas:checkpoint] handoff at {self.token_usage} tokens"
+        )
+        
+        # Signal Scheduler via events.jsonl (not a separate CLI tool)
         await self.session_history.log_event(
             session_id=self.session_id,
             agent_id=self.config.agent_id,
-            event_type="handoff_initiated",
+            event_type="handoff_request",        # read by Scheduler
             data={
                 "reason": "token_exhaustion",
                 "token_usage": self.token_usage,
                 "token_limit": self.config.token_limit,
+                "task_id": self.task.id,
             },
         )
         
@@ -676,6 +692,12 @@ class MergeQueueProcessor:
 
 ```yaml
 merge_queue_config:
+  # The merge-queue worktree is PERMANENT — created once during umas init --project.
+  # Only the temp test branch is created/destroyed per batch.
+  # State machine: IDLE → COLLECTING → TESTING → BISECTING → MERGING
+  # See UMAS-TECH-DESIGN-SPEC.md §3.4 Merge Queue Processor
+  worktree: permanent
+  
   batch_size: 10
   batch_timeout_seconds: 300
   
@@ -687,10 +709,38 @@ merge_queue_config:
   bisecting:
     enabled: true
     max_depth: 10
+    # If all PRs fail independently → all moved to blocked (failed_in_isolation)
+    # Agents re-spawned with failure context. Retry limit: 3 per PR.
+    # See UMAS-TECH-DESIGN-SPEC.md §4.9
     
   notifications:
     on_merge: true
     on_failure: true
+```
+
+#### 6.2.4 Test Coverage Policy
+
+```yaml
+# Configurable per project in umas.config.yaml
+# See UMAS-TECH-DESIGN-SPEC.md §3.4 Test Coverage Policy
+test_coverage:
+  mode: selective          # selective (default) | strict
+  
+  selective_mode:
+    # Tests required for: branches, loops, parsers, money, security
+    # Tests NOT required for: renaming, formatting, config-only changes
+    risky_logic_patterns:
+      - conditional_logic
+      - loops_and_iteration
+      - parsers_and_transforms
+      - money_calculations
+      - security_checks
+    
+  strict_mode:
+    # Full TDD: red-green-refactor for every feature
+    tdd_required: true
+    
+  coverage_target: 80      # percentage, configurable per project
 ```
 
 ### 6.3 Submodule: Test Runner

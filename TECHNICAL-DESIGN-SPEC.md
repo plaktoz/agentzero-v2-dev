@@ -1,9 +1,22 @@
 # Technical Design Specification: Unified Multi-Agent Development System
 
-**Version:** 1.0  
-**Date:** October 18, 2026  
-**Status:** Draft for Review  
-**Based on:** unified-multi-agent-system-prd.md v1.0
+**Version:** 1.1
+**Date:** October 18, 2026
+**Status:** Active
+**Based on:** [unified-multi-agent-system-prd.md](unified-multi-agent-system-prd.md)
+
+## Document Set
+
+This file is part of a reconciled document set. Read all four together:
+
+| Document | Covers |
+|----------|--------|
+| **TECHNICAL-DESIGN-SPEC.md** ← you are here | Technology stack, system architecture, Context Persistence implementation |
+| [TECHNICAL-DESIGN-SPEC-PART2.md](TECHNICAL-DESIGN-SPEC-PART2.md) | Orchestration System, Agent Execution System implementation |
+| [TECHNICAL-DESIGN-SPEC-PART3.md](TECHNICAL-DESIGN-SPEC-PART3.md) | Verification System, Monitoring System implementation |
+| [UMAS-TECH-DESIGN-SPEC.md](UMAS-TECH-DESIGN-SPEC.md) | Component design decisions, exception flows, resolved PRD conflicts |
+
+**Reading order:** Start with [UMAS-TECH-DESIGN-SPEC.md](UMAS-TECH-DESIGN-SPEC.md) for design decisions, then read this file and Parts 2–3 for implementation detail.
 
 ---
 
@@ -775,7 +788,11 @@ worktree_config:
     commit_interval_seconds: 300  # Every 5 minutes
     commit_on_tool_use: true
     commit_on_decision: true
-    commit_message_template: "[Agent {agent_id}] {operation}: {description}"
+    # Signal format for UMAS orchestration layer:
+    #   completion  → "[umas:done] <task-id>"
+    #   checkpoint  → "[umas:checkpoint] <summary>"
+    #   general     → "[umas] <agent-id> <step-summary> [tokens: N]"
+    commit_message_template: "[umas] {agent_id} {operation}: {description}"
   
   state_persistence:
     state_file: ".umas/state.json"

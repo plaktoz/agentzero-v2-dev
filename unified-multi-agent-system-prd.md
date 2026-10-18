@@ -342,7 +342,7 @@ agents:
 - `health-check` - Run comprehensive health check
 
 **Project Management:**
-- `project create` - Create new project
+- `project register` - Register existing repository with UMAS
 - `project list` - List all projects
 - `project switch` - Switch active project
 
@@ -826,7 +826,7 @@ Project Setup:
 All checks passed! System ready to use.
 
 Quick start:
-  1. Create project: umas project create my-project
+  1. Register project: umas project register my-project
   2. Submit request: umas request "Add login feature"
   3. Monitor progress: umas watch
 ```
@@ -2335,8 +2335,8 @@ The Coordinator never writes code - it coordinates. This separation ensures clea
 **Implementation:**
 - Task-specific agent spawning
 - Hook-based work assignment
-- Completion protocol (gt done)
-- Escalation protocol (gt escalate)
+- Completion signal: agent commits worktree with message `[umas:done] <task-id>` — Scheduler detects via hook or database poll
+- Escalation signal: agent appends `{"event":"escalate","severity":"P0|P1|P2","reason":"..."}` to `.umas/events.jsonl` — Coordinator picks up on next poll
 
 ### 3.2 Specialized Agents
 

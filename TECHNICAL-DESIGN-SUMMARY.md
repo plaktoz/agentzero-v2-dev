@@ -1,18 +1,35 @@
 # Technical Design Specification Summary
 
-**Version:** 1.0  
-**Date:** October 18, 2026  
-**Status:** Complete - Ready for Review
+**Version:** 1.1
+**Date:** October 18, 2026
+**Status:** Active — Reconciled
 
 ---
 
 ## Document Structure
 
-This technical design specification is split across multiple files for readability:
+The full technical design is spread across four documents. Read them in this order:
 
-1. **TECHNICAL-DESIGN-SPEC.md** - Core infrastructure and Context Persistence System
-2. **TECHNICAL-DESIGN-SPEC-PART2.md** - Orchestration and Agent Execution Systems
-3. **TECHNICAL-DESIGN-SPEC-PART3.md** - Verification and Monitoring Systems
+| # | Document | What it covers | Start here if… |
+|---|----------|---------------|----------------|
+| 1 | [UMAS-TECH-DESIGN-SPEC.md](UMAS-TECH-DESIGN-SPEC.md) | Component design decisions, agent signalling protocol, exception flows (16 scenarios with alternative flows), resolved PRD conflicts | You want to understand **why** things work the way they do |
+| 2 | [TECHNICAL-DESIGN-SPEC.md](TECHNICAL-DESIGN-SPEC.md) | Technology stack (Rust/Python/React), system architecture, Context Persistence implementation (Rust `WorktreeService`, Python `ArtifactService`) | You are implementing the **core infrastructure** |
+| 3 | [TECHNICAL-DESIGN-SPEC-PART2.md](TECHNICAL-DESIGN-SPEC-PART2.md) | Orchestration System (`CoordinatorAgent`, `Router`, `Scheduler`) and Agent Execution System implementation | You are implementing the **orchestration or agent layer** |
+| 4 | [TECHNICAL-DESIGN-SPEC-PART3.md](TECHNICAL-DESIGN-SPEC-PART3.md) | Verification System (`MergeQueueProcessor`, `TestRunner`, `CodeReviewAgent`) and Monitoring System (`Daemon`, `TriageAgent`) | You are implementing the **verification or monitoring layer** |
+
+**Source of truth for product requirements:** [unified-multi-agent-system-prd.md](unified-multi-agent-system-prd.md)
+
+### Reconciliation status
+
+All four documents were reconciled in this revision. Key changes from v1.0:
+
+- `gt done` / `gt escalate` (Gastown terms) removed from all documents. Replaced with filesystem-based signalling: `[umas:done]` commit messages and `.umas/events.jsonl` appends.
+- Grilling/propulsion rule made explicit in `CoordinatorAgent`: human-initiated requests grill, agent-to-agent handoffs execute immediately.
+- Router scoring heuristic documented in `CoordinatorAgent` config and `UMAS-TECH-DESIGN-SPEC.md §3.2`.
+- Merge-queue worktree clarified as permanent in `MergeQueueProcessor` config.
+- Full agent session status enum (`budget_paused`, `provider_failed`) added to Part 2 Coordinator config.
+- Test coverage policy (selective vs strict modes) added to Part 3 Verification config.
+- Cross-references added to all three implementation files pointing to `UMAS-TECH-DESIGN-SPEC.md`.
 
 ---
 

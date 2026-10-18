@@ -1,6 +1,7 @@
 # Technical Design Specification: Unified Multi-Agent Development System (Part 2)
 
-**Continuation from TECHNICAL-DESIGN-SPEC.md**
+**Continuation from [TECHNICAL-DESIGN-SPEC.md](TECHNICAL-DESIGN-SPEC.md)**
+**Design decisions and exception flows:** [UMAS-TECH-DESIGN-SPEC.md](UMAS-TECH-DESIGN-SPEC.md)
 
 ---
 
@@ -563,9 +564,18 @@ class CoordinatorAgent:
         self,
         request: WorkRequest,
     ) -> WorkBundle:
-        """Handle incoming work request from human."""
+        """Handle incoming work request from human.
         
-        # Step 1: Analyze complexity
+        Grilling rule: human-initiated requests always go through a grilling
+        session before planning. Agent-to-agent handoffs skip grilling and
+        execute immediately (propulsion principle).
+        See: UMAS-TECH-DESIGN-SPEC.md §3.2 Coordinator
+        """
+        
+        # Step 1: Analyze complexity using scoring heuristic
+        # Signals: files affected, scope ambiguity, security/auth/payments,
+        # new feature keywords, specific bug cite (→ simple).
+        # User can override: --route simple|medium|large|greenfield
         complexity = await self._analyze_complexity(request)
         
         # Step 2: Decide workflow
@@ -745,6 +755,7 @@ coordinator_config:
   token_limit: 200000
   
   complexity_thresholds:
+    # Scoring heuristic — see UMAS-TECH-DESIGN-SPEC.md §3.2 Router
     simple:
       max_files: 3
       max_lines: 100
@@ -759,7 +770,10 @@ coordinator_config:
       unlimited: true
   
   grilling:
+    # Grilling runs for human-initiated requests only.
+    # Agent-to-agent handoffs set human_initiated: false and skip grilling.
     enabled: true
+    human_initiated_only: true
     max_questions: 10
     timeout_seconds: 300
   
@@ -768,6 +782,14 @@ coordinator_config:
     architect: true
     ux: true
     analyst: true
+  
+  session_status_values:
+    # Full enum — see UMAS-TECH-DESIGN-SPEC.md §2 Data Model
+    # spawned | active | handoff | crashed | done | budget_paused | provider_failed
+    resumable_statuses:
+      - budget_paused
+      - provider_failed
+    resumable_timeout_hours: 24
 ```
 
 ### 4.3 Submodule: Router (Skill Selection)
