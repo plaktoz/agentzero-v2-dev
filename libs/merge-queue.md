@@ -176,6 +176,16 @@ log_dir: .merge-queue/logs
 | `git_busy` | Repo lock | Retry with backoff, then fail |
 | `ref_missing` | Candidate `ref` no longer exists | Candidate blocked with `ref_missing` |
 
+### Error records
+
+This library keeps its own typed errors and does not import any error library. A consumer that wants one error vocabulary can express each of them as an [error-classifier](error-classifier.md) record (a data format, not a dependency). Suggested `recoverability` below; severity is the consumer's policy.
+
+| Error / event | Suggested recoverability |
+|---------------|--------------------------|
+| `git_busy`, `publish_failed` | `transient` |
+| `timeout`, `target_moved` | `ambiguous` (a re-run decides) |
+| `conflict`, `ref_missing`, `baseline_red` | `permanent` until a person or agent changes the inputs |
+
 ## 8. Acceptance Criteria
 
 1. Batch of 8 where candidate 5 breaks tests: culprit 5 is found in 3 verify runs, the other 7 merge together, and the target never holds an unverified tree.
@@ -195,6 +205,7 @@ log_dir: .merge-queue/logs
 | Exception flow 4.9 (no clean subset) | All `blocked(test_failure)`; UMAS re-spawns agents with failure context up to `max_attempts` |
 | Exception flow 4.11 (agent causes regression) | `blocked` plus `flaky_suspected`; UMAS reads its own flaky history from the event log |
 | Verify command | `test-adapters run --json` wrapped so a non-passing result exits non-zero |
+| Blocked reasons and failures | Mapped to records by UMAS; `conflict` becomes a merge-conflict code, `baseline_red` a halt that needs a supervisor. See [error-classifier](error-classifier.md) section 9 |
 
 ## 10. Source Material and Deviations
 

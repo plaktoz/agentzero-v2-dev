@@ -61,6 +61,8 @@ aliases:
 | `invalid_request` | 400 schema errors | No retry. Raise |
 | `content_filtered` | Refusal or safety stop | No retry. Return with `stop_reason=refusal` |
 
+The gateway keeps this taxonomy as its own. A consumer that wants one error vocabulary can express each class as an [error-classifier](error-classifier.md) catalog entry (a data format, not a dependency): `rate_limited`, `server_error` and `timeout` are `transient` entries whose `retry` block carries the policy above (`base_seconds: 5, factor: 3`, `base_seconds: 0` for immediate retries, `honour: retry_after`); `auth`, `context_overflow` and `invalid_request` are `permanent`; `content_filtered` is a result, not an error. Failover is the gateway's own behaviour and is not part of the record.
+
 ## 4. Interface
 
 | Operation | Description |
@@ -146,6 +148,7 @@ If a candidate passes all "yes" rows, adopt it and write only configuration plus
 |--------------|---------|
 | Exception flow 4.7 retry table | Gateway default policy (3.3) |
 | Failover resume from `STATE.md` | UMAS builds the compressed context from `hook-store` and calls the gateway with the fallback alias |
+| Error classes and retry table | Same policy expressed as [error-classifier](error-classifier.md) catalog entries (section 9 there); the gateway still enforces its own policy |
 | P0 on auth error; P1 on exhausted | UMAS maps `AuthError` -> P0 escalation, `ProviderExhausted` -> P1 and `provider_failed` session status |
 | Per-role model mapping and panels | UMAS resolves a role to an alias; a panel is N `complete` calls plus synthesis (not gateway logic) |
 | Token accounting | `on_usage` -> `budget-meter.record` |

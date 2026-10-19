@@ -147,6 +147,16 @@ redact:
 | `Unreadable` | File cannot be parsed at all | Reads fail; `repair` offered |
 | `LockTimeout` | Rotation or repair lock not acquired within `lock_timeout` | Fail, retryable |
 
+### Error records
+
+This library keeps its own typed errors and does not import any error library. A consumer that wants one error vocabulary can express each of them as an [error-classifier](error-classifier.md) record (a data format, not a dependency). Suggested `recoverability` below; severity is the consumer's policy.
+
+| Error | Suggested recoverability |
+|-------|--------------------------|
+| `LockTimeout` | `transient` |
+| `DiskFull` | `ambiguous` |
+| `LineTooLarge`, `InvalidType`, `PermissionDenied`, `Unreadable` | `permanent` (`Unreadable` until `repair`) |
+
 ## 8. Acceptance Criteria
 
 1. 20 processes appending 10,000 events each (events under 4 KiB) produce exactly 200,000 valid lines, with no interleaving.
@@ -167,6 +177,7 @@ redact:
 | Session history (`SessionHistoryInterface`) | Event types `session_started`, `session_ended`, `decision_made`, `file_modified`, `commit_created`, `token_usage`, ... with `fold` reducers for `query_sessions` and `get_session_context` |
 | Audit retention, 90 days | `retain_days = 90` |
 | `umas debug replay` | `read(scope=<session>)` or `fold` |
+| Typed errors | Mapped to records by UMAS (`LockTimeout` as `transient`; the rest per section 7). The record's `severity` can be written as an `escalate` event's `severity` |
 
 The UMAS event-type catalogue stays in UMAS (Tier 0 contracts), not in this library.
 

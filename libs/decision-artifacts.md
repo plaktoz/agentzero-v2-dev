@@ -177,6 +177,15 @@ slug: { max_length: 60 }
 | `NotARepo` | Scans need a repository root for `.gitignore` handling; fall back to walking from the given path with a warning |
 | `Malformed` | Reported by `check`, never auto-fixed |
 
+### Error records
+
+This library keeps its own typed errors and does not import any error library. A consumer that wants one error vocabulary can express each of them as an [error-classifier](error-classifier.md) record (a data format, not a dependency). Suggested `recoverability` below; severity is the consumer's policy.
+
+| Error | Suggested recoverability |
+|-------|--------------------------|
+| `Exists`, `Conflict`, `Immutable`, `MissingSection`, `Malformed` | `permanent` until the input changes |
+| `NotARepo` | `permanent` (the library continues with a warning) |
+
 ## 8. Acceptance Criteria
 
 1. Ten concurrent `create(adr, ...)` calls yield ten files with ten distinct, consecutive numbers.
@@ -195,6 +204,7 @@ slug: { max_length: 60 }
 | Shortcut comments tracked in a debt ledger | `scan_shortcuts` + `write_debt_ledger`; run in the merge queue's verify step as `decision-artifacts check` |
 | Decision artifacts as durable context for agents | Agents `get`/`list` ADRs and the glossary when starting a task |
 | Minimalism ladder rung: "tests/comments" policy | Enforced by `check`, which rejects malformed shortcuts |
+| Typed errors | Mapped to records by UMAS. All are input errors for the calling agent, so `render(agent)` is the natural view. See [error-classifier](error-classifier.md) section 9 |
 
 ## 10. Source Material and Deviations
 

@@ -1,9 +1,9 @@
 # Modularisation Assessment: Unified Multi-Agent Development System
 
 **Author:** Bob (IBM)
-**Date:** October 18, 2026 · **Reviewed:** October 19, 2026 · **Updated:** October 20, 2026
+**Date:** October 18, 2026 · **Reviewed:** October 19, 2026 · **Updated:** October 21, 2026
 **Based on:** PRD v1.0, TECHNICAL-DESIGN-SUMMARY.md v1.1, TECHNICAL-DESIGN-SPEC.md v1.1, TECHNICAL-DESIGN-SPEC-PART2.md, TECHNICAL-DESIGN-SPEC-PART3.md, UMAS-BUILD-ASSESSMENT.md
-**Review against:** `libs/` (10 library specs, including `error-classifier` and `agent-platform`), `packs/` (8 content-pack specs), the reference-code appendices (section 12 of each spec), and [`docs/decisions/ADR-0001-minimal-html-dashboard.md`](docs/decisions/ADR-0001-minimal-html-dashboard.md)
+**Review against:** `libs/` (12 library specs), `packs/` (8 content-pack specs), the reference-code appendices (section 12 of each spec), and [`docs/decisions/ADR-0001-minimal-html-dashboard.md`](docs/decisions/ADR-0001-minimal-html-dashboard.md)
 
 ---
 
@@ -51,7 +51,7 @@ All 5 specialised agents plus the WorkerAgent share identical lifecycle concerns
 
 | Component | What it does | Currently duplicated in | Status | Remarks |
 |---|---|---|---|---|
-| **`agent-session`** | Spawn → execute → checkpoint → handoff lifecycle with token tracking | WorkerAgent, all 5 specialised agents | ❌ Not done | No `libs/agent-session.md`. The lifecycle is partially described in `TECHNICAL-DESIGN-SPEC-PART2.md` but has not been extracted as a standalone library. This is the highest-value missing lib: it is the shared skeleton for all 6 agent types. Without it, each agent will implement checkpointing and handoff independently and inconsistently. |
+| **`agent-session`** | Spawn → execute → checkpoint → handoff lifecycle with token tracking | WorkerAgent, all 5 specialised agents | ✅ Done | [`libs/agent-session.md`](libs/agent-session.md) — extracted as the shared lifecycle skeleton for all 6 agent types. Covers the `spawned → active → handoff → crashed → done` state machine, durable `STATE.md`, checkpoint commits, handoff packet construction, and token threshold monitoring. Reference implementations added: `WorkerAgent` (§12.1, source `TECHNICAL-DESIGN-SPEC-PART3.md` §5.2.2), WorkerAgent config YAML (§12.2, source §5.2.3), and `CoordinatorAgent` (§12.3, source `TECHNICAL-DESIGN-SPEC-PART2.md` §4.2.2). All three source sections tombstoned. |
 | **`context-compressor`** | lite/full/ultra compression strategies for context handoff | Agent handoff (Module 10), cross-platform transfer | 🔀 Merged | The *mechanical* side (fit content into a token limit) is covered by `budget-meter`'s `pack()` function. The *content* side (what goes into a handoff packet — task, decisions, notes) is addressed by the Developer prompt in `packs/specialist-agents.md`. This is the right split. The original assessment treated it as a single thing; it is two concerns. Agree with the merge. |
 | **`llm-gateway`** | Unified interface over Anthropic/OpenAI/Gemini/local, with failover and retry | CoordinatorAgent, WorkerAgent, all specialised agents, CodeReviewAgent | ✅ Done | [`libs/llm-gateway.md`](libs/llm-gateway.md) — good spec. Crucially, it is written as an *evaluation checklist* first, not a build prescription ("adopt first"). The no-blind-retry-loops rule, circuit breaker, and per-class error taxonomy are all present. Open question §11.1 (is IBM Bob a chat-completion API or an agent platform?) is the right question to surface — it determines whether Bob belongs here or in platform adapters. |
 | **`minimalism-enforcer`** | 6-rung ladder logic, code-avoided tracking, reuse percentage | DeveloperAgent today — should be available to all agents | ✅ Done | Extracted as [`packs/minimalism-ladder.md`](packs/minimalism-ladder.md) — correctly placed in Tier 2 (content pack) rather than Tier 1 (code library). The ladder is a *prompt and rule set*, not executable logic. Three enforcement levels (lite/full/ultra) are defined. The original assessment placed this in Category B (agent infrastructure libs), which was wrong — it belongs with the packs. |
@@ -69,7 +69,7 @@ These are standalone daemons/processes, not libraries.
 | **`umas-scheduler`** (Rust) | Capacity management, token budget enforcement, queue | WorkerAgents | ⚠️ Partial | The budget side is covered by `budget-meter`. The *capacity* side (semaphore, agent queue, dispatch) has not been extracted as a standalone library. The Rust `Scheduler` struct in `budget-meter`'s §12.1 is marked as a reference implementation only. This is a gap for Phase 3 (multi-agent). Recommend either extracting a `task-queue` lib or documenting that the Scheduler is a UMAS-specific component that composes `budget-meter` and `watchdog`. |
 | **`umas-merge-queue`** (Python) | Batch merge with bisecting | TestRunner, main branch | ✅ Done | [`libs/merge-queue.md`](libs/merge-queue.md) — significant improvement over the source. Prefix-bisect replaces the split-half approach (which misses combination failures and costs more runs). Crash recovery, baseline check, and persisted state are all added. The reference implementation §12.1 is flagged as defective (CAS issue, no conflict handling, in-memory queue). Strongly agree with the rewrite. |
 | **`umas-test-runner`** (Rust) | Parallel test execution across frameworks | MergeQueue, VerificationLayer | ✅ Done | [`libs/test-adapters.md`](libs/test-adapters.md) — correctly language-agnostic. Framework detection, normalised `TestResult`, flaky test tracking, and the adapter interface for adding new frameworks are all present. Policy (TDD, coverage targets) is explicitly removed from the lib and left to callers. Agree. |
-| **`umas-metrics-collector`** | Time-series writes to TimescaleDB | All services via OpenTelemetry | ❌ Not done | No lib spec extracted. As flagged in §3 of this assessment, TimescaleDB as a hard dependency was questionable. There is no `libs/metrics.md` or equivalent. The libs do emit events via callbacks (`on_event`, `on_usage`), which is the right primitive — but the collection and storage side has no spec. This is acceptable to defer (metrics are Phase 4 in the build assessment), but the callback contract in each lib should be documented as the metrics seam. |
+| **`umas-metrics-collector`** | Time-series writes to TimescaleDB | All services via OpenTelemetry | ✅ Done | [`libs/metrics-store.md`](libs/metrics-store.md) — extracted with the TimescaleDB dependency explicitly removed. Two backends behind one interface: JSONL file ledger (Phase 1–2) and a relational `metrics` table in SQLite or PostgreSQL (Phase 3+). TimescaleDB is documented as a one-line optional upgrade (`create_hypertable`), not a hard dependency. The lib provides source adapters that translate `budget-meter`, `event-log`, and `test-adapters` callback events into metric rows without modifying those libraries. |
 
 ---
 
@@ -151,9 +151,9 @@ The `packs/` folder represents a category the original assessment did not identi
 ### What needs a second look ⚠️
 
 **1. TimescaleDB is a heavyweight dependency for Tier 1/2**
-**Status:** ⚠️ Still unresolved
+**Status:** ✅ Resolved
 
-TimescaleDB requires a separate Postgres cluster. For MVP (SQLite tier), time-series metrics should be stored in SQLite using simple `(timestamp, metric_name, value)` rows — no time-series DB needed until Tier 3. TimescaleDB should be an *optional* upgrade, not a hard dependency from day one. The libs correctly avoid any DB dependency, which means the metrics storage decision has been quietly deferred — but it should be made explicit.
+[`libs/metrics-store.md`](libs/metrics-store.md) removes TimescaleDB as a hard dependency. Default storage is a JSONL ledger (Phase 1–2), then a standard PostgreSQL `metrics` table (Phase 3+). TimescaleDB is an optional upgrade documented in §2 Non-Goals: a single `create_hypertable` call with no application code change. This matches the decision made in the preceding session.
 
 **2. React + TypeScript dashboard has zero spec coverage, but carries the second-highest build cost (25M tokens)**
 **Status:** ✅ Decided — option B
@@ -187,7 +187,7 @@ Neither `libs/` nor `packs/` addresses authentication or RBAC. The data model (r
 | Decision | Options | Recommendation | Status |
 |---|---|---|---|
 | Dashboard timing | Phase 2 minimal vs Phase 4 full React | Ship TUI in Phase 1, React in Phase 4 | ✅ Resolved — minimal read-only HTML (not the recommended TUI), [ADR-0001](docs/decisions/ADR-0001-minimal-html-dashboard.md) |
-| TimescaleDB | Hard dependency vs optional upgrade | Optional — default to SQLite rows | ❌ Not decided |
+| TimescaleDB | Hard dependency vs optional upgrade | Optional — default to SQLite rows | ✅ Resolved — JSONL ledger (Phase 1–2) → standard PostgreSQL (Phase 3+) → TimescaleDB optional one-liner; see [`libs/metrics-store.md`](libs/metrics-store.md) §2 |
 | Router design | Keyword stub vs scoring heuristic | Design the interface now, keyword-match is fine as v1 impl | ✅ Resolved — `packs/router-heuristic.md` |
 | IPC mechanism | Filesystem events vs message broker | Design broker interface now, filesystem impl is fine for Phase 1–2 | ⚠️ Deferred but flagged in `event-log` §11 |
 | Auth | Defer to Phase 4 vs RBAC skeleton in Phase 1 | RBAC data model + middleware hook in Phase 1 | ❌ Not decided |
@@ -197,15 +197,15 @@ Neither `libs/` nor `packs/` addresses authentication or RBAC. The data model (r
 
 ## 5. Gaps Still Open
 
-In priority order. Closed since the last review: `error-classifier` (now [`libs/error-classifier.md`](libs/error-classifier.md)) and the dashboard decision ([ADR-0001](docs/decisions/ADR-0001-minimal-html-dashboard.md)).
+In priority order. Closed since the last review: `error-classifier` (now [`libs/error-classifier.md`](libs/error-classifier.md)), dashboard decision ([ADR-0001](docs/decisions/ADR-0001-minimal-html-dashboard.md)), `agent-session` (now [`libs/agent-session.md`](libs/agent-session.md) with `CoordinatorAgent` §12.3 added), and `metrics-store` (now [`libs/metrics-store.md`](libs/metrics-store.md), TimescaleDB resolved).
 
-1. **`agent-session` lib** — The shared lifecycle for all 6 agent types (spawn → execute → checkpoint → handoff). Without it, the 35M-token agent execution work will produce 6 inconsistent implementations.
-2. **RBAC data model** — Security gap. Should be a Tier 0 (UMAS-specific) schema decision made in Phase 1, not Phase 4.
-3. **`task-queue` / Scheduler extraction** — The capacity/dispatch half of the Scheduler is not covered by any lib. Either extract it or document it as a deliberate UMAS-internal component.
+1. **RBAC data model** — Security gap. Should be a Tier 0 (UMAS-specific) schema decision made in Phase 1, not Phase 4. Neither `libs/` nor `packs/` addresses authentication or RBAC.
+2. **`task-queue` / Scheduler extraction** — The capacity/dispatch half of the Scheduler is not covered by any lib. Either extract it or document it as a deliberate UMAS-internal component.
+3. **`structured-output-parser` decision** — Each pack defines its own output schema, but the *parsing mechanism* (how an agent validates and extracts a structured response) has no spec. A brief decision record is needed: either document that Pydantic v2 is the standard mechanism and no dedicated lib is needed, or extract a thin spec.
 4. **Platform adapter decision** — IBM Bob is *both*: register in `agent-platform` as a harness adapter and in `llm-gateway` as a provider. `libs/agent-platform.md` §9 and §11.1 document this split. Stakeholder sign-off still needed before Phase 2.
 5. **Follow-ups from closed items:**
    - Re-base the 25M dashboard estimate for the HTML page.
-   - Point the other libs' error tables (`llm-gateway` §3.3 and others) at `error-classifier` records, or record that they stay separate.
+   - ~~Point the other libs' error tables at `error-classifier` records~~ Done 2026-10-20: each lib keeps its own typed errors, and its failure-modes section now has an "Error records" table of suggested `recoverability`. It is a data mapping, with no import.
    - Choose the dashboard backend framework.
 
 ---
@@ -214,4 +214,4 @@ In priority order. Closed since the last review: `error-classifier` (now [`libs/
 
 The `libs/` and `packs/` work is high quality and addresses the most important items from the original assessment. The Tier 1 / Tier 2 split (code libraries vs. content packs) is better structured than the five categories proposed here. The specs are thorough, independence rules are well-defined, and the composition maps make the wiring explicit without creating code-level dependencies.
 
-Since the last review, `error-classifier` was extracted and the dashboard was decided (minimal HTML). Reference code from the original implementation specs was moved verbatim into section 12 of each lib and pack as non-normative appendices. Four gaps and some follow-ups in §5 remain before the foundation is complete.
+As of October 21: all 12 libs are specced, all 8 packs are specced, all inline source code has been moved to §12 reference appendices and tombstoned at source. The `structured-output-parser` decision record, RBAC data model, `task-queue` extraction, and IBM Bob adapter sign-off are the four open items before the foundation is complete.

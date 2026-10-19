@@ -1,6 +1,6 @@
 # Standalone Libraries (Tier 1)
 
-> Ten reusable libraries extracted from the UMAS design. Each has its own spec and can be built, versioned, tested, and used without UMAS.
+> Twelve reusable libraries extracted from the UMAS design. Each has its own spec and can be built, versioned, tested, and used without UMAS.
 >
 > **Status:** Draft v0.1 · **Date:** October 19, 2026
 > **Referenced from:** [UMAS-TECH-DESIGN-SPEC.md](../UMAS-TECH-DESIGN-SPEC.md) §1.1 · [TECHNICAL-DESIGN-SUMMARY.md](../TECHNICAL-DESIGN-SUMMARY.md)
@@ -21,6 +21,8 @@
 | [decision-artifacts](decision-artifacts.md) | PRFAQ, ADR, Spec, and GLOSSARY files, plus a shortcut-debt ledger scanned from code | Decision-record tooling for any repo, and a CI lint |
 | [error-classifier](error-classifier.md) | One error record (code, severity, recoverability), deterministic classification rules, retry advice, agent and human rendering, repeat-pattern alerts | A shared error vocabulary for any multi-component system |
 | [agent-platform](agent-platform.md) | Adapter registry for coding agent harnesses (Claude Code, IBM Bob, Copilot, custom) with work assignment, completion signalling, and cross-platform context transfer | Assigning work to any agent harness and tracking completion without knowing which tool is running |
+| [agent-session](agent-session.md) | Shared lifecycle skeleton for LLM agent sessions: spawn → execute → checkpoint → handoff → done, with STATE.md, token threshold monitoring, and handoff-packet construction | Any multi-agent system where agents must hand off work and successors must resume from a durable state |
+| [metrics-store](metrics-store.md) | Record scalar measurements (tokens, durations, costs, error rates) from multiple processes; queryable by time window and tag; two backends: JSONL ledger (Phase 1–2) and a relational table (Phase 3+) | Budget reporting, cost tracking, or quality trending for any multi-component system with a file-based or SQL backend |
 
 ---
 
@@ -44,6 +46,7 @@ These rules make a library standalone. A spec or implementation that breaks one 
 - `Result` means success or a typed error from that library's error table.
 - Times are RFC 3339 UTC. IDs are ULIDs unless stated.
 - MUST, SHOULD, and MAY carry their RFC 2119 meaning.
+- Each library keeps its own typed errors. Where a spec has a "Failure Modes" section it may end with an "Error records" table giving a suggested `recoverability` for each error, so a consumer can express them as [error-classifier](error-classifier.md) records. This is a data mapping, not an import.
 - Each spec ends with "How UMAS uses it". This is a mapping table for readers, and the library does not depend on anything in it.
 
 ---
@@ -62,9 +65,12 @@ Dependency arrows show what the consuming application wires together. They are n
  merge-queue -+-- verify cmd --> test-adapters                                  |
               |                                                                 |
  llm-gateway -+-- usage callback --> budget-meter                               |
-              |                                                                 |
+               |                                                                 |
  agent-platform -- assign/read_signal --> hook-store (worktrees as task inboxes)|
-              |    pack_context/unpack_context (cross-platform handoff)          |
+               |    pack_context/unpack_context (cross-platform handoff)          |
+ agent-session -+-- checkpoint/done commits --> hook-store                       |
+               |    session events --> event-log                                  |
+               |    handoff packing --> budget-meter                              |
  decision-artifacts (independent; invoked by agents/skills)                     |
  error-classifier (consumer maps each lib's typed errors to one record format) |
               +-----------------------------------------------------------------+
@@ -86,6 +92,7 @@ This is an open decision (see the stack review in the discussion that produced t
 | error-classifier | Any | Pure functions over data files; the record schema must be identical in every language |
 | llm-gateway | Python or TypeScript | Where the provider SDKs live |
 | agent-platform | Python or TypeScript | Where the harness SDKs and file-format helpers live |
+| agent-session | Python or TypeScript | Where the LLM agent runtime lives |
 
 Each library SHOULD also expose a thin CLI (`<name> <command> --json`) so a non-host-language consumer can use it by subprocess. The CLI is part of the contract.
 
@@ -101,6 +108,8 @@ Each library SHOULD also expose a thin CLI (`<name> <command> --json`) so a non-
 6. **decision-artifacts**: independent, can be built in parallel at any point.
 7. **llm-gateway**: adopt or wrap first. Build last, only if the evaluation in its spec fails.
 7. **agent-platform**: depends on `hook-store` being settled (worktree layout). Build after Phase 1; required before multi-platform work in Phase 4.
+8. **agent-session**: depends on `hook-store`, `event-log`, and `budget-meter`. Build in Phase 2 — it is the skeleton all agent implementations use.
+9. **metrics-store**: depends on nothing. JSONL backend can be wired in Phase 1 alongside `event-log`; SQL backend activated in Phase 3 when PostgreSQL is provisioned.
 
 ---
 

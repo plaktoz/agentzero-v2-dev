@@ -246,6 +246,16 @@ Each platform's config block is passed to its `assign` and `read_signal` functio
 | `PathTraversal` | Artefact path in a context pack escapes the project root | Fail `PathTraversal`; reject the entire pack |
 | `HookNotFound` | `assign` called with a `hook_path` that does not exist | Fail; the caller must create the hook via `hook-store` first |
 
+### Error records
+
+This library keeps its own typed errors and does not import any error library. A consumer that wants one error vocabulary can express each of them as an [error-classifier](error-classifier.md) record (a data format, not a dependency). Suggested `recoverability` below; severity is the consumer's policy.
+
+| Error | Suggested recoverability |
+|-------|--------------------------|
+| `AssignmentWriteFailed` | `ambiguous` |
+| `SignalCorrupt` | `ambiguous` (the file is left in place) |
+| `UnknownPlatform`, `CapabilityMissing`, `HookNotFound`, `ChecksumMismatch`, `PathTraversal` | `permanent` |
+
 ## 8. Acceptance Criteria
 
 1. `assign` for `claude-code` writes `TASK.md` into the given hook worktree; `read_signal` detects a subsequent commit matching `[done]` and returns a signal; a second call to `read_signal` returns `None`.
@@ -263,7 +273,7 @@ Each platform's config block is passed to its `assign` and `read_signal` functio
 | `ClaudeCodeAdapter`, `IBMBobAdapter`, `CopilotAdapter` from the PRD | The three built-in adapters in §5.1 |
 | Agent selection strategy (PRD §Agent Selection Strategy) | Not this library. UMAS applies `packs/router-heuristic` to pick a platform, then calls `assign` here |
 | Cross-platform handoff flow from PRD §Cross-Platform Context Transfer | `pack_context` → `unpack_context` → `assign`, as described in §5.4 |
-| Platform-specific errors (`PLATFORM_UNAVAILABLE`, `HANDOFF_TIMEOUT`, etc.) | UMAS maps `CapabilityMissing` → route to another platform; `AssignmentWriteFailed` → P1 escalation; `ChecksumMismatch` → P1 escalation with the pack retained for inspection |
+| Platform-specific errors (`PLATFORM_UNAVAILABLE`, `HANDOFF_TIMEOUT`, etc.) | UMAS maps `CapabilityMissing` → route to another platform; `AssignmentWriteFailed` → P1 escalation; `ChecksumMismatch` → P1 escalation with the pack retained for inspection. Each can be expressed as an [error-classifier](error-classifier.md) record (section 7 suggests the recoverability) |
 | IBM Bob: gateway provider or agent platform? | UMAS registers `ibm-bob` as an adapter here **and** configures it as a provider in `llm-gateway` when Bob exposes a chat-completion endpoint. The two registrations are independent; the library does not couple them. |
 
 ## 10. Source Material and Deviations

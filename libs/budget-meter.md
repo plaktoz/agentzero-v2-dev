@@ -150,6 +150,17 @@ Budgets themselves are defined by the caller through `define` or a budgets file;
 | `LockTimeout` | Writer lock held too long | Fail, retryable |
 | `ClockSkew` | Clock moved backwards over a window boundary | Log; never re-open an already reset window |
 
+### Error records
+
+This library keeps its own typed errors and does not import any error library. A consumer that wants one error vocabulary can express each of them as an [error-classifier](error-classifier.md) record (a data format, not a dependency). Suggested `recoverability` below; severity is the consumer's policy.
+
+| Error | Suggested recoverability |
+|-------|--------------------------|
+| `Deferred` | `transient`; `retry_after` supplies the delay |
+| `LockTimeout` | `transient` |
+| `LedgerCorrupt`, `ClockSkew` | `ambiguous` (the library continues; `rebuild` repairs) |
+| `UnknownBudget`, `RequiredTooLarge` | `permanent` |
+
 ## 8. Acceptance Criteria
 
 1. 50 concurrent reservations against a budget with room for 10 admit exactly the number that fit.
@@ -169,6 +180,7 @@ Budgets themselves are defined by the caller through `define` or a budgets file;
 | `budget_paused` session status | Set by UMAS when `reserve` returns `Deferred` |
 | Handoff packet, about 15k tokens | `pack(...)` with `required` = task, next steps, last decisions; `truncatable` = notes; pointers for files |
 | Token and cost metrics | The ledger is the source for `umas metrics tokens/cost` |
+| Typed errors | Mapped to records by UMAS; `Deferred` becomes a `transient` record whose retry delay is `retry_after`. See [error-classifier](error-classifier.md) section 9 |
 
 ## 10. Source Material and Deviations
 

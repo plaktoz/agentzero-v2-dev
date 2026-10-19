@@ -195,6 +195,17 @@ gc:
 | `WorktreeMissing` | Registered by git but directory gone | `list` reports `missing`; `git worktree prune` is run only by `gc` |
 | `DiskFull` | Write or commit fails ENOSPC | Fail, leave the previous committed state intact. State writes are atomic, so no partial `STATE.md` |
 
+### Error records
+
+This library keeps its own typed errors and does not import any error library. A consumer that wants one error vocabulary can express each of them as an [error-classifier](error-classifier.md) record (a data format, not a dependency). Suggested `recoverability` below; severity is the consumer's policy.
+
+| Error | Suggested recoverability |
+|-------|--------------------------|
+| `GitBusy` | `transient` |
+| `DiskFull` | `ambiguous` (clears only if space is freed) |
+| `StateCorrupt`, `WorktreeMissing` | `permanent` until `recover` or `gc` is run |
+| `NotAGitRepo`, `AlreadyExists`, `LeaseHeld`, `NotOwner`, `DirtyRefused` | `permanent` |
+
 ## 8. Acceptance Criteria
 
 1. Killing the holder process (`kill -9`) mid-edit, then `recover`, returns the last checkpoint's state and reports the uncommitted files.
@@ -216,6 +227,7 @@ gc:
 | `[umas:checkpoint] <summary>` | `checkpoint(signal="umas:checkpoint")`; Project Monitor reads `last_activity_at` |
 | Stale worktrees (exception flow 4.8) | `list` + `gc`; `umas worktrees recover` uses `recover` + `transfer` |
 | Handoff packet source | `read_state` (`decisions`, `next_steps`, `refs`) |
+| Typed errors | Mapped to records by UMAS (`GitBusy` as `transient`; the rest per the table in section 7). See [error-classifier](error-classifier.md) section 9 |
 
 ## 10. Source Material and Deviations
 

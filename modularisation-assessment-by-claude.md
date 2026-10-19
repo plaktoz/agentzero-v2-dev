@@ -121,5 +121,5 @@ Status: **Done**, **Partial**, **Not done**, **Changed** (done differently from 
 
 - I told you earlier that `llm-gateway` contradicted my "buy" advice. That overstated it: the spec says adopt first and is mostly a requirements checklist. The real gap is `merge-queue` (row 5 above).
 - The library count said "nine" in `libs/README.md` and `UMAS-TECH-DESIGN-SPEC.md` while the folder had ten, and `agent-platform` was missing from the main spec and summary tables. Fixed on 2026-10-20.
-- The `error-classifier` record is not yet referenced from the other libs. Each still has its own error table.
+- The `error-classifier` record was not referenced from the other libs. Fixed on 2026-10-20: the eleven other libs keep their own typed errors, and each failure-modes section now maps them to a suggested `recoverability` (`llm-gateway` §3.3 gets an equivalent note). Severity stays a consumer policy. `metrics-store` (metric sources table) still names `error-classifier` as a data source in its metrics table, which is a cross-library mention to check against the no-import rule.
 - The build assessment's token estimates and phase plan were not redrawn, which my last line offered to do.

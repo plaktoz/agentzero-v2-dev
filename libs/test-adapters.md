@@ -140,6 +140,18 @@ command_overrides:             # per framework: replace the generated command
 | `timeout` | Run exceeded the limit | Process group killed; partial results if the report exists |
 | `Ambiguous` | Multiple frameworks and none chosen | Fail before running |
 
+### Error records
+
+This library keeps its own typed errors and does not import any error library. A consumer that wants one error vocabulary can express each of them as an [error-classifier](error-classifier.md) record (a data format, not a dependency). Suggested `recoverability` below; severity is the consumer's policy.
+
+| Error / status | Suggested recoverability |
+|----------------|--------------------------|
+| `timeout` | `ambiguous` |
+| `tool_missing`, `no_tests`, `Ambiguous` | `permanent` until configuration changes |
+| `collection`, `unparseable_report` | `permanent` until the code or tool is fixed |
+
+Failing tests are results, not errors. A test failure is not an error record unless the consumer chooses to make one.
+
 ## 8. Acceptance Criteria
 
 1. For each supported framework, a sample project with 3 pass / 1 fail / 1 skip yields identical `TestResult` counts and one failure with file and line.
@@ -158,6 +170,7 @@ command_overrides:             # per framework: replace the generated command
 | Merge queue verify | Command: `test-adapters run --json`, so exit code 0 means green |
 | Test coverage policy (`selective` / `strict`, `coverage_target`) | Applied by UMAS using `result.coverage`; "risky logic" detection belongs to the verification agents (Tier 2) |
 | Flaky test history (exception flow 4.11) | UMAS logs `result.flaky` to the event log and consults it on later failures |
+| Error statuses | Mapped to records by UMAS. Test failures stay in `TestResult`; only `status=error` becomes a record |
 
 ## 10. Source Material and Deviations
 

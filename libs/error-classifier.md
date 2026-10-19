@@ -279,7 +279,7 @@ Fixtures F1 to F10 ship with the library as input and expected-output files.
 | Alert on P0 now, P1 pattern (>3 in 10 minutes), daily P2/P3 digest | Section 5.5 defaults |
 | Error catalog and troubleshooting guides | The catalog, `docs`, `causes`, `prevention` |
 | Agent-facing and human-facing error messages | `render(agent)` and `render(human)` |
-| Typed errors inside the other libraries | Mapped to records by UMAS; the libraries do not import this one |
+| Typed errors inside the other libraries | Mapped to records by UMAS; the libraries do not import this one. Each library's failure-modes section has a suggested `recoverability` per error (the "Error records" table, or the 3.3 note in llm-gateway). Severity is UMAS policy and is set in its catalog, not by the library |
 
 ## 10. Source Material and Deviations
 

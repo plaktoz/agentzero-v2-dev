@@ -159,6 +159,17 @@ nodes:
 | Start command fails immediately | Counted toward the crash-loop window |
 | Node ladder exhausted | State `failed`; `escalate` emitted once; no further actions until a human or caller resets it |
 
+### Error records
+
+This library keeps its own typed errors and does not import any error library. A consumer that wants one error vocabulary can express each of them as an [error-classifier](error-classifier.md) record (a data format, not a dependency). Suggested `recoverability` below; severity is the consumer's policy.
+
+The watchdog reports conditions, not exceptions. A node reaching `failed` or an `escalate` event carries a reason; a consumer can wrap it as an error record.
+
+| Condition | Suggested recoverability |
+|-----------|--------------------------|
+| `unresponsive`, `stalled` | `transient` while the ladder has rungs left |
+| `failed` (ladder exhausted), crash loop | `permanent` until a person or caller resets the node |
+
 ## 8. Acceptance Criteria
 
 1. `kill -9` of a supervised process is detected and restarted within `interval * miss_threshold + tick`.
@@ -181,6 +192,7 @@ The three-tier watchdog is three levels of this library, with intelligence added
 | Project Monitor stuck detection | Per-worker `external` node: no heartbeat 5 min = `unresponsive`; no commit 10 min = `stalled` via `git_commit_time` |
 | Recovery: nudge -> graceful handoff -> emergency handoff | Stalled ladder: `nudge -> request_graceful -> callback(emergency_handoff)` |
 | 95% token usage with no handoff | Not a watchdog concern; combine a [budget-meter](budget-meter.md) event with a callback |
+| `escalate` events | Wrapped as records by UMAS; the node, ladder rung and reason go into `context`. See [error-classifier](error-classifier.md) section 9 |
 
 ## 10. Source Material and Deviations
 
