@@ -1,44 +1,41 @@
 # Technical Design Specification Summary
 
-**Version:** 1.1
-**Date:** October 18, 2026
-**Status:** Active — Reconciled
+**Version:** 2.0
+**Date:** October 21, 2026
+**Status:** Active — Unified
 
 ---
 
 ## Document Structure
 
-The full technical design is spread across four documents. Read them in this order:
+The full technical design is now a **single document**. The four-file split from v1.x has been consolidated.
 
-| # | Document | What it covers | Start here if… |
-|---|----------|---------------|----------------|
-| 1 | [UMAS-TECH-DESIGN-SPEC.md](UMAS-TECH-DESIGN-SPEC.md) | Component design decisions, agent signalling protocol, exception flows (16 scenarios with alternative flows), resolved PRD conflicts | You want to understand **why** things work the way they do |
-| 2 | [TECHNICAL-DESIGN-SPEC.md](TECHNICAL-DESIGN-SPEC.md) | Technology stack (Rust/Python/React), system architecture, Context Persistence implementation (Rust `WorktreeService`, Python `ArtifactService`) | You are implementing the **core infrastructure** |
-| 3 | [TECHNICAL-DESIGN-SPEC-PART2.md](TECHNICAL-DESIGN-SPEC-PART2.md) | Orchestration System (`CoordinatorAgent`, `Router`, `Scheduler`) and Agent Execution System implementation | You are implementing the **orchestration or agent layer** |
-| 4 | [TECHNICAL-DESIGN-SPEC-PART3.md](TECHNICAL-DESIGN-SPEC-PART3.md) | Verification System (`MergeQueueProcessor`, `TestRunner`, `CodeReviewAgent`) and Monitoring System (`Daemon`, `TriageAgent`) | You are implementing the **verification or monitoring layer** |
+| Document | Role |
+|----------|------|
+| **[TECHNICAL-DESIGN-SPEC.md](TECHNICAL-DESIGN-SPEC.md)** ← start here | The single authoritative technical design (v2.0). Technology stack, architecture, all component designs, exception flows, APIs. |
+| [UMAS-TECH-DESIGN-SPEC.md](UMAS-TECH-DESIGN-SPEC.md) | ~~Superseded~~ — merged into TECHNICAL-DESIGN-SPEC.md v2.0 |
+| [TECHNICAL-DESIGN-SPEC-PART2.md](TECHNICAL-DESIGN-SPEC-PART2.md) | ~~Superseded~~ — merged into TECHNICAL-DESIGN-SPEC.md v2.0 |
+| [TECHNICAL-DESIGN-SPEC-PART3.md](TECHNICAL-DESIGN-SPEC-PART3.md) | ~~Superseded~~ — merged into TECHNICAL-DESIGN-SPEC.md v2.0 |
 
 **Source of truth for product requirements:** [unified-multi-agent-system-prd.md](unified-multi-agent-system-prd.md)
+**Modularisation assessment:** [modularisation-assessment-by-bob.md](modularisation-assessment-by-bob.md)
 
 ### Standalone component specs
 
-Reusable parts of the design are specified separately. Each one is usable without UMAS and has its own acceptance criteria. The documents above describe how UMAS uses them.
+Reusable parts of the design are specified separately. Each one is usable without UMAS and has its own acceptance criteria. [TECHNICAL-DESIGN-SPEC.md §3](TECHNICAL-DESIGN-SPEC.md) describes how UMAS uses them.
 
 | Set | Index | Contents |
 |-----|-------|----------|
-| Tier 1, libraries | [libs/README.md](libs/README.md) | [hook-store](libs/hook-store.md), [event-log](libs/event-log.md), [merge-queue](libs/merge-queue.md), [test-adapters](libs/test-adapters.md), [budget-meter](libs/budget-meter.md), [llm-gateway](libs/llm-gateway.md), [watchdog](libs/watchdog.md), [decision-artifacts](libs/decision-artifacts.md), [error-classifier](libs/error-classifier.md), [agent-platform](libs/agent-platform.md) |
-| Tier 2, content packs | [packs/README.md](packs/README.md) | [minimalism-ladder](packs/minimalism-ladder.md), [anti-slop](packs/anti-slop.md), [communication-modes](packs/communication-modes.md), [two-axis-review](packs/two-axis-review.md), [specialist-agents](packs/specialist-agents.md), [router-heuristic](packs/router-heuristic.md), [grilling](packs/grilling.md), [test-policy](packs/test-policy.md) |
+| Tier 1, libraries (12) | [libs/README.md](libs/README.md) | [hook-store](libs/hook-store.md), [event-log](libs/event-log.md), [merge-queue](libs/merge-queue.md), [test-adapters](libs/test-adapters.md), [budget-meter](libs/budget-meter.md), [llm-gateway](libs/llm-gateway.md), [watchdog](libs/watchdog.md), [decision-artifacts](libs/decision-artifacts.md), [error-classifier](libs/error-classifier.md), [agent-platform](libs/agent-platform.md), [agent-session](libs/agent-session.md), [metrics-store](libs/metrics-store.md) |
+| Tier 2, content packs (8) | [packs/README.md](packs/README.md) | [minimalism-ladder](packs/minimalism-ladder.md), [anti-slop](packs/anti-slop.md), [communication-modes](packs/communication-modes.md), [two-axis-review](packs/two-axis-review.md), [specialist-agents](packs/specialist-agents.md), [router-heuristic](packs/router-heuristic.md), [grilling](packs/grilling.md), [test-policy](packs/test-policy.md) |
 
-### Reconciliation status
+### Key changes in v2.0
 
-All four documents were reconciled in this revision. Key changes from v1.0:
-
-- `gt done` / `gt escalate` (Gastown terms) removed from all documents. Replaced with filesystem-based signalling: `[umas:done]` commit messages and `.umas/events.jsonl` appends.
-- Grilling/propulsion rule made explicit in `CoordinatorAgent`: human-initiated requests grill, agent-to-agent handoffs execute immediately.
-- Router scoring heuristic documented in `CoordinatorAgent` config and `UMAS-TECH-DESIGN-SPEC.md §3.2`.
-- Merge-queue worktree clarified as permanent in `MergeQueueProcessor` config.
-- Full agent session status enum (`budget_paused`, `provider_failed`) added to Part 2 Coordinator config.
-- Test coverage policy (selective vs strict modes) added to Part 3 Verification config.
-- Cross-references added to all three implementation files pointing to `UMAS-TECH-DESIGN-SPEC.md`.
+- All four design files merged into a single `TECHNICAL-DESIGN-SPEC.md`. The Part 2/3 files and `UMAS-TECH-DESIGN-SPEC.md` are now superseded stubs.
+- **TimescaleDB removed as a hard dependency.** Metrics storage is now a JSONL ledger (Phase 1–2) → standard PostgreSQL `metrics` table (Phase 3+). TimescaleDB is an optional one-statement upgrade. See [libs/metrics-store.md](libs/metrics-store.md).
+- **Dashboard confirmed as minimal HTML.** The React stack is retained as a Phase 4 option only ([ADR-0001](docs/decisions/ADR-0001-minimal-html-dashboard.md)).
+- Two new libs registered: [agent-session](libs/agent-session.md) (shared lifecycle for all 6 agent types) and [metrics-store](libs/metrics-store.md).
+- All inline code moved to `libs/` and `packs/` reference appendices (§12 sections). Source files tombstoned.
 
 ---
 
@@ -47,12 +44,12 @@ All four documents were reconciled in this revision. Key changes from v1.0:
 ### Core Languages
 - **Daemon & CLI:** Rust 1.70+ (performance, memory safety, cross-platform)
 - **Agent Runtime:** Python 3.10+ (AI/ML ecosystem, LLM SDK support)
-- **Dashboard:** minimal read-only HTML page polling the API, per [ADR-0001](docs/decisions/ADR-0001-minimal-html-dashboard.md) (React 18+ with TypeScript deferred)
+- **Dashboard:** Minimal read-only HTML page polling the API, per [ADR-0001](docs/decisions/ADR-0001-minimal-html-dashboard.md). React 18+ / TypeScript deferred to Phase 4.
 
 ### Databases
 - **Development:** SQLite 3.35+ (embedded, zero-config)
-- **Production:** PostgreSQL 14+ (scalability, 20-30+ agents)
-- **Metrics:** TimescaleDB (time-series data)
+- **Production:** PostgreSQL 14+ (scalability, 20–30+ agents)
+- **Metrics:** JSONL file ledger (Phase 1–2) → PostgreSQL `metrics` table (Phase 3+) via [libs/metrics-store.md](libs/metrics-store.md). TimescaleDB is an optional one-statement upgrade, not a hard dependency.
 
 ### LLM Providers (Tier 1)
 - Anthropic Claude (claude-3-5-sonnet-20241022)
@@ -61,9 +58,7 @@ All four documents were reconciled in this revision. Key changes from v1.0:
 
 ### Observability
 - OpenTelemetry protocol
-- Prometheus (metrics)
-- Jaeger (distributed tracing)
-- Loki (log aggregation)
+- Prometheus (metrics) · Jaeger (distributed tracing) · Loki (log aggregation)
 
 ---
 
@@ -74,7 +69,7 @@ All four documents were reconciled in this revision. Key changes from v1.0:
 ```
 1. Human Interface Layer
    - CLI (Rust)
-   - Dashboard (React)
+   - Dashboard (minimal HTML polling API; React deferred to Phase 4)
    - Metrics Display
    - Escalation Channels
 
@@ -103,7 +98,7 @@ All four documents were reconciled in this revision. Key changes from v1.0:
    - Git Worktrees (hooks)
    - Task Database (SQLite/PostgreSQL)
    - Decision Artifacts (files)
-   - Metrics Database (TimescaleDB)
+   - Metrics (JSONL ledger → PostgreSQL; see libs/metrics-store.md)
 ```
 
 ---
@@ -270,11 +265,9 @@ Daemon (Rust) ← heartbeat every 3 min
    - Commands: init, start-all, agents, request, watch, metrics
    - Shell completion support
 
-2. **Dashboard** (React + TypeScript)
-   - Real-time agent activity
-   - Work bundle visualization
-   - Merge queue state
-   - Metrics and trends
+2. **Dashboard** (minimal HTML + polling REST API — [ADR-0001](docs/decisions/ADR-0001-minimal-html-dashboard.md))
+   - Read-only view of agent activity, work bundles, merge queue state, metrics
+   - React 18+ / TypeScript is the Phase 4 option
 
 3. **Metrics Display**
    - Cost per task
@@ -359,11 +352,11 @@ artifacts (id, type, title, content, author, created_at, metadata)
 glossary_terms (id, term, definition, context, author)
 
 -- Sessions
-session_events (stored in .events.jsonl file)
+session_events (stored in .events.jsonl — libs/event-log.md)
 
--- Metrics
-token_usage (id, agent_id, session_id, tokens, timestamp)
-cost_tracking (id, agent_id, task_id, cost, timestamp)
+-- Metrics (libs/metrics-store.md)
+-- Phase 1-2: JSONL file ledger
+-- Phase 3+:  metrics (name, value, ts, tags) — standard PostgreSQL table
 ```
 
 ---
@@ -628,5 +621,5 @@ This technical design specification should be updated as:
 - Technology choices evolve
 - Performance requirements change
 
-**Last Updated:** October 18, 2026  
-**Next Review:** November 18, 2026
+**Last Updated:** October 21, 2026
+**Next Review:** November 21, 2026
