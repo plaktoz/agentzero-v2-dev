@@ -7,6 +7,10 @@
 > - [TECHNICAL-DESIGN-SPEC-PART2.md](TECHNICAL-DESIGN-SPEC-PART2.md) — Orchestration and Agent Execution
 > - [TECHNICAL-DESIGN-SPEC-PART3.md](TECHNICAL-DESIGN-SPEC-PART3.md) — Verification and Monitoring
 >
+> **Reusable components extracted from this design (each usable without UMAS):**
+> - [libs/](libs/README.md) — Tier 1: ten standalone libraries (hook-store, event-log, merge-queue, test-adapters, budget-meter, llm-gateway, watchdog, decision-artifacts, error-classifier, agent-platform)
+> - [packs/](packs/README.md) — Tier 2: eight content packs (minimalism-ladder, anti-slop, communication-modes, two-axis-review, specialist-agents, router-heuristic, grilling, test-policy)
+>
 > **Entry point for the full document set:** [TECHNICAL-DESIGN-SUMMARY.md](TECHNICAL-DESIGN-SUMMARY.md)
 > **Product requirements:** [unified-multi-agent-system-prd.md](unified-multi-agent-system-prd.md)
 > **Setup and operations guide:** [UMAS-SETUP-GUIDE.md](UMAS-SETUP-GUIDE.md)
@@ -75,6 +79,38 @@
 │           Daemon · Triage Agent · System Patrol · Project Monitor  │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+### 1.1 Reusable Components
+
+Parts of these components are specified as standalone units with no dependency on UMAS. The sections below describe how UMAS uses them; the standalone specs are the authority on their behaviour. Where the two differ, the standalone spec records the difference in its "Source material and deviations" section.
+
+**Tier 1, libraries** ([index](libs/README.md))
+
+| Component here | Standalone spec |
+|----------------|-----------------|
+| Hooks and worktree state (§3.1) | [hook-store](libs/hook-store.md) |
+| `.umas/events.jsonl` signalling (§3.3) | [event-log](libs/event-log.md) |
+| Merge Queue Processor (§3.4) | [merge-queue](libs/merge-queue.md) |
+| Test Runner (§3.4) | [test-adapters](libs/test-adapters.md) |
+| Token budget, handoff packet (§3.6) | [budget-meter](libs/budget-meter.md) |
+| Provider failure handling (§3.7, §4.7) | [llm-gateway](libs/llm-gateway.md) |
+| Three-tier watchdog (§3.5) | [watchdog](libs/watchdog.md) |
+| Decision artifacts, shortcut ledger (§3.1, §3.3) | [decision-artifacts](libs/decision-artifacts.md) |
+| Error severity, recoverability, escalation records (§3.3, §4) | [error-classifier](libs/error-classifier.md) |
+| Platform adapters, work assignment, cross-platform context transfer (PRD Module 7) | [agent-platform](libs/agent-platform.md) |
+
+**Tier 2, content packs** ([index](packs/README.md))
+
+| Component here | Standalone spec |
+|----------------|-----------------|
+| Minimalism ladder, shortcut comments (§3.3) | [minimalism-ladder](packs/minimalism-ladder.md) |
+| Anti-slop principles (PRD §11) | [anti-slop](packs/anti-slop.md) |
+| Communication modes (PRD §11.9) | [communication-modes](packs/communication-modes.md) |
+| Code Review, two-axis (§3.4) | [two-axis-review](packs/two-axis-review.md) |
+| Specialized Agents (§3.3) | [specialist-agents](packs/specialist-agents.md) |
+| Router scoring (§3.2) | [router-heuristic](packs/router-heuristic.md) |
+| Grilling and the propulsion rule (§3.2) | [grilling](packs/grilling.md) |
+| Test Coverage Policy (§3.4) | [test-policy](packs/test-policy.md) |
 
 ---
 
@@ -224,6 +260,8 @@ Selects workflow based on task complexity using a scoring heuristic:
 
 The classification and its score are logged with the work bundle record. The user can override with `--route simple|medium|large|greenfield`.
 
+> Standalone spec with numeric weights and fixtures: [packs/router-heuristic.md](packs/router-heuristic.md). Grilling trigger rules: [packs/grilling.md](packs/grilling.md).
+
 **Minimalism vs Specialization:** Specialization is only invoked where complexity justifies the cost. Simple requests go directly to a minimalist worker — no specialist overhead. The ladder principle (§3.3) applies at every complexity tier.
 
 #### Scheduler (Capacity Management)
@@ -278,6 +316,8 @@ All agent-to-orchestration signalling goes through the filesystem — no separat
 
 The ladder runs **after** reading the relevant code, never before.
 
+> Standalone spec: [packs/minimalism-ladder.md](packs/minimalism-ladder.md).
+
 **Shortcut comments:** Agents may leave a structured comment to mark a deliberate deferral — format `// SHORTCUT: <what> — <when to fix>`. This is the only permitted comment that does not explain "why" code exists. It must be tracked in the project's debt ledger. Decorative, explanatory, or redundant comments are not permitted.
 
 #### Specialized Agents
@@ -291,6 +331,8 @@ Invoked by the Router for medium/large tasks:
 | Architect | ADR, tech stack, system design | Medium+ complexity |
 | UX Designer | Interface and interaction design | User-facing changes |
 | Developer | Implementation with minimalism enforcement | All implementation tasks |
+
+> Standalone spec with prompts and output schemas: [packs/specialist-agents.md](packs/specialist-agents.md).
 
 ---
 
@@ -335,6 +377,8 @@ Every PR goes through two independent review passes run in parallel:
 
 Each finding is filed as: `{ location, what, problem, fix, consequence }`. Findings without a concrete fix are not filed.
 
+> Standalone spec: [packs/two-axis-review.md](packs/two-axis-review.md).
+
 #### Test Coverage Policy
 
 Test coverage is configurable per project via `umas.config.yaml`:
@@ -345,6 +389,8 @@ Test coverage is configurable per project via `umas.config.yaml`:
 | `strict` | Full TDD (red-green-refactor) for every feature | `testing.tdd_required: true` |
 
 Trivial changes (renaming, formatting, config-only) require no tests under either mode. Coverage target is set separately via `testing.coverage_target` (number, 0–100).
+
+> Standalone spec: [packs/test-policy.md](packs/test-policy.md). Test execution and result format: [libs/test-adapters.md](libs/test-adapters.md).
 
 ---
 

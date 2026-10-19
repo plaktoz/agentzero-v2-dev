@@ -19,6 +19,15 @@ The full technical design is spread across four documents. Read them in this ord
 
 **Source of truth for product requirements:** [unified-multi-agent-system-prd.md](unified-multi-agent-system-prd.md)
 
+### Standalone component specs
+
+Reusable parts of the design are specified separately. Each one is usable without UMAS and has its own acceptance criteria. The documents above describe how UMAS uses them.
+
+| Set | Index | Contents |
+|-----|-------|----------|
+| Tier 1, libraries | [libs/README.md](libs/README.md) | [hook-store](libs/hook-store.md), [event-log](libs/event-log.md), [merge-queue](libs/merge-queue.md), [test-adapters](libs/test-adapters.md), [budget-meter](libs/budget-meter.md), [llm-gateway](libs/llm-gateway.md), [watchdog](libs/watchdog.md), [decision-artifacts](libs/decision-artifacts.md), [error-classifier](libs/error-classifier.md), [agent-platform](libs/agent-platform.md) |
+| Tier 2, content packs | [packs/README.md](packs/README.md) | [minimalism-ladder](packs/minimalism-ladder.md), [anti-slop](packs/anti-slop.md), [communication-modes](packs/communication-modes.md), [two-axis-review](packs/two-axis-review.md), [specialist-agents](packs/specialist-agents.md), [router-heuristic](packs/router-heuristic.md), [grilling](packs/grilling.md), [test-policy](packs/test-policy.md) |
+
 ### Reconciliation status
 
 All four documents were reconciled in this revision. Key changes from v1.0:
@@ -38,7 +47,7 @@ All four documents were reconciled in this revision. Key changes from v1.0:
 ### Core Languages
 - **Daemon & CLI:** Rust 1.70+ (performance, memory safety, cross-platform)
 - **Agent Runtime:** Python 3.10+ (AI/ML ecosystem, LLM SDK support)
-- **Dashboard:** React 18+ with TypeScript
+- **Dashboard:** minimal read-only HTML page polling the API, per [ADR-0001](docs/decisions/ADR-0001-minimal-html-dashboard.md) (React 18+ with TypeScript deferred)
 
 ### Databases
 - **Development:** SQLite 3.35+ (embedded, zero-config)
@@ -294,7 +303,7 @@ Daemon (Rust) ← heartbeat every 3 min
 
 ### Module 8: Error Handling & Recovery
 
-**Error Classification:**
+**Error Classification** (standalone spec: [libs/error-classifier.md](libs/error-classifier.md)):
 - P0 (Critical): Immediate human intervention
 - P1 (High): Coordinator intervention
 - P2 (Medium): System Patrol handles
