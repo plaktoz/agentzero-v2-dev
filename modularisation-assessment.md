@@ -153,7 +153,7 @@ Modules are those of the summary document. The libraries listed are the standalo
 | C. TypeScript only | TypeScript everywhere | One toolchain; official SDKs; skills ship through npm. | Node dependency; weaker single-binary story; Python-first LLM tooling is out of reach. | The team is TypeScript-first and the harnesses are Claude Code and MCP-based. |
 | D. Java only | Java everywhere | Strong typing and concurrency; native JMS if using ActiveMQ; fits enterprise constraints. | Heavier runtime; the LLM and agent ecosystem is thinner; slower iteration. | An enterprise rule requires the JVM, or Java is already the team's language. |
 
-Suggested direction (a recommendation, not a decision): option A if single-binary distribution matters, otherwise option B for the first release and move the watchdog and CLI to Go later. The libs are language-neutral and expose a `<name> <command> --json` CLI, so a library can be re-implemented in another language without changing its consumers. Java is only worth the cost with an enterprise requirement.
+Decision: option A. The earlier suggestion was option A if single-binary distribution matters, otherwise option B first. The split by library is in 4.6. The libs are language-neutral and expose a `<name> <command> --json` CLI, so a library can be re-implemented in another language without changing its consumers. Java is only worth the cost with an enterprise requirement.
 
 ### 4.4 Messaging
 
@@ -200,6 +200,35 @@ Today there is no broker. The libs use files (`events.jsonl`, heartbeat files, s
 - Rust appears in five code blocks in section 12 of `hook-store` (2), `budget-meter`, `test-adapters` and `watchdog`. They stay as non-normative reference code but now describe a language the stack no longer uses. Replace or mark them.
 - The implementation-language table in the libs README lists "Rust or Go" for `watchdog` and treats the language as an open decision. Update it once the stack option is chosen.
 - The summary document, the stack spec and the build assessment still list Rust for the Daemon, CLI, Scheduler and Test Runner. The 162M-token estimate was built on that stack and needs re-basing.
+
+### 4.6 Language decision (Option A)
+
+Decided: Go core, Python agents. The two halves meet only through files and each lib's `<name> <command> --json` CLI, never through imports.
+
+| Language | Components |
+|---|---|
+| Go | `hook-store`, `event-log`, `merge-queue`, `test-adapters`, `watchdog`, `budget-meter`, the CLI |
+| Python | `llm-gateway`, `agent-platform`, `agent-session`, `decision-artifacts`, `metrics-store`, the API, the agent logic and the packs' tooling |
+| One implementation, exposed by CLI | `error-classifier`. Its language is not chosen; other languages call its CLI and do not reimplement it |
+
+Consequences:
+- The Rust reference code in section 12 of `hook-store`, `budget-meter`, `test-adapters` and `watchdog` becomes Go. The `event-log` and `merge-queue` reference code must be checked for the language it uses.
+- The libs README language table needs updating to Go and Python.
+- Two toolchains and two release channels: Go binaries, and pip packages for the Python half.
+- The Go-versus-Python placement of `budget-meter` and `metrics-store` follows the process that owns the ledger. Revisit if that owner turns out to be Python.
+
+### 4.7 Message broker decision
+
+Decided: the recommendation in 4.4 is accepted.
+
+- Files remain the source of truth (`events.jsonl`, heartbeat files, signal files). No lib requires a server.
+- No broker ships in Phase 1-2.
+- If scale needs one (Phase 3-4, around 20-30 agents), it is **RabbitMQ**, added as a Tier 3 optional transport that publishes from the event log (an outbox). Losing the broker loses speed, not data. Its clients exist in both Go (`amqp091-go`) and Python (`pika`, `aio-pika`), so it fits option A.
+- Task dispatch would use queues. Replay of event history would use RabbitMQ Streams, and only if replay at scale is needed.
+- Watchdog heartbeats stay on files or direct checks and never go through a broker.
+- ActiveMQ Classic and Artemis are not chosen. Revisit only if a JMS requirement or an existing ActiveMQ estate appears, which would also reopen the language decision.
+
+Work this creates: define the transport interface (publish, subscribe, ack, dead-letter) with the file implementation, and decide which spec owns it. `event-log` is the likely owner for the event flows, but dispatch is Scheduler territory and the Scheduler capacity half is still unspecified (gap 2).
 
 ---
 
@@ -422,15 +451,15 @@ Doing the Phase 1 items early costs little and avoids adding an authorisation la
 | Decision | Options | Recommendation | Status |
 |---|---|---|---|
 | Rust in the stack | Keep, optional, or remove | Claude: Python-first. Bob: keep Rust. | Resolved: Rust removed (learning curve too high). Language and messaging options are assessed in section 4 and are not yet chosen |
-| Implementation languages | Option A (Go core, Python agents), B (Python only), C (TypeScript only), D (Java only) | Section 4.3 | Not decided |
-| Message broker | None (files), RabbitMQ, ActiveMQ Classic, ActiveMQ Artemis | Section 4.4: keep files as the source of truth; RabbitMQ if a broker is added | Not decided |
+| Implementation languages | Option A (Go core, Python agents), B (Python only), C (TypeScript only), D (Java only) | Section 4.3 | Decided: Option A. Go for the CLI and the file, git and process libs; Python for the agent layer and API. Split in 4.6 |
+| Message broker | None (files), RabbitMQ, ActiveMQ Classic, ActiveMQ Artemis | Section 4.4: keep files as the source of truth; RabbitMQ if a broker is added | Decided: files are the source of truth and no broker ships in Phase 1-2. If one is added (Phase 3-4), it is RabbitMQ as an optional outbox transport. ActiveMQ is not chosen. See 4.7 |
 | External CLI agents or in-process SDK loop | See stack item 7 | None given | Not decided (`agent-platform` assumes external) |
 | Publish Tier 1 and 2 as separate packages, or keep internal seams | Monorepo of independent packages, or separate repos | None given | Not decided. The independence rules keep both options open. |
 | Dashboard | Terminal UI, minimal HTML, full React | Bob: TUI first, React in Phase 4 | Resolved: minimal read-only HTML |
 | TimescaleDB | Hard dependency, or optional upgrade | Optional | Resolved: JSONL ledger, then PostgreSQL, then TimescaleDB as a one-liner |
 | Router design | Keyword stub, or scoring heuristic | Interface now, keyword match fine for v1 | Resolved: scoring heuristic pack |
 | `CodingAgentAdapter` and `LLMGateway` | Two abstractions, or unified | Keep separate | Resolved. IBM Bob registers in both with separate credentials. Stakeholder sign-off still pending. |
-| IPC mechanism | Filesystem, or message broker | Broker interface now, filesystem implementation for Phase 1-2 | Deferred, flagged in `event-log` |
+| IPC mechanism | Filesystem, or message broker | Broker interface now, filesystem implementation for Phase 1-2 | Decided with the message broker row: filesystem implementation for Phase 1-2 behind a transport interface (4.7). The broker itself stays deferred. `event-log` open question 1 (is a pure-file design enough at 20-30 writers) is still open |
 | Auth | Defer to Phase 4, or RBAC skeleton in Phase 1 | RBAC data model and middleware hook in Phase 1; roles and model in section 5 | Approved: the roles and data model in section 5 are accepted. The seven questions in 5.9 remain open and do not block the Phase 1 skeleton |
 
 ---
