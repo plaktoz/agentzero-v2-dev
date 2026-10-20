@@ -1,6 +1,6 @@
 # Standalone Libraries (Tier 1)
 
-> Twelve reusable libraries extracted from the UMAS design. Each has its own spec and can be built, versioned, tested, and used without UMAS.
+> Thirteen reusable libraries extracted from the UMAS design. Each has its own spec and can be built, versioned, tested, and used without UMAS.
 >
 > **Status:** Draft v0.1 · **Date:** October 19, 2026
 > **Referenced from:** [UMAS-TECH-DESIGN-SPEC.md](../UMAS-TECH-DESIGN-SPEC.md) §1.1 · [TECHNICAL-DESIGN-SUMMARY.md](../TECHNICAL-DESIGN-SUMMARY.md)
@@ -22,6 +22,7 @@
 | [error-classifier](error-classifier.md) | One error record (code, severity, recoverability), deterministic classification rules, retry advice, agent and human rendering, repeat-pattern alerts | A shared error vocabulary for any multi-component system |
 | [agent-platform](agent-platform.md) | Adapter registry for coding agent harnesses (Claude Code, OpenAI Codex, Gemini CLI, Copilot, custom) with work assignment, completion signalling, and cross-platform context transfer | Assigning work to any agent harness and tracking completion without knowing which tool is running |
 | [agent-session](agent-session.md) | Shared lifecycle skeleton for LLM agent sessions: spawn → execute → checkpoint → handoff → done, with STATE.md, token threshold monitoring, and handoff-packet construction | Any multi-agent system where agents must hand off work and successors must resume from a durable state |
+| [task-queue](task-queue.md) | Dependency graph and ready queue with leased claims, a concurrency cap, retry, and parent/child groups, stored in an event log plus snapshot | A local work queue for any set of dependent jobs, with no broker or database |
 | [metrics-store](metrics-store.md) | Record scalar measurements (tokens, durations, costs, error rates) from multiple processes; queryable by time window and tag; two backends: JSONL ledger (Phase 1–2) and a relational table (Phase 3+) | Budget reporting, cost tracking, or quality trending for any multi-component system with a file-based or SQL backend |
 
 ---
@@ -85,6 +86,7 @@ This is an open decision (see the stack review in the discussion that produced t
 | Library | Natural fit | Reason |
 |---------|-------------|--------|
 | hook-store, merge-queue | Any | I/O-bound git subprocess work |
+| task-queue | Any (Go under the language decision) | File locking, an append-only log, and graph walks. A static binary suits a queue shared by many processes |
 | event-log, budget-meter | Any | File I/O and arithmetic |
 | test-adapters | Any | Subprocess and report parsing |
 | watchdog | Rust or Go gives a single static binary; Python is acceptable | Needs to outlive the things it supervises |
@@ -109,7 +111,8 @@ Each library SHOULD also expose a thin CLI (`<name> <command> --json`) so a non-
 7. **llm-gateway**: adopt or wrap first. Build last, only if the evaluation in its spec fails.
 7. **agent-platform**: depends on `hook-store` being settled (worktree layout). Build after Phase 1; required before multi-platform work in Phase 4.
 8. **agent-session**: depends on `hook-store`, `event-log`, and `budget-meter`. Build in Phase 2 — it is the skeleton all agent implementations use.
-9. **metrics-store**: depends on nothing. JSONL backend can be wired in Phase 1 alongside `event-log`; SQL backend activated in Phase 3 when PostgreSQL is provisioned.
+9. **task-queue**: depends on nothing. Build with Phase 1, because the Scheduler cannot dispatch without it. The `admit` callback is wired to `budget-meter` by the consuming application.
+10. **metrics-store**: depends on nothing. JSONL backend can be wired in Phase 1 alongside `event-log`; SQL backend activated in Phase 3 when PostgreSQL is provisioned.
 
 ---
 

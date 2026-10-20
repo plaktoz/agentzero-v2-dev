@@ -2,7 +2,7 @@
 
 Merged from two assessments: Bob (IBM), written 2026-10-18 and updated 2026-10-21, and Claude, written 2026-10-19 and updated 2026-10-20. Where they disagree, both views are shown.
 
-Reviewed against the state of the repo on 2026-10-21: 12 library specs, 8 content-pack specs, the section 12 reference-code appendices, and the dashboard decision record.
+Reviewed against the state of the repo on 2026-10-21: 13 library specs, 8 content-pack specs, the section 12 reference-code appendices, and the dashboard decision record.
 
 Every file is linked once, in the tables of section 2 and the decisions table in section 6. Everywhere else it is named in backticks.
 
@@ -27,7 +27,7 @@ The 10 modules in the spec are feature domains, not reusable components. Both as
 | Tier | Contents | State |
 |---|---|---|
 | 0. Contracts | Event schema, hook layout and `STATE.md`, commit trailers, error record, CLI/daemon JSON-RPC surface | Partial. The contracts live inside the libs rather than as a separate set; the JSON-RPC surface is not specified anywhere. The SQL schema was dropped from the libs on purpose (files or git only). |
-| 1. Libraries | Code with no UMAS dependency | Done. 12 specs. |
+| 1. Libraries | Code with no UMAS dependency | Done. 13 specs. |
 | 2. Content packs | Prompts, rules, skills (not code) | Done as specs. No `SKILL.md` has been built yet. |
 | 3. UMAS glue | Coordinator, Scheduler, Project Monitors, Triage, Patrol | Not done. Still in the original specs. |
 | 4. Shells | CLI, dashboard, installers | Partial. Only the dashboard is decided. |
@@ -55,6 +55,8 @@ Tier 1 and Tier 2 is a cleaner cut than Bob's original five categories, because 
 | [agent-session](libs/agent-session.md) | `agent-session` / not in plan | Done | Shared lifecycle skeleton for all six agent types (`spawned`, `active`, `handoff`, `crashed`, `done`), durable `STATE.md`, checkpoint commits, handoff packets, token thresholds. Reference code for `WorkerAgent` and `CoordinatorAgent` is in its section 12. |
 | [metrics-store](libs/metrics-store.md) | `umas-metrics-collector` / not in plan | Done | Two backends behind one interface: JSONL ledger (Phase 1-2), then a relational table in SQLite or PostgreSQL (Phase 3+). TimescaleDB is an optional one-line upgrade, not a dependency. Source adapters turn `budget-meter`, `event-log` and `test-adapters` callbacks into metric rows. |
 
+| [task-queue](libs/task-queue.md) | Scheduler `ready_queue` / not in plan | Done, New | Extracted from the Scheduler (section 8). Dependency graph, ready queue, leased claims, concurrency cap, retry, parent/child groups. Event log plus snapshot on files. Admission is a callback, so it never imports `budget-meter`. Evaluate existing tools before building (its section 10). |
+
 Merged, with no library of their own:
 
 | Item | Where it went |
@@ -68,7 +70,6 @@ Not extracted:
 | Item | State |
 |---|---|
 | `structured-output-parser` (Bob) | Not done. Each pack defines its own output schema but nothing specifies how an agent validates and extracts a structured response. Pydantic may be enough; a short decision record either way is needed. |
-| Scheduler capacity and dispatch half (`task-queue`) | Not done. The budget half is `budget-meter`. The semaphore, queue and dispatch half is in no spec. Either extract it or document it as a deliberate UMAS-internal component composing `budget-meter` and `watchdog`. |
 
 ### 2.2 Tier 2 content packs
 
@@ -207,7 +208,7 @@ Decided: Go core, Python agents. The two halves meet only through files and each
 
 | Language | Components |
 |---|---|
-| Go | `hook-store`, `event-log`, `merge-queue`, `test-adapters`, `watchdog`, `budget-meter`, the CLI |
+| Go | `hook-store`, `event-log`, `merge-queue`, `test-adapters`, `watchdog`, `budget-meter`, `task-queue`, the CLI |
 | Python | `llm-gateway`, `agent-platform`, `agent-session`, `decision-artifacts`, `metrics-store`, the API, the agent logic and the packs' tooling |
 | One implementation, exposed by CLI | `error-classifier`. Its language is not chosen; other languages call its CLI and do not reimplement it |
 
@@ -474,7 +475,8 @@ Doing the Phase 1 items early costs little and avoids adding an authorisation la
 | Implementation languages | Option A (Go core, Python agents), B (Python only), C (TypeScript only), D (Java only) | Section 4.3 | Decided: Option A. Go for the CLI and the file, git and process libs; Python for the agent layer and API. Split in 4.6 |
 | Message broker | None (files), RabbitMQ, ActiveMQ Classic, ActiveMQ Artemis | Section 4.4: keep files as the source of truth; RabbitMQ if a broker is added | Decided: files are the source of truth and no broker ships in Phase 1-2. If one is added (Phase 3-4), it is RabbitMQ as an optional outbox transport. ActiveMQ is not chosen. See 4.7 |
 | External CLI agents or in-process SDK loop | See stack item 7 | Hybrid | Decided: hybrid, with coarse Worker token caps accepted. See 4.8 |
-| Publish Tier 1 and 2 as separate packages, or keep internal seams | Monorepo of independent packages, or separate repos | None given | Not decided. The independence rules keep both options open. |
+| Publish Tier 1 and 2 as separate packages, or keep internal seams | Monorepo of independent packages, or separate repos | None given | Decided: option B, one monorepo with each lib built and versioned as its own package, and nothing published yet. A lib can be split into its own repo later (history-preserving) if someone outside UMAS needs it. |
+| Scheduler: UMAS-internal component, or extract a `task-queue` lib | Internal, or standalone lib | Extract if reusable | Decided: extract `task-queue`, because the dependency graph, leased claims and concurrency cap are a generic problem with no UMAS knowledge. Admission is a callback, so it does not import `budget-meter`. Dispatch loop, routing tags, hook creation and the CLI launcher stay as UMAS glue. An adopt-or-build check comes first (its section 10). |
 | Dashboard | Terminal UI, minimal HTML, full React | Bob: TUI first, React in Phase 4 | Resolved: minimal read-only HTML |
 | TimescaleDB | Hard dependency, or optional upgrade | Optional | Resolved: JSONL ledger, then PostgreSQL, then TimescaleDB as a one-liner |
 | Router design | Keyword stub, or scoring heuristic | Interface now, keyword match fine for v1 | Resolved: scoring heuristic pack |
@@ -487,8 +489,8 @@ Doing the Phase 1 items early costs little and avoids adding an authorisation la
 ## 7. Open gaps, in priority order
 
 1. **RBAC data model.** A security gap. The roles and model are approved in section 5 (seven human roles, seven agent roles, a binding-based data model). The open questions (5.9) still need answers, and the skeleton should land in Phase 1, not Phase 4.
-2. **Scheduler capacity extraction (`task-queue`)**, or a statement that it is a UMAS-internal component.
-3. **CLI launcher.** Nothing specifies the component that starts, supervises and stops the external harness CLIs (4.8). It belongs with the Scheduler decision in gap 2 and is written in Go.
+2. **Scheduler.** Decided: extract `task-queue` (see `libs/task-queue.md`). What remains is UMAS glue, not a library: the dispatch loop, routing tags, hook creation per task and the `admit` rule.
+3. **CLI launcher.** Nothing specifies the component that starts, supervises and stops the external harness CLIs (4.8). It is the second half of the Scheduler glue: it claims a task from `task-queue`, starts the harness as a `watchdog` node, and reports the result. Written in Go.
 4. **`structured-output-parser` decision record.**
 5. **Follow-ups from closed items:**
    - Re-base the 25M dashboard token estimate for the HTML page, and decide whether it ships in Phase 2.
@@ -508,6 +510,7 @@ Closed since the earlier reviews: the IBM Bob sign-off (dropped because Bob was 
 - Moved implementation code from the three technical design files into a non-normative "12. Reference implementation" section of each matching lib and pack (20 blocks, verbatim, with pointers left behind). Code with no standalone home stayed in place. The `agent-session` and `metrics-store` sections 12 were added separately.
 - Added a "source material and deviations" section (section 10) to every spec.
 - Wired the other libs to `error-classifier` by data only: each keeps its own typed errors, and its failure-modes section ends with an "Error records" table of suggested `recoverability`, with `llm-gateway` having an equivalent note on its error taxonomy. Severity stays the consumer's policy. No imports were added.
+- Extracted the Scheduler's queue half into `libs/task-queue.md` after a reusability check, and noted that the Scheduler's own dispatch loop stays as UMAS glue.
 
 ## 9. Corrections to the earlier assessments
 

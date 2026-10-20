@@ -8,7 +8,7 @@
 
 > This is the single authoritative technical design document. The four-file split from v1.x has been collapsed here.
 > All code that was inline in the previous documents has been moved into `libs/` and `packs/` reference appendices.
-> **Reusable components:** [libs/README.md](libs/README.md) (12 libraries) · [packs/README.md](packs/README.md) (8 content packs)
+> **Reusable components:** [libs/README.md](libs/README.md) (13 libraries) · [packs/README.md](packs/README.md) (8 content packs)
 > **Product requirements:** [unified-multi-agent-system-prd.md](unified-multi-agent-system-prd.md)
 > **Modularisation assessment:** [modularisation-assessment.md](modularisation-assessment.md)
 
@@ -174,7 +174,7 @@ phase_4_option:
                              │ Unix Socket / JSON-RPC
 ┌────────────────────────────▼────────────────────────────────────┐
 │                     ORCHESTRATION LAYER                          │
-│         Coordinator (Python)  ·  Router  ·  Scheduler (Rust)    │
+│         Coordinator (Python)  ·  Router  ·  Scheduler (Go)    │
 └──────┬─────────────────────────────────────────┬────────────────┘
        │ Task Queue                               │ Resource Alloc
 ┌──────▼───────────────┐          ┌──────────────▼───────────────┐
@@ -452,8 +452,8 @@ Override: `--route simple|medium|large|greenfield`
 
 #### Scheduler
 
-- Maintains a `ready_queue` of tasks with no unresolved dependencies
-- Dispatches agents up to the concurrency limit; tasks wait in queue when at capacity
+- Maintains a `ready_queue` of tasks with no unresolved dependencies, using [libs/task-queue.md](libs/task-queue.md)
+- Dispatches agents up to the concurrency limit; tasks wait in queue when at capacity (`max_claimed` plus an `admit` callback backed by `budget-meter`)
 - On every task completion: marks complete → unblocks dependents → dispatches newly ready tasks
 
 ```python
@@ -1037,7 +1037,7 @@ Production:
 ## 14. Open Questions
 
 1. **RBAC data model** — Security gap. Roles, permissions, middleware hook. Should be a Phase 1 decision, currently unspecced.
-2. **`task-queue` / Scheduler extraction** — The capacity/dispatch half of the Scheduler has no standalone lib spec. Either extract it or explicitly document it as a UMAS-internal component.
+2. **Scheduler glue** — The queue half is extracted as [libs/task-queue.md](libs/task-queue.md). The dispatch loop, routing tags, per-task hook creation and the `admit` rule still need a short UMAS-side spec.
 3. **`structured-output-parser` decision** — Each pack defines output schemas but the parsing mechanism (Pydantic v2?) has no decision record. ADR needed.
 4. **CLI launcher** — Coding Workers run as external CLI harnesses (hybrid model decided; see [modularisation-assessment.md](modularisation-assessment.md) section 4.8). The component that launches and supervises those processes is not specified.
 5. **IPC at scale** — File-based `events.jsonl` is fine for Phase 1–2. Phase 3 bottleneck risk flagged in [event-log §11](libs/event-log.md). Broker interface design deferred.
