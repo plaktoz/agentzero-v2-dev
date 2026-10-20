@@ -3,7 +3,7 @@
 > Nine reusable prompt-and-rule packs extracted from the UMAS design. Each is plain text (Markdown, YAML, JSON Schema) that any agent harness can load. Each has its own spec and can be versioned, tested, and used without UMAS.
 >
 > **Status:** Draft v0.1 · **Date:** October 21, 2026
-> **Referenced from:** [TECHNICAL-DESIGN-SPEC.md](../TECHNICAL-DESIGN-SPEC.md) §3 · [TECHNICAL-DESIGN-SUMMARY.md](../TECHNICAL-DESIGN-SUMMARY.md)
+> **Referenced from:** [TECHNICAL-DESIGN-SPEC.md](../umas/TECHNICAL-DESIGN-SPEC.md) §3 · [TECHNICAL-DESIGN-SUMMARY.md](../umas/TECHNICAL-DESIGN-SUMMARY.md)
 > **Sibling set:** [libs/](../libs/README.md) (Tier 1, code libraries)
 
 ---
@@ -12,15 +12,15 @@
 
 | Pack | One-line purpose | Standalone use |
 |------|------------------|----------------|
-| [minimalism-ladder](minimalism-ladder.md) | A six-rung check an agent runs after reading the code and before writing any | Cuts needless code in any coding agent |
-| [anti-slop](anti-slop.md) | Writing and code rules plus a two-pass review that removes generic AI patterns without touching facts | A review skill for docs and code in any repo |
-| [communication-modes](communication-modes.md) | Two registers (compact for agents, plain for humans) with intensity levels and a routing table | Token savings in agent-to-agent text, clarity in human-facing text |
-| [two-axis-review](two-axis-review.md) | Independent Standards and Spec review passes, one finding format, severity-based gating | A PR review skill for any team |
-| [specialist-agents](specialist-agents.md) | Prompts and output contracts for Analyst, Product Manager, UX Designer, Architect, Developer | A lightweight planning-to-code pipeline |
-| [router-heuristic](router-heuristic.md) | A scoring rubric that sends a request to a direct worker, an architect plus worker, or a full panel | Right-sizing process to task size |
-| [grilling](grilling.md) | A bounded questioning protocol that produces an alignment summary before work starts | Requirement clarification for any agent |
-| [test-policy](test-policy.md) | A selective-versus-strict testing rule and a "risky logic" classifier | Deciding which changes need tests |
-| [playbook-runner](playbook-runner.md) | A phase-gated workflow engine: any SDD or process workflow expressed as a Markdown playbook, executed by the Coordinator with human gates, auto gates, and a mandatory escape hatch | Running any phase-gated development process (production gatekeeper, autonomous loop, compliance workflow) against any project |
+| [minimalism-ladder](./minimalism-ladder/README.md) | A six-rung check an agent runs after reading the code and before writing any | Cuts needless code in any coding agent |
+| [anti-slop](./anti-slop/README.md) | Writing and code rules plus a two-pass review that removes generic AI patterns without touching facts | A review skill for docs and code in any repo |
+| [communication-modes](./communication-modes/README.md) | Two registers (compact for agents, plain for humans) with intensity levels and a routing table | Token savings in agent-to-agent text, clarity in human-facing text |
+| [two-axis-review](./two-axis-review/README.md) | Independent Standards and Spec review passes, one finding format, severity-based gating | A PR review skill for any team |
+| [specialist-agents](./specialist-agents/README.md) | Prompts and output contracts for Analyst, Product Manager, UX Designer, Architect, Developer | A lightweight planning-to-code pipeline |
+| [router-heuristic](./router-heuristic/README.md) | A scoring rubric that sends a request to a direct worker, an architect plus worker, or a full panel | Right-sizing process to task size |
+| [grilling](./grilling/README.md) | A bounded questioning protocol that produces an alignment summary before work starts | Requirement clarification for any agent |
+| [test-policy](./test-policy/README.md) | A selective-versus-strict testing rule and a "risky logic" classifier | Deciding which changes need tests |
+| [playbook-runner](./playbook-runner/README.md) | A phase-gated workflow engine: any SDD or process workflow expressed as a Markdown playbook, executed by the Coordinator with human gates, auto gates, and a mandatory escape hatch | Running any phase-gated development process (production gatekeeper, autonomous loop, compliance workflow) against any project |
 
 ### Built-in playbooks (shipped inside `playbook-runner`)
 
@@ -34,7 +34,7 @@
 | Candidate | Decision | Reason |
 |-----------|----------|--------|
 | Audit skill (whole-repo impact-ranked analysis) | Not extracted | The PRD names it but gives no rule set to port. Nothing to specify beyond a title. Re-open when its behaviour is defined |
-| Handoff-packet compression levels | Not a pack | The mechanism is `pack()` in [budget-meter](../libs/budget-meter.md). What goes into the packet is task-specific and is covered by the Developer prompt in specialist-agents |
+| Handoff-packet compression levels | Not a pack | The mechanism is `pack()` in [budget-meter](libs/budget-meter/README.md). What goes into the packet is task-specific and is covered by the Developer prompt in specialist-agents |
 
 ---
 

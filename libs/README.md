@@ -3,7 +3,7 @@
 > Fourteen reusable libraries extracted from the UMAS design. Each has its own spec and can be built, versioned, tested, and used without UMAS.
 >
 > **Status:** Draft v0.1 · **Date:** October 19, 2026
-> **Referenced from:** [UMAS-TECH-DESIGN-SPEC.md](../UMAS-TECH-DESIGN-SPEC.md) §1.1 · [TECHNICAL-DESIGN-SUMMARY.md](../TECHNICAL-DESIGN-SUMMARY.md)
+> **Referenced from:** [UMAS-TECH-DESIGN-SPEC.md](../umas/UMAS-TECH-DESIGN-SPEC.md) §1.1 · [TECHNICAL-DESIGN-SUMMARY.md](../umas/TECHNICAL-DESIGN-SUMMARY.md)
 
 ---
 
@@ -11,20 +11,20 @@
 
 | Library | One-line purpose | Standalone use |
 |---------|------------------|----------------|
-| [hook-store](hook-store.md) | Durable git-worktree "hooks" that hold a unit of work's state across crashes and handoffs | Crash-safe workspaces for any agent harness or long-running script |
-| [event-log](event-log.md) | Append-only JSONL event log with cursor-based reading, rotation, and corruption recovery | Audit trail, replay, or lightweight message bus between local processes |
-| [merge-queue](merge-queue.md) | Batch merge with prefix-bisect, driven by any verify command | A local or CI merge queue for any repo, with no agents involved |
-| [test-adapters](test-adapters.md) | Run pytest, jest, or cargo test and get one normalised result | Any tool that needs test results without per-framework parsing |
-| [budget-meter](budget-meter.md) | Token and cost budgets, threshold events, admission control, handoff-packet packing | Budget control for any LLM application |
-| [llm-gateway](llm-gateway.md) | Provider-neutral LLM calls with retry, failover, and rate limiting | Provider portability. **Adopt an existing package first** |
-| [watchdog](watchdog.md) | Heartbeat and progress supervision with a restart and escalation ladder | Supervising any set of long-running local processes |
-| [decision-artifacts](decision-artifacts.md) | PRFAQ, ADR, Spec, and GLOSSARY files, plus a shortcut-debt ledger scanned from code | Decision-record tooling for any repo, and a CI lint |
-| [error-classifier](error-classifier.md) | One error record (code, severity, recoverability), deterministic classification rules, retry advice, agent and human rendering, repeat-pattern alerts | A shared error vocabulary for any multi-component system |
-| [agent-platform](agent-platform.md) | Adapter registry for coding agent harnesses (Claude Code, OpenAI Codex, Gemini CLI, Copilot, custom) with work assignment, completion signalling, and cross-platform context transfer | Assigning work to any agent harness and tracking completion without knowing which tool is running |
-| [agent-session](agent-session.md) | Shared lifecycle skeleton for LLM agent sessions: spawn → execute → checkpoint → handoff → done, with STATE.md, token threshold monitoring, and handoff-packet construction | Any multi-agent system where agents must hand off work and successors must resume from a durable state |
-| [task-queue](task-queue.md) | Dependency graph and ready queue with leased claims, a concurrency cap, retry, and parent/child groups, stored in an event log plus snapshot | A local work queue for any set of dependent jobs, with no broker or database |
-| [kc-axi](kc-axi.md) | Run a local Keycloak in Docker or Podman and administer realms, clients and users through an agent-friendly CLI (lean output, fixed exit codes, no secrets printed), on Linux and Windows | Identity-provider set-up and admin for any project or any coding agent |
-| [metrics-store](metrics-store.md) | Record scalar measurements (tokens, durations, costs, error rates) from multiple processes; queryable by time window and tag; two backends: JSONL ledger (Phase 1–2) and a relational table (Phase 3+) | Budget reporting, cost tracking, or quality trending for any multi-component system with a file-based or SQL backend |
+| [hook-store](../hook-store/README.md) | Durable git-worktree "hooks" that hold a unit of work's state across crashes and handoffs | Crash-safe workspaces for any agent harness or long-running script |
+| [event-log](../event-log/README.md) | Append-only JSONL event log with cursor-based reading, rotation, and corruption recovery | Audit trail, replay, or lightweight message bus between local processes |
+| [merge-queue](../merge-queue/README.md) | Batch merge with prefix-bisect, driven by any verify command | A local or CI merge queue for any repo, with no agents involved |
+| [test-adapters](../test-adapters/README.md) | Run pytest, jest, or cargo test and get one normalised result | Any tool that needs test results without per-framework parsing |
+| [budget-meter](../budget-meter/README.md) | Token and cost budgets, threshold events, admission control, handoff-packet packing | Budget control for any LLM application |
+| [llm-gateway](../llm-gateway/README.md) | Provider-neutral LLM calls with retry, failover, and rate limiting | Provider portability. **Adopt an existing package first** |
+| [watchdog](../watchdog/README.md) | Heartbeat and progress supervision with a restart and escalation ladder | Supervising any set of long-running local processes |
+| [decision-artifacts](../decision-artifacts/README.md) | PRFAQ, ADR, Spec, and GLOSSARY files, plus a shortcut-debt ledger scanned from code | Decision-record tooling for any repo, and a CI lint |
+| [error-classifier](../error-classifier/README.md) | One error record (code, severity, recoverability), deterministic classification rules, retry advice, agent and human rendering, repeat-pattern alerts | A shared error vocabulary for any multi-component system |
+| [agent-platform](../agent-platform/README.md) | Adapter registry for coding agent harnesses (Claude Code, OpenAI Codex, Gemini CLI, Copilot, custom) with work assignment, completion signalling, and cross-platform context transfer | Assigning work to any agent harness and tracking completion without knowing which tool is running |
+| [agent-session](../agent-session/README.md) | Shared lifecycle skeleton for LLM agent sessions: spawn → execute → checkpoint → handoff → done, with STATE.md, token threshold monitoring, and handoff-packet construction | Any multi-agent system where agents must hand off work and successors must resume from a durable state |
+| [task-queue](../task-queue/README.md) | Dependency graph and ready queue with leased claims, a concurrency cap, retry, and parent/child groups, stored in an event log plus snapshot | A local work queue for any set of dependent jobs, with no broker or database |
+| [kc-axi](../kc-axi/README.md) | Run a local Keycloak in Docker or Podman and administer realms, clients and users through an agent-friendly CLI (lean output, fixed exit codes, no secrets printed), on Linux and Windows | Identity-provider set-up and admin for any project or any coding agent |
+| [metrics-store](../metrics-store/README.md) | Record scalar measurements (tokens, durations, costs, error rates) from multiple processes; queryable by time window and tag; two backends: JSONL ledger (Phase 1–2) and a relational table (Phase 3+) | Budget reporting, cost tracking, or quality trending for any multi-component system with a file-based or SQL backend |
 
 ---
 
@@ -48,7 +48,7 @@ These rules make a library standalone. A spec or implementation that breaks one 
 - `Result` means success or a typed error from that library's error table.
 - Times are RFC 3339 UTC. IDs are ULIDs unless stated.
 - MUST, SHOULD, and MAY carry their RFC 2119 meaning.
-- Each library keeps its own typed errors. Where a spec has a "Failure Modes" section it may end with an "Error records" table giving a suggested `recoverability` for each error, so a consumer can express them as [error-classifier](error-classifier.md) records. This is a data mapping, not an import.
+- Each library keeps its own typed errors. Where a spec has a "Failure Modes" section it may end with an "Error records" table giving a suggested `recoverability` for each error, so a consumer can express them as [error-classifier](../error-classifier/README.md) records. This is a data mapping, not an import.
 - Each spec ends with "How UMAS uses it". This is a mapping table for readers, and the library does not depend on anything in it.
 
 ---
@@ -151,14 +151,14 @@ The default view is produced from the same data as `--json`, by an encoder at th
 
 | Library | Fit | Why |
 |---------|-----|-----|
-| [test-adapters](test-adapters.md), [task-queue](task-queue.md), [event-log](event-log.md) (reads), [merge-queue](merge-queue.md) (`status`), [budget-meter](budget-meter.md) (`status`) | Strong | Agents read their output often and it can be large. These five carry an AXI subsection in section 4 |
+| [test-adapters](../test-adapters/README.md), [task-queue](../task-queue/README.md), [event-log](../event-log/README.md) (reads), [merge-queue](../merge-queue/README.md) (`status`), [budget-meter](../budget-meter/README.md) (`status`) | Strong | Agents read their output often and it can be large. These five carry an AXI subsection in section 4 |
 | hook-store, metrics-store, decision-artifacts (`check`), watchdog (`check`), agent-session, error-classifier | Medium | Reviewed later |
 | llm-gateway, agent-platform | Low | Used by programs, not by an agent at a prompt |
 
 ### Open points for the AXI review
 
-1. Is TOON the default encoding, or plain key-value as in [kc-axi](kc-axi.md) today? [kc-axi](kc-axi.md) also still deviates (stderr errors, exit codes 3 to 7, default limit 3) and is to be revised against these rules.
-2. Exit code 1 for `test-adapters run` when tests fail, versus AXI's reading of 1 as "the tool errored". Kept as 1 here because [merge-queue](merge-queue.md) depends on it.
+1. Is TOON the default encoding, or plain key-value as in [kc-axi](../kc-axi/README.md) today? [kc-axi](../kc-axi/README.md) also still deviates (stderr errors, exit codes 3 to 7, default limit 3) and is to be revised against these rules.
+2. Exit code 1 for `test-adapters run` when tests fail, versus AXI's reading of 1 as "the tool errored". Kept as 1 here because [merge-queue](../merge-queue/README.md) depends on it.
 3. Whether `reserve` should exit non-zero on `Deferred` for shell callers. Kept at 0 here.
 4. Which agent platforms get the session-start hook (AXI names Claude Code, Codex and OpenCode), and whether to also ship a skill file per lib.
 5. A shared Go package for the encoder and the flag rules, or each lib carrying its own copy. A shared package would be a dependency between libraries (rule 2), so the likely answer is a copy per lib, or a separate tiny library.
