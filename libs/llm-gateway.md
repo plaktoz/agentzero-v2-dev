@@ -47,7 +47,7 @@ aliases:
   planner:  { primary: ..., fallback: null }
 ```
 
-**Model IDs are never hard-coded in the library or in the spec.** The current docs pin specific model IDs (for example `claude-3-5-sonnet-20241022`); this is a configuration value that will change.
+Replacing a provider is an edit to this table, not a code change. **Model IDs are never hard-coded in the library or in the spec.** The current docs pin specific model IDs (for example `claude-3-5-sonnet-20241022`); this is a configuration value that will change.
 
 ### 3.3 Error taxonomy
 
@@ -110,7 +110,7 @@ Evaluate candidates (for example LiteLLM, the provider SDKs with a thin wrapper,
 
 | # | Criterion | Required |
 |---|-----------|----------|
-| 1 | Supports Anthropic, OpenAI, and a custom HTTP endpoint (for example IBM Bob) | yes |
+| 1 | Supports Anthropic, OpenAI, Google Gemini, and a custom HTTP endpoint (for example a local model server) | yes |
 | 2 | Unified tool-calling and streaming | yes |
 | 3 | Per-class retry schedule as in 3.3 (configurable) | yes |
 | 4 | Ordered fallback with a visible attempts list | yes |
@@ -166,6 +166,6 @@ Extracted from `TECHNICAL-DESIGN-SPEC.md` §1.3 (providers), `UMAS-TECH-DESIGN-S
 
 ## 11. Open Questions
 
-1. IBM Bob is described as a custom HTTP client with enterprise auth and audit logging. Is it a chat-completion API (fits this interface) or an agent platform (does not)? This decides whether Bob belongs in the gateway or in platform adapters (Tier 4).
+1. Are Anthropic, OpenAI and Gemini each reached through their native APIs, or through a compatible endpoint? Native keeps provider features such as prompt caching. A compatible endpoint is simpler to replace.
 2. Do any workers call providers directly through a CLI agent (such as Claude Code), bypassing this gateway entirely? If agents are external CLIs, the gateway applies only to UMAS's own LLM calls (Coordinator, Router, Triage) and usage figures must come from the CLIs' reported usage instead.
 3. Multi-model panels: is a synthesis helper worth including, or does it stay application logic?

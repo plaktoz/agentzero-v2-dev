@@ -8,7 +8,7 @@
 
 ## 1. Purpose
 
-Abstract the differences between coding agent harnesses — the tools that actually run an agent session (Claude Code, IBM Bob, GitHub Copilot, custom agents) — behind one interface. The consuming application assigns work to a harness, reads back its signal when the work is done, and transfers context across harness boundaries without knowing which harness is on either end.
+Abstract the differences between coding agent harnesses — the tools that actually run an agent session (Claude Code, OpenAI Codex, Gemini CLI, GitHub Copilot, custom agents) — behind one interface. The consuming application assigns work to a harness, reads back its signal when the work is done, and transfers context across harness boundaries without knowing which harness is on either end.
 
 ## 2. Scope and Non-Goals
 
@@ -21,7 +21,7 @@ Abstract the differences between coding agent harnesses — the tools that actua
 - A capability declaration per adapter (what the platform can do)
 
 **Non-goals**
-- Calling LLM providers. That is [llm-gateway](llm-gateway.md). Some platforms are also LLM providers (IBM Bob); that distinction is a decision for the consuming application, recorded in section 11.
+- Calling LLM providers. That is [llm-gateway](llm-gateway.md). A harness often ships with a default provider, but UMAS registers the harness here and the provider there, so either can be replaced alone.
 - Spawning OS processes or managing agent lifecycle. The harness decides how it runs; this library only defines what it reads and writes.
 - Routing or selection logic (which platform to use for which task). That belongs to [packs/router-heuristic](../packs/router-heuristic.md) and the consuming application.
 - Authentication or secrets management. Credentials are passed in by the caller; never stored by this library.
@@ -60,7 +60,6 @@ A capability is a string token. The library defines a fixed vocabulary; unknown 
 | `refactoring` | Restructures existing code |
 | `security-review` | Checks for security and compliance issues |
 | `documentation` | Writes or updates docs |
-| `enterprise-compliance` | Enforces enterprise policies (audit logging, RBAC) |
 
 ### 3.3 Work assignment
 
@@ -143,7 +142,7 @@ Also `agent-platform <op> --json`.
 
 ### 5.1 Built-in adapters
 
-Three adapters are shipped with the library. They may be overridden by the caller.
+Four adapters are shipped with the library. They may be overridden by the caller.
 
 **`claude-code`**
 ```
@@ -154,14 +153,25 @@ completion_signal: commit-message   # looks for [done] or [blocked] in the hook'
 assign:            writes TASK.md into the hook worktree and optionally a .claude/task.md hint file
 ```
 
-**`ibm-bob`**
+**`openai-codex`**
 ```
-capabilities:      [code-generation, code-review, security-review, documentation, enterprise-compliance]
-context_format:    json
+capabilities:      [code-generation, code-review, refactoring, documentation]
+context_format:    markdown
 hook_support:      true
-completion_signal: file             # reads .run/<assignment_id>.signal.json written by Bob's hook
-assign:            writes TASK.json into the hook worktree
+completion_signal: commit-message   # same [done] / [blocked] convention as claude-code
+assign:            writes TASK.md into the hook worktree
 ```
+
+**`gemini-cli`**
+```
+capabilities:      [code-generation, code-review, refactoring, documentation]
+context_format:    markdown
+hook_support:      true
+completion_signal: commit-message   # same [done] / [blocked] convention as claude-code
+assign:            writes TASK.md into the hook worktree
+```
+
+The capability lists for `openai-codex` and `gemini-cli` are starting values, not tested facts. Adjust them in configuration after trying each tool.
 
 **`copilot`**
 ```
@@ -200,7 +210,7 @@ Context is never lost in translation: fields that cannot be represented in the t
 
 A caller adds a custom adapter by calling `register(adapter)` with a fully populated `PlatformAdapter` struct. The `assign`, `read_signal`, `pack_context`, and `unpack_context` fields are callbacks supplied by the caller. The library validates that all required fields are present and that the `capabilities` list contains at least one known token.
 
-Custom adapters override built-ins of the same name, so a caller can patch the `ibm-bob` adapter's `assign` logic without forking the library.
+Custom adapters override built-ins of the same name, so a caller can patch the `openai-codex` adapter's `assign` logic without forking the library.
 
 ### 5.6 Security
 
@@ -208,6 +218,10 @@ Custom adapters override built-ins of the same name, so a caller can patch the `
 - `config` objects are never logged or written to disk by the library.
 - The `ContextPack` checksum (`SHA-256`) detects corruption or tampering in transit. `unpack_context` refuses a pack whose checksum does not match.
 - Artefact paths in a pack are validated to be relative paths within the hook worktree or project root; absolute paths and `..` traversal are rejected.
+
+### 5.7 Replaceability
+
+Nothing outside an adapter names a specific harness. A work assignment, completion signal and context pack have the same shape for every harness, and routing selects by capability and configuration. Replacing a harness means registering another adapter (or overriding a built-in) and changing the platform name in configuration. No consumer changes.
 
 ## 6. Configuration
 
@@ -221,10 +235,15 @@ platforms:
     hook_base: ".hooks"         # root directory for hook-store worktrees
     signal_pattern: "\\[(done|blocked|escalated)\\]"   # regex on commit messages
 
-  ibm-bob:
+  openai-codex:
     enabled: true
     hook_base: ".hooks"
-    signal_file_dir: ".run"
+    signal_pattern: "\\[(done|blocked|escalated)\\]"
+
+  gemini-cli:
+    enabled: true
+    hook_base: ".hooks"
+    signal_pattern: "\\[(done|blocked|escalated)\\]"
 
   copilot:
     enabled: false
@@ -259,22 +278,22 @@ This library keeps its own typed errors and does not import any error library. A
 ## 8. Acceptance Criteria
 
 1. `assign` for `claude-code` writes `TASK.md` into the given hook worktree; `read_signal` detects a subsequent commit matching `[done]` and returns a signal; a second call to `read_signal` returns `None`.
-2. A cross-platform handoff from `claude-code` to `ibm-bob`: `pack_context` produces a pack whose checksum is valid; `unpack_context` produces a `WorkAssignment` with `context_format = json`; `assign` writes `TASK.json` into the target hook.
+2. A cross-platform handoff from `claude-code` to `openai-codex`: `pack_context` produces a pack whose checksum is valid; `unpack_context` produces a `WorkAssignment`; `assign` writes `TASK.md` into the target hook. A handoff to a custom adapter that declares `context_format = json` writes `TASK.json` instead.
 3. A pack with a mutated `task_summary` field fails `ChecksumMismatch` in `unpack_context`.
 4. Registering a custom adapter with `name = "claude-code"` overrides the built-in; subsequent `assign` calls use the custom `assign` callback.
 5. `validate` returns an error when a configured platform's `hook_base` directory does not exist.
 6. An artefact path of `../../etc/passwd` in a context pack is rejected with `PathTraversal`.
+7. The same `WorkAssignment` is accepted by `claude-code`, `openai-codex` and `gemini-cli` with no change other than the platform name. Replacing one with another touches configuration only.
 
 ## 9. How UMAS Uses It
 
 | UMAS concept | Mapping |
 |---|---|
 | Module 7: Multi-Agent Platform Support | This library is the implementation of that module's adapter layer |
-| `ClaudeCodeAdapter`, `IBMBobAdapter`, `CopilotAdapter` from the PRD | The three built-in adapters in §5.1 |
+| `ClaudeCodeAdapter`, `OpenAICodexAdapter`, `GeminiCliAdapter`, `CopilotAdapter` from the PRD | The four built-in adapters in §5.1 |
 | Agent selection strategy (PRD §Agent Selection Strategy) | Not this library. UMAS applies `packs/router-heuristic` to pick a platform, then calls `assign` here |
 | Cross-platform handoff flow from PRD §Cross-Platform Context Transfer | `pack_context` → `unpack_context` → `assign`, as described in §5.4 |
 | Platform-specific errors (`PLATFORM_UNAVAILABLE`, `HANDOFF_TIMEOUT`, etc.) | UMAS maps `CapabilityMissing` → route to another platform; `AssignmentWriteFailed` → P1 escalation; `ChecksumMismatch` → P1 escalation with the pack retained for inspection. Each can be expressed as an [error-classifier](error-classifier.md) record (section 7 suggests the recoverability) |
-| IBM Bob: gateway provider or agent platform? | UMAS registers `ibm-bob` as an adapter here **and** configures it as a provider in `llm-gateway` when Bob exposes a chat-completion endpoint. The two registrations are independent; the library does not couple them. |
 
 ## 10. Source Material and Deviations
 
@@ -283,7 +302,7 @@ Extracted from `unified-multi-agent-system-prd.md` §Multi-Agent Platform Suppor
 | Deviation | Why |
 |-----------|-----|
 | Library covers harness adapters only, not LLM providers | The PRD conflates the two. LLM calls belong in `llm-gateway`; work assignment and completion signals belong here. Mixing them would make both components harder to test and replace independently |
-| `assign` writes files; it does not call APIs or spawn processes | The PRD's `spawn_agent(task, config) -> Agent` assumes the adapter controls the agent's lifecycle. In practice Claude Code, Bob, and Copilot are independent tools; UMAS can only present work to them, not start them |
+| `assign` writes files; it does not call APIs or spawn processes | The PRD's `spawn_agent(task, config) -> Agent` assumes the adapter controls the agent's lifecycle. In practice Claude Code, Codex, Gemini CLI and Copilot are independent tools; UMAS can only present work to them, not start them |
 | `read_signal` is non-blocking | The PRD implies the adapter manages the agent's completion event. A blocking read would couple UMAS's scheduling loop to the harness's timing |
 | Context pack has a checksum | The PRD's `context_transfer` block mentions an integrity check but does not specify it; `SHA-256` of the canonical JSON is unambiguous |
 | `completion_signal: none` for Copilot | The PRD marks `supports_hooks = False` for Copilot but provides no alternative signal mechanism. File mtime polling is the pragmatic fallback |
@@ -291,7 +310,7 @@ Extracted from `unified-multi-agent-system-prd.md` §Multi-Agent Platform Suppor
 
 ## 11. Open Questions
 
-1. **IBM Bob as both harness and LLM provider:** When Bob is used as a coding harness (it runs agent sessions), its adapter belongs here. When Bob's chat-completion endpoint is called directly (for example by the Coordinator's planning step), it belongs in `llm-gateway`. The consuming application must register Bob in both, with separate credentials. Is this the agreed split, or should there be a single "Bob integration" component that wraps both? This should be decided before Phase 2.
+1. **Harness and provider pairing:** Each harness ships with a default provider (Claude Code with Anthropic, Codex with OpenAI, Gemini CLI with Google). UMAS registers the harness here and, only where UMAS itself calls that provider (for example the Coordinator's planning step), registers the provider in `llm-gateway` with its own credentials. Is that the agreed rule, or should a harness that can use several providers be configured through the gateway?
 
 2. **Completion signal reliability for `commit-message`:** A harness that crashes after committing but before the UMAS poller runs will produce a valid signal. A harness that commits without the signal pattern in the message will be silently ignored. Should there be a timeout after which `read_signal` returns a synthetic `abandoned` signal?
 
@@ -307,7 +326,7 @@ Extracted from `unified-multi-agent-system-prd.md` §Multi-Agent Platform Suppor
 
 ### 12.1 Adapter base class and platform implementations (Python)
 
-Source: `unified-multi-agent-system-prd.md` §Platform-Specific Adapters
+Source: `unified-multi-agent-system-prd.md` §Platform-Specific Adapters. `OpenAICodexAdapter` and `GeminiCliAdapter` replace the original `IBMBobAdapter`, which was removed from the solution.
 
 ```python
 class CodingAgentAdapter:
@@ -338,14 +357,16 @@ class ClaudeCodeAdapter(CodingAgentAdapter):
     context_format = "markdown"
 
 
-class IBMBobAdapter(CodingAgentAdapter):
-    capabilities = [
-        "code-generation", "security-review",
-        "compliance-check", "enterprise-integration",
-    ]
+class OpenAICodexAdapter(CodingAgentAdapter):
+    capabilities = ["code-generation", "code-review", "refactoring", "documentation"]
     supports_hooks = True
-    context_format = "json"
-    enterprise_features = ["audit-logging", "rbac", "secret-management"]
+    context_format = "markdown"
+
+
+class GeminiCliAdapter(CodingAgentAdapter):
+    capabilities = ["code-generation", "code-review", "refactoring", "documentation"]
+    supports_hooks = True
+    context_format = "markdown"
 
 
 class CopilotAdapter(CodingAgentAdapter):

@@ -10,7 +10,7 @@
 > All code that was inline in the previous documents has been moved into `libs/` and `packs/` reference appendices.
 > **Reusable components:** [libs/README.md](libs/README.md) (12 libraries) · [packs/README.md](packs/README.md) (8 content packs)
 > **Product requirements:** [unified-multi-agent-system-prd.md](unified-multi-agent-system-prd.md)
-> **Modularisation assessment:** [modularisation-assessment-by-bob.md](modularisation-assessment-by-bob.md)
+> **Modularisation assessment:** [modularisation-assessment.md](modularisation-assessment.md)
 
 ---
 
@@ -108,23 +108,19 @@ metrics_storage:
 ### 1.3 LLM Providers
 
 ```yaml
+# Providers are configuration. Replacing one is an edit to the llm-gateway alias table.
 tier_1_full_integration:
   anthropic_claude:
     models: [claude-3-5-sonnet-20241022, claude-3-opus-20240229]
     features: [hooks_support, streaming, function_calling, max_tokens_200k]
-  ibm_bob:
-    endpoint: "https://bob.ibm.com/api/v1"
-    models: [bob-enterprise-v1]
-    features: [hooks_support, enterprise_auth, audit_logging, compliance_mode]
-    note: Registers in BOTH libs/agent-platform.md (harness) and libs/llm-gateway.md (provider). See §3.
   openai_gpt:
     models: [gpt-4-turbo, gpt-4]
     features: [streaming, function_calling, max_tokens_128k]
-
-tier_2_basic_integration:
   google_gemini:
     models: [gemini-1.5-pro, gemini-1.5-flash]
     features: [streaming, max_tokens_1m]
+
+tier_2_basic_integration:
   local_llm:
     endpoint: "http://localhost:11434"
     models: [llama3, codellama]
@@ -520,15 +516,16 @@ Invoked by the Router for medium/large tasks:
 
 #### Multi-Platform Support
 
-UMAS supports three first-class coding agent harnesses. IBM Bob registers in **both** places independently:
+UMAS supports four first-class coding agent harnesses. Each is an adapter in [agent-platform](libs/agent-platform.md). None is built into the core, so any can be replaced by changing configuration.
 
 | Harness | Registers in | Notes |
 |---------|-------------|-------|
 | Claude Code | [agent-platform](libs/agent-platform.md) | Completion via commit-message hook |
-| IBM Bob | [agent-platform](libs/agent-platform.md) + [llm-gateway](libs/llm-gateway.md) | Harness + LLM provider — separate credentials |
+| OpenAI Codex | [agent-platform](libs/agent-platform.md) | Completion via commit-message hook |
+| Gemini CLI | [agent-platform](libs/agent-platform.md) | Completion via commit-message hook |
 | GitHub Copilot | [agent-platform](libs/agent-platform.md) | Completion via file mtime (IDE tool) |
 
-`agent-platform` handles work assignment, context packing, and completion signalling. `llm-gateway` handles inference routing. They are separate concerns at separate layers.
+`agent-platform` handles work assignment, context packing, and completion signalling. `llm-gateway` handles inference routing. They are separate concerns at separate layers, so a harness and a provider are replaced independently.
 
 ---
 
@@ -1042,7 +1039,7 @@ Production:
 1. **RBAC data model** — Security gap. Roles, permissions, middleware hook. Should be a Phase 1 decision, currently unspecced.
 2. **`task-queue` / Scheduler extraction** — The capacity/dispatch half of the Scheduler has no standalone lib spec. Either extract it or explicitly document it as a UMAS-internal component.
 3. **`structured-output-parser` decision** — Each pack defines output schemas but the parsing mechanism (Pydantic v2?) has no decision record. ADR needed.
-4. **IBM Bob adapter sign-off** — Dual-registration (harness + LLM provider) documented in [agent-platform §9](libs/agent-platform.md) and [llm-gateway §9](libs/llm-gateway.md). Stakeholder confirmation needed before Phase 2.
+4. **Agent execution model** — External harness CLIs or an in-process loop. See stack item 7 in [modularisation-assessment.md](modularisation-assessment.md).
 5. **IPC at scale** — File-based `events.jsonl` is fine for Phase 1–2. Phase 3 bottleneck risk flagged in [event-log §11](libs/event-log.md). Broker interface design deferred.
 6. **Dashboard backend framework** — FastAPI vs. Express not yet chosen.
 7. **25M-token dashboard estimate** — The `UMAS-BUILD-ASSESSMENT.md` estimate was for React. Re-base for the minimal HTML page.

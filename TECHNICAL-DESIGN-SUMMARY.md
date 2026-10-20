@@ -18,7 +18,7 @@ The full technical design is now a **single document**. The four-file split from
 | [TECHNICAL-DESIGN-SPEC-PART3.md](TECHNICAL-DESIGN-SPEC-PART3.md) | ~~Superseded~~ — merged into TECHNICAL-DESIGN-SPEC.md v2.0 |
 
 **Source of truth for product requirements:** [unified-multi-agent-system-prd.md](unified-multi-agent-system-prd.md)
-**Modularisation assessment:** [modularisation-assessment-by-bob.md](modularisation-assessment-by-bob.md)
+**Modularisation assessment:** [modularisation-assessment.md](modularisation-assessment.md)
 
 ### Standalone component specs
 
@@ -53,8 +53,8 @@ Reusable parts of the design are specified separately. Each one is usable withou
 
 ### LLM Providers (Tier 1)
 - Anthropic Claude (claude-3-5-sonnet-20241022)
-- IBM Bob (enterprise features)
 - OpenAI GPT-4
+- Google Gemini
 
 ### Observability
 - OpenTelemetry protocol
@@ -283,7 +283,8 @@ Daemon (Rust) ← heartbeat every 3 min
 
 **Tier 1 Platforms:**
 - Claude Code (full integration)
-- IBM Bob (enterprise features)
+- OpenAI Codex (full integration)
+- Gemini CLI (full integration)
 - GitHub Copilot (code completion)
 
 **Key Components:**

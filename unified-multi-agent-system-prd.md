@@ -876,10 +876,10 @@ Migration complete!
 
 ### Overview
 
-**Requirement:** The system must support multiple coding agent platforms (Claude Code, GitHub Copilot, IBM Bob, etc.) working together within the same project.
+**Requirement:** The system must support multiple coding agent platforms (Claude Code, OpenAI Codex, Gemini CLI, GitHub Copilot, etc.) working together within the same project.
 
 **Rationale:**
-- Different coding agents have different strengths (e.g., Claude Code for architecture, Copilot for autocomplete, Bob for enterprise workflows)
+- Different coding agents have different strengths (e.g., Claude Code for architecture, Copilot for autocomplete)
 - Teams may have licenses for multiple platforms
 - Avoid vendor lock-in to a single coding agent platform
 - Enable best-of-breed approach (use the right agent for the right task)
@@ -888,7 +888,8 @@ Migration complete!
 
 **Tier 1 (Full Integration):**
 - **Claude Code:** Full integration with context persistence, hooks, and workflows
-- **IBM Bob:** Enterprise-grade integration with security and compliance features
+- **OpenAI Codex:** Coding agent CLI run in a hook worktree
+- **Gemini CLI:** Coding agent CLI run in a hook worktree
 - **GitHub Copilot:** Code completion and suggestion integration
 
 **Tier 2 (Basic Integration):**
@@ -897,7 +898,6 @@ Migration complete!
 - **Tabnine:** Code completion integration
 
 **Tier 3 (Experimental):**
-- **Codex (OpenAI):** Direct API integration
 - **Custom Agents:** User-defined agents via plugin system
 
 ### Agent Interoperability Requirements
@@ -914,7 +914,7 @@ agent_protocol:
   version: "1.0"
   
   agent_identity:
-    platform: string          # "claude-code", "ibm-bob", "copilot"
+    platform: string          # "claude-code", "openai-codex", "gemini-cli", "copilot"
     agent_id: string          # Unique agent identifier
     capabilities: array       # ["code-generation", "review", "refactor"]
     
@@ -936,6 +936,7 @@ agent_protocol:
 **Requirements:**
 - **MUST:** Implement adapter for each supported platform
 - **MUST:** Abstract platform differences behind common interface
+- **MUST:** Allow any platform or LLM provider to be replaced by changing configuration, with no change to the core
 - **MUST:** Handle platform-specific authentication
 - **MUST:** Map platform capabilities to system roles
 
@@ -984,21 +985,36 @@ class ClaudeCodeAdapter(CodingAgentAdapter):
     context_format = "markdown"
 ```
 
-**IBM Bob Adapter:**
+**OpenAI Codex Adapter:**
 ```python
-class IBMBobAdapter(CodingAgentAdapter):
-    """Adapter for IBM Bob platform"""
-    
+class OpenAICodexAdapter(CodingAgentAdapter):
+    """Adapter for the OpenAI Codex CLI"""
+
     capabilities = [
         "code-generation",
-        "security-review",
-        "compliance-check",
-        "enterprise-integration"
+        "code-review",
+        "refactoring",
+        "documentation"
     ]
-    
+
     supports_hooks = True
-    context_format = "json"
-    enterprise_features = ["audit-logging", "rbac", "secret-management"]
+    context_format = "markdown"
+```
+
+**Gemini CLI Adapter:**
+```python
+class GeminiCliAdapter(CodingAgentAdapter):
+    """Adapter for the Gemini CLI"""
+
+    capabilities = [
+        "code-generation",
+        "code-review",
+        "refactoring",
+        "documentation"
+    ]
+
+    supports_hooks = True
+    context_format = "markdown"
 ```
 
 **GitHub Copilot Adapter:**
@@ -1030,13 +1046,13 @@ agent_selection:
   by_task_type:
     architecture_design:
       primary: "claude-code"
-      fallback: "ibm-bob"
+      fallback: "gemini-cli"
       reason: "Long context, design thinking"
       
     code_generation:
-      primary: "ibm-bob"
-      fallback: "claude-code"
-      reason: "Enterprise compliance, security"
+      primary: "claude-code"
+      fallback: "openai-codex"
+      reason: "Default; override per project"
       
     code_completion:
       primary: "copilot"
@@ -1044,18 +1060,18 @@ agent_selection:
       reason: "Real-time suggestions, IDE integration"
       
     security_review:
-      primary: "ibm-bob"
-      fallback: "claude-code"
-      reason: "Enterprise security standards"
+      primary: "claude-code"
+      fallback: "gemini-cli"
+      reason: "Default; override per project"
       
     refactoring:
       primary: "claude-code"
-      fallback: "ibm-bob"
+      fallback: "openai-codex"
       reason: "Code understanding, minimalism"
   
   by_project_type:
     enterprise:
-      preferred_platforms: ["ibm-bob", "claude-code"]
+      preferred_platforms: ["claude-code", "openai-codex"]
       required_features: ["audit-logging", "compliance"]
       
     open_source:
@@ -1112,10 +1128,9 @@ Task: Implement authentication system
    - Defines API contracts
    - Commits to hook: auth-system/
    
-2. IBM Bob (Implementation):
+2. OpenAI Codex (Implementation):
    - Reads architecture from hook
    - Implements with security best practices
-   - Adds compliance checks
    - Commits to hook: auth-system/
    
 3. Copilot (Refinement):
@@ -1143,14 +1158,17 @@ multi_agent_config:
       model: "claude-3-5-sonnet-20241022"
       roles: ["architect", "reviewer", "developer"]
       
-    ibm_bob:
+    openai_codex:
       enabled: boolean
-      api_key: env:IBM_BOB_API_KEY
-      endpoint: "https://bob.ibm.com/api"
-      roles: ["developer", "security-reviewer"]
-      enterprise_features:
-        audit_logging: true
-        compliance_mode: "strict"
+      api_key: env:OPENAI_API_KEY
+      model: "<from config>"
+      roles: ["developer"]
+
+    gemini_cli:
+      enabled: boolean
+      api_key: env:GEMINI_API_KEY
+      model: "<from config>"
+      roles: ["developer"]
         
     copilot:
       enabled: boolean
@@ -1186,12 +1204,11 @@ platform_metrics:
       avg_cost_per_task: $0.45
       handoff_success_rate: 98%
       
-    ibm_bob:
+    openai_codex:
       tasks_completed: 89
       avg_quality_score: 9.5
       avg_cost_per_task: $0.52
       handoff_success_rate: 99%
-      compliance_pass_rate: 100%
       
     copilot:
       suggestions_accepted: 1247
@@ -1265,7 +1282,7 @@ security:
 - **Resilience:** Fallback options if primary platform unavailable
 - **Cost Optimization:** Choose cost-effective platform per task
 - **Vendor Independence:** Avoid lock-in to single platform
-- **Enterprise Readiness:** Support enterprise platforms like IBM Bob with compliance features
+- **Replaceability:** Any coding agent platform or LLM provider can be swapped by changing configuration
 
 
 

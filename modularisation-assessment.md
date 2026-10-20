@@ -51,7 +51,7 @@ Tier 1 and Tier 2 is a cleaner cut than Bob's original five categories, because 
 | [watchdog](libs/watchdog.md) | `umas-daemon` / `watchdog` | Done | A generic supervision library. The three-tier Daemon, Triage, Patrol design is three levels of it. The Rust Daemon is demoted to reference code. |
 | [decision-artifacts](libs/decision-artifacts.md) | not in Bob's plan / `decision-artifacts` | Done | PRFAQ/ADR/Spec/GLOSSARY templates and shortcut-debt tracking. |
 | [error-classifier](libs/error-classifier.md) | `error-classifier` / not in plan | Done | Added after Bob's review found the gap. A shared record format with deterministic rules, not a shared import. Adds redaction, `retry_plan`, agent and human renderings, fingerprinting and pattern alerts. Ships no catalog. Five open questions in its section 11 (for example whether unmatched errors default to P2 or P1). The other libs map to it by data only (see section 8). |
-| [agent-platform](libs/agent-platform.md) | `CodingAgentAdapter` plugin registry (Category D) / platform adapters in Tier 4 | Done, Changed | Moved from Tier 4 to Tier 1. Harness adapters only, never LLM providers. `assign` writes files and does not spawn processes. `read_signal` is non-blocking. Context packs carry a SHA-256 checksum and reject path traversal. Built-in adapters: `claude-code`, `ibm-bob`, `copilot`. Bob's original advice to unify it with `llm-gateway` was wrong: one routes work to harnesses, the other routes inference calls. |
+| [agent-platform](libs/agent-platform.md) | `CodingAgentAdapter` plugin registry (Category D) / platform adapters in Tier 4 | Done, Changed | Moved from Tier 4 to Tier 1. Harness adapters only, never LLM providers. `assign` writes files and does not spawn processes. `read_signal` is non-blocking. Context packs carry a SHA-256 checksum and reject path traversal. Built-in adapters: `claude-code`, `openai-codex`, `gemini-cli`, `copilot`. Bob's original advice to unify it with `llm-gateway` was wrong: one routes work to harnesses, the other routes inference calls. |
 | [agent-session](libs/agent-session.md) | `agent-session` / not in plan | Done | Shared lifecycle skeleton for all six agent types (`spawned`, `active`, `handoff`, `crashed`, `done`), durable `STATE.md`, checkpoint commits, handoff packets, token thresholds. Reference code for `WorkerAgent` and `CoordinatorAgent` is in its section 12. |
 | [metrics-store](libs/metrics-store.md) | `umas-metrics-collector` / not in plan | Done | Two backends behind one interface: JSONL ledger (Phase 1-2), then a relational table in SQLite or PostgreSQL (Phase 3+). TimescaleDB is an optional one-line upgrade, not a dependency. Source adapters turn `budget-meter`, `event-log` and `test-adapters` callbacks into metric rows. |
 
@@ -122,7 +122,7 @@ Caveat: the language and broker facts below come from general knowledge. They we
 
 | Language | Pros | Cons | Considerations |
 |---|---|---|---|
-| Java | Mature, strongly typed, very good concurrency (virtual threads in recent LTS releases). JMS is native, so an ActiveMQ or Artemis broker fits without an adapter. Good fit for enterprise and IBM environments. Official LLM SDKs and frameworks exist (Anthropic and OpenAI Java SDKs, Spring AI, LangChain4j). | Heavier runtime and slower start than Go. Needs a JRE unless built with GraalVM native image, which adds build effort. Verbose. The agent and prompt tooling community is smaller than Python's. | Choose it if an enterprise constraint (for example Bob or IBM) needs the JVM, or if the broker is Artemis or Classic. Native image is worth testing for the CLI and watchdog. |
+| Java | Mature, strongly typed, very good concurrency (virtual threads in recent LTS releases). JMS is native, so an ActiveMQ or Artemis broker fits without an adapter. Good fit for enterprise environments. Official LLM SDKs and frameworks exist (Anthropic and OpenAI Java SDKs, Spring AI, LangChain4j). | Heavier runtime and slower start than Go. Needs a JRE unless built with GraalVM native image, which adds build effort. Verbose. The agent and prompt tooling community is smaller than Python's. | Choose it if an enterprise constraint (for example an existing JVM estate) needs the JVM, or if the broker is Artemis or Classic. Native image is worth testing for the CLI and watchdog. |
 | Go | One static binary per tool, cross-compiled; fast start; low memory. Goroutines suit process supervision and many concurrent git subprocesses. Strong standard library. Simple to ship a CLI that any harness can call. | Fewer LLM and agent libraries than Python or TypeScript. Verbose error handling. Weaker schema validation than Pydantic or zod (struct tags and a validator library). Less natural for prompt templating and text processing. | The natural replacement for the Rust slot: Daemon, watchdog, CLI, merge-queue. A single binary matches the "non-intrusive install" goal. |
 | TypeScript | Official Anthropic SDK, Claude Agent SDK and MCP SDKs. Async I/O fits the I/O-bound workload. One language for the API, tooling and any front end. Packages ship as npm modules and Claude Code skills. | Needs Node (or Bun/Deno) at runtime; single-binary packaging is less mature. Types vanish at runtime, so inputs need zod or similar. Single-threaded for CPU work. Process supervision is workable but not a strength. | Good for skills, the API server and glue. The dashboard decision (static HTML, no build step) removes the main reason to pick it for the front end. |
 | Python | Best LLM ecosystem: provider SDKs, Claude Agent SDK, Pydantic, test tooling (pytest). Fastest iteration, and the language models generate most reliably. Fits text-heavy work (decision artifacts, classification, prompt packs). | No single binary (PyInstaller and similar are awkward). Environment and packaging friction (venv, pipx). GIL limits CPU parallelism, though the workload is I/O-bound and asyncio copes. Slower start than Go. Types are optional. | Best for agent logic, `llm-gateway`, `agent-platform`, `agent-session` and the packs. A long-running daemon is fine if a service manager restarts it. |
@@ -246,7 +246,6 @@ Gap 1 in section 7 and stack item 8. This section proposes the roles, the permis
 | Stack spec, API | JWT Bearer tokens between the dashboard and the API. The RBAC data model is listed as an open item. |
 | PRD, escalation | P0 goes to a human, P1 to the Coordinator. Security issues found in review "escalate to human immediately". Someone must own that inbox. |
 | PRD, platform config | Per-platform `roles` (`architect`, `reviewer`, `developer`, `security-reviewer`). These are **agent job roles** for routing, not access roles. Do not conflate the two. |
-| PRD, enterprise platform | The IBM Bob adapter lists `audit-logging`, `rbac` and `secret-management` as enterprise features, so a compliance mode is expected. |
 
 Conflicts to settle: the PRD marks access control optional, while the stack spec, summary and build assessment treat it as required. Section 5.9 asks this as a question.
 
@@ -437,7 +436,7 @@ Doing the Phase 1 items early costs little and avoids adding an authorisation la
 ### 5.9 Open questions
 
 1. Is access control mandatory for the first release? The PRD marks it optional and every other document treats it as required.
-2. Do you want an identity provider (OIDC, SSO) from the start, or local users first? An enterprise or IBM deployment will probably need the provider.
+2. Do you want an identity provider (OIDC, SSO) from the start, or local users first? An enterprise deployment will probably need the provider.
 3. Does Viewer see only assigned projects, or all projects? The PRD says "own projects", which implies assignment.
 4. Is the two-person rule (author cannot approve their own merge) required, or is a single developer allowed to self-approve in the MVP?
 5. Should agents be able to act with a user's full permission, or only the intersection described in 5.2?
@@ -453,12 +452,12 @@ Doing the Phase 1 items early costs little and avoids adding an authorisation la
 | Rust in the stack | Keep, optional, or remove | Claude: Python-first. Bob: keep Rust. | Resolved: Rust removed (learning curve too high). Language and messaging options are assessed in section 4 and are not yet chosen |
 | Implementation languages | Option A (Go core, Python agents), B (Python only), C (TypeScript only), D (Java only) | Section 4.3 | Decided: Option A. Go for the CLI and the file, git and process libs; Python for the agent layer and API. Split in 4.6 |
 | Message broker | None (files), RabbitMQ, ActiveMQ Classic, ActiveMQ Artemis | Section 4.4: keep files as the source of truth; RabbitMQ if a broker is added | Decided: files are the source of truth and no broker ships in Phase 1-2. If one is added (Phase 3-4), it is RabbitMQ as an optional outbox transport. ActiveMQ is not chosen. See 4.7 |
-| External CLI agents or in-process SDK loop | See stack item 7 | None given | Not decided (`agent-platform` assumes external) |
+| External CLI agents or in-process SDK loop | See stack item 7 | None given | Not decided. `agent-platform` assumes external harnesses (Claude Code, OpenAI Codex, Gemini CLI); the Coordinator and Monitors could call `llm-gateway` directly |
 | Publish Tier 1 and 2 as separate packages, or keep internal seams | Monorepo of independent packages, or separate repos | None given | Not decided. The independence rules keep both options open. |
 | Dashboard | Terminal UI, minimal HTML, full React | Bob: TUI first, React in Phase 4 | Resolved: minimal read-only HTML |
 | TimescaleDB | Hard dependency, or optional upgrade | Optional | Resolved: JSONL ledger, then PostgreSQL, then TimescaleDB as a one-liner |
 | Router design | Keyword stub, or scoring heuristic | Interface now, keyword match fine for v1 | Resolved: scoring heuristic pack |
-| `CodingAgentAdapter` and `LLMGateway` | Two abstractions, or unified | Keep separate | Resolved. IBM Bob registers in both with separate credentials. Stakeholder sign-off still pending. |
+| `CodingAgentAdapter` and `LLMGateway`; supported platforms | Two abstractions, or unified; which vendors | Keep separate | Resolved: kept separate. IBM Bob is removed from the solution. Claude, OpenAI and Gemini are supported, each registered independently as a harness in `agent-platform` and as a provider in `llm-gateway`, so either layer can be replaced by configuration |
 | IPC mechanism | Filesystem, or message broker | Broker interface now, filesystem implementation for Phase 1-2 | Decided with the message broker row: filesystem implementation for Phase 1-2 behind a transport interface (4.7). The broker itself stays deferred. `event-log` open question 1 (is a pure-file design enough at 20-30 writers) is still open |
 | Auth | Defer to Phase 4, or RBAC skeleton in Phase 1 | RBAC data model and middleware hook in Phase 1; roles and model in section 5 | Approved: the roles and data model in section 5 are accepted. The seven questions in 5.9 remain open and do not block the Phase 1 skeleton |
 
@@ -469,17 +468,16 @@ Doing the Phase 1 items early costs little and avoids adding an authorisation la
 1. **RBAC data model.** A security gap. The roles and model are approved in section 5 (seven human roles, seven agent roles, a binding-based data model). The open questions (5.9) still need answers, and the skeleton should land in Phase 1, not Phase 4.
 2. **Scheduler capacity extraction (`task-queue`)**, or a statement that it is a UMAS-internal component.
 3. **`structured-output-parser` decision record.**
-4. **IBM Bob sign-off** on registering in both `agent-platform` and `llm-gateway`, needed before Phase 2.
-5. **Follow-ups from closed items:**
+4. **Follow-ups from closed items:**
    - Re-base the 25M dashboard token estimate for the HTML page, and decide whether it ships in Phase 2.
    - Choose the dashboard backend framework and write the shared OpenAPI definition.
    - Re-cost the build assessment's token estimates and redraw the phase plan around the tiers (offered by Claude, not done).
    - Add an adopt-or-build evaluation to `merge-queue`.
    - Build the `SKILL.md` files for the packs, and run them against a model.
    - Specify the CLI/daemon JSON-RPC surface and the REST endpoints.
-6. **Cross-library mention to check:** `metrics-store` names `error-classifier` as the source of two metrics (`error.p0_count`, `error.p1_count`). Check this against the no-import rule; it is acceptable only if it stays a data-format reference.
+5. **Cross-library mention to check:** `metrics-store` names `error-classifier` as the source of two metrics (`error.p0_count`, `error.p1_count`). Check this against the no-import rule; it is acceptable only if it stays a data-format reference.
 
-Closed since the earlier reviews: `error-classifier`, `agent-session`, `metrics-store`, the dashboard decision, the TimescaleDB question, and the library count (the READMEs said "nine" while the folder had ten; the main spec and summary tables were missing `agent-platform`).
+Closed since the earlier reviews: the IBM Bob sign-off (dropped because Bob was removed), `error-classifier`, `agent-session`, `metrics-store`, the dashboard decision, the TimescaleDB question, and the library count (the READMEs said "nine" while the folder had ten; the main spec and summary tables were missing `agent-platform`).
 
 ---
 
