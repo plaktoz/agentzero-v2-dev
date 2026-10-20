@@ -158,6 +158,8 @@ nodes:
 | Clock jump | Uses monotonic time for intervals where possible; heartbeat `ts` is wall clock, so large jumps cause one false `unresponsive` which the `seq` counter allows to be detected and ignored |
 | Start command fails immediately | Counted toward the crash-loop window |
 | Node ladder exhausted | State `failed`; `escalate` emitted once; no further actions until a human or caller resets it |
+| **Boot after machine shutdown** | On startup, all nodes whose heartbeat `ts` is older than `now - (interval * miss_threshold)` are in `unresponsive` state at tick 0. For nodes marked `kind: external` with a `machine_pause_aware: true` flag, the watchdog suppresses the `unresponsive` ladder for one `startup_grace` period and emits a `boot_stale` event instead. This allows the consuming application to distinguish "crashed before shutdown" from "was running cleanly and is now awaiting resume". |
+| **Heartbeat absent because agent was paused cleanly** | If `<hook-path>/PAUSE.md` exists and `<hook-path>/.pause` does not (shutdown completed cleanly), the watchdog treats the node as `paused` rather than `unresponsive` and skips the restart ladder entirely. |
 
 ### Error records
 
@@ -193,6 +195,7 @@ The three-tier watchdog is three levels of this library, with intelligence added
 | Recovery: nudge -> graceful handoff -> emergency handoff | Stalled ladder: `nudge -> request_graceful -> callback(emergency_handoff)` |
 | 95% token usage with no handoff | Not a watchdog concern; combine a [budget-meter](budget-meter.md) event with a callback |
 | `escalate` events | Wrapped as records by UMAS; the node, ladder rung and reason go into `context`. See [error-classifier](error-classifier.md) section 9 |
+| **Machine shutdown / boot recovery** | All worker nodes are `kind: external, machine_pause_aware: true`. On boot, the watchdog emits `boot_stale` per node and suppresses restart for one `startup_grace`. UMAS daemon reads `PAUSE.md` per worktree and either resumes (token valid) or sets `auth_expired` before the grace window ends. |
 
 ## 10. Source Material and Deviations
 

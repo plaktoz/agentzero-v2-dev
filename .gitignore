@@ -1,0 +1,91 @@
+# ─── UMAS workspace ──────────────────────────────────────────────────────────
+.umas/worktrees/
+.umas/token-cache
+*.db
+*.db-shm
+*.db-wal
+*.db.bak
+
+# secrets — never committed (see UMAS-DNA.md §A6)
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+**/secrets/
+**/token-cache
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+**/.idea/
+**/.vscode/
+*.swp
+*~
+
+# ─── Rust ────────────────────────────────────────────────────────────────────
+**/target/
+**/*.rs.bk
+# Cargo.lock: omit for library crates, keep for binaries — override per subdir
+
+# ─── Python ──────────────────────────────────────────────────────────────────
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+**/.venv/
+**/venv/
+**/env/
+*.egg-info/
+**/dist/
+**/build/
+**/.eggs/
+*.egg
+**/.mypy_cache/
+**/.ruff_cache/
+**/.pytest_cache/
+**/htmlcov/
+.coverage
+coverage.xml
+
+# ─── Node / TypeScript ───────────────────────────────────────────────────────
+**/node_modules/
+**/.next/
+**/.nuxt/
+**/.output/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+**/.cache/
+
+# ─── Java ────────────────────────────────────────────────────────────────────
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+**/.gradle/
+**/out/
+*.iml
+*.iws
+*.ipr
+.classpath
+.project
+**/.settings/
+
+# ─── BOB ────────────────────────────────────────────────────────────────────
+**/.bob/
+
+# ─── Go ──────────────────────────────────────────────────────────────────────
+**/vendor/
+**/bin/
+*.exe
+*.exe~
+*.test
+*.out
+**/go.sum.bak

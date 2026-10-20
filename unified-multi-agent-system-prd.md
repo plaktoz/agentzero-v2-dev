@@ -171,12 +171,13 @@ Track code size, cost, time, test coverage, and production reliability.
 - **MUST NOT:** Hardcode API keys in configuration files or code
 - **MUST:** Support integration with HashiCorp Vault or equivalent secret management
 
-**Access Control:** (optional)
+**Access Control:**
 - **MUST:** Implement role-based access control (RBAC)
+- **MUST:** Authenticate people through OpenID Connect (OIDC), with Keycloak as the identity provider
 - **Required Roles:**
   - **Admin:** Manage agents, view all projects, modify system configuration
   - **Developer:** Spawn agents, view own projects, submit work requests
-  - **Viewer:** View metrics, view own projects (read-only)
+  - **Viewer:** View metrics and all projects (read-only)
 
 **Audit Logging:**
 - **MUST:** Log all agent operations with timestamp, user, action

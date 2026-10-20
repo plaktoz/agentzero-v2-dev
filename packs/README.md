@@ -1,9 +1,9 @@
 # Content Packs (Tier 2)
 
-> Eight reusable prompt-and-rule packs extracted from the UMAS design. Each is plain text (Markdown, YAML, JSON Schema) that any agent harness can load. Each has its own spec and can be versioned, tested, and used without UMAS.
+> Nine reusable prompt-and-rule packs extracted from the UMAS design. Each is plain text (Markdown, YAML, JSON Schema) that any agent harness can load. Each has its own spec and can be versioned, tested, and used without UMAS.
 >
-> **Status:** Draft v0.1 · **Date:** October 19, 2026
-> **Referenced from:** [UMAS-TECH-DESIGN-SPEC.md](../UMAS-TECH-DESIGN-SPEC.md) §1.1 · [TECHNICAL-DESIGN-SUMMARY.md](../TECHNICAL-DESIGN-SUMMARY.md)
+> **Status:** Draft v0.1 · **Date:** October 21, 2026
+> **Referenced from:** [TECHNICAL-DESIGN-SPEC.md](../TECHNICAL-DESIGN-SPEC.md) §3 · [TECHNICAL-DESIGN-SUMMARY.md](../TECHNICAL-DESIGN-SUMMARY.md)
 > **Sibling set:** [libs/](../libs/README.md) (Tier 1, code libraries)
 
 ---
@@ -20,6 +20,14 @@
 | [router-heuristic](router-heuristic.md) | A scoring rubric that sends a request to a direct worker, an architect plus worker, or a full panel | Right-sizing process to task size |
 | [grilling](grilling.md) | A bounded questioning protocol that produces an alignment summary before work starts | Requirement clarification for any agent |
 | [test-policy](test-policy.md) | A selective-versus-strict testing rule and a "risky logic" classifier | Deciding which changes need tests |
+| [playbook-runner](playbook-runner.md) | A phase-gated workflow engine: any SDD or process workflow expressed as a Markdown playbook, executed by the Coordinator with human gates, auto gates, and a mandatory escape hatch | Running any phase-gated development process (production gatekeeper, autonomous loop, compliance workflow) against any project |
+
+### Built-in playbooks (shipped inside `playbook-runner`)
+
+| Playbook | Purpose | Phases |
+|----------|---------|--------|
+| `production-gatekeeper` | Six-stage quality-gated workflow: Spec before code, human approves plan, tests gate build, two-axis review before ship | DEFINE → PLAN (gate) → BUILD → VERIFY (gate) → REVIEW → SHIP |
+| `autonomous-loop` | Autonomous execution to a user-defined exit predicate with escape hatch | SCAN → APPLY → VERIFY (exit predicate) |
 
 ### Considered and not extracted
 
@@ -86,12 +94,12 @@ request --> grilling --> alignment summary --+
                                               v
                                        router-heuristic --> route
                                               |
-        +-------------------------------------+
-        v
- specialist-agents (Analyst -> PM -> UX -> Architect -> Developer)
-        |                                  |
-        |            uses                  | uses
-        v                                  v
+        +-------------------------------------+------------ playbook-runner (optional)
+        v                                                          |
+ specialist-agents (Analyst -> PM -> UX -> Architect -> Developer) |
+        |                                  |                       |
+        |            uses                  | uses    phase loop:   |
+        v                                  v         gates + escape|
  communication-modes (artifact register)   minimalism-ladder + test-policy
         |
         v
@@ -99,6 +107,9 @@ request --> grilling --> alignment summary --+
 
  diff --> two-axis-review --> findings (severity gate)
                  uses: anti-slop code rules (Standards axis), test-policy (Standards axis)
+
+ playbook-runner wraps the pipeline above; each playbook step calls one pack or agent role.
+ Without a playbook, the pipeline runs in the default implicit sequence (unchanged).
 ```
 
 ---

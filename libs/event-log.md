@@ -79,6 +79,47 @@ Maximum line size is `max_line_bytes` (default 64 KiB). Larger payloads must be 
 
 Also exposed as `event-log <op> --json`. `append` over the CLI reads the JSON `data` from stdin.
 
+### 4.1 CLI output (AXI)
+
+Follows [CLI Conventions (AXI)](README.md#cli-conventions-axi). `--json` is unchanged (one envelope per line) and is what other libraries and programs read.
+
+**Why it fits.** `read` is how an agent asks "what happened". A day of events can be tens of thousands of lines, and each carries a `data` object of any size.
+
+**Default view of `read`** (illustrative):
+
+```
+events[20 of 1284]{ts,type,source,data}:
+  10:23:01,step_complete,alice,"validation logic done"
+  10:23:09,test_run,alice,"{passed:118,failed:1}"
+  ...
+by_type: step_complete 412, test_run 380, hook_claimed 96, other 396
+range: 2026-10-19T00:02 to 2026-10-19T10:23
+help[2]:
+  event-log read --type test_run --limit 50
+  event-log read --id-after 01JC4A...   # next page
+```
+
+| Rule | Applied here |
+|------|--------------|
+| Minimal fields | `ts` (time only when all events share a day), `type`, `source`, and `data` as a one-line summary. `--fields id,scope,trace` adds the rest |
+| Truncation | `data` is flattened to one line and cut at 200 characters with `… (N chars total)`. `--full` prints the whole object |
+| Aggregates | `n of total` for the filter, a `by_type` breakdown, and the time range. The total comes from the same scan `read` already performs; `--no-total` skips the count on very large logs |
+| Empty state | `events: none matched (filter: type=deploy since=09:00; 1284 events in range)`. It states the filter and what was checked |
+| Newest first | The default order for agents is newest first, with a generous default limit (20). `--order asc` for oldest first |
+| Hints | After a truncated read: the exact `--id-after` command for the next page |
+
+**Mutations.** `append` reads `data` from stdin, never prompts, and prints one line: `appended: <id>`. It is **not** idempotent, since each call is a new fact; this is the one deliberate exception to AXI's idempotency rule and it is stated here so nobody expects otherwise. `rotate` and `prune` are idempotent: a second `prune` with nothing to delete exits 0 with `pruned: 0 segments`. `repair` prints what was quarantined and where.
+
+**`follow`.** A stream, not a result. It prints one summary line per event (the same four fields) and ends only when interrupted. The default view of `follow` is for a person; an agent should use `poll` with a cursor.
+
+**Exit codes.** `0` success, including an empty read. `1` a typed error (`corrupt_line` found by `verify`, `unsupported_version`, `lock_timeout`). `2` usage. `verify` exits 1 when it finds corruption, so a script can branch on it.
+
+**How to use it.**
+- **Agent investigating:** `event-log read --type <t> --since <time>`; narrow with filters before using `--full`.
+- **Program consuming events:** `--json` or read the files directly. The default view drops fields.
+- **Writer in another language:** `echo '{...}' | event-log append --type X --source Y`.
+
+
 ## 5. Behaviour
 
 ### 5.1 Append atomicity
@@ -166,6 +207,10 @@ This library keeps its own typed errors and does not import any error library. A
 5. `repair` followed by `verify` reports clean; the quarantine folder contains every removed line.
 6. `fold` over 1M events completes in constant memory.
 7. `ts` is monotonic per writer even if the system clock steps backwards (the library clamps to the previous value).
+8. A read of 10,000 matching events prints 20 by default with `20 of 10000` and the next-page hint; `--limit` changes the count.
+9. A read with no match prints a line naming the filter and exits 0.
+10. An event with 50 KB of `data` prints at most about 200 characters of it in the default view; `--full` and `--json` print all of it.
+11. `prune` run twice exits 0 both times; the second reports nothing removed.
 
 ## 9. How UMAS Uses It
 

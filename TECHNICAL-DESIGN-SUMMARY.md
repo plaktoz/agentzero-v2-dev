@@ -12,13 +12,13 @@ The full technical design is now a **single document**. The four-file split from
 
 | Document | Role |
 |----------|------|
-| **[TECHNICAL-DESIGN-SPEC.md](TECHNICAL-DESIGN-SPEC.md)** ← start here | The single authoritative technical design (v2.0). Technology stack, architecture, all component designs, exception flows, APIs. |
+| **[UMAS-DNA.md](UMAS-DNA.md)** ← read this first | Project DNA — six principles, architecture invariants, shared vocabulary, signal protocol, module checklist. Authoritative for every module. |
+| **[TECHNICAL-DESIGN-SPEC.md](TECHNICAL-DESIGN-SPEC.md)** | The single authoritative technical design (v2.0). Technology stack, architecture, all component designs, exception flows, APIs. |
 | [UMAS-TECH-DESIGN-SPEC.md](UMAS-TECH-DESIGN-SPEC.md) | ~~Superseded~~ — merged into TECHNICAL-DESIGN-SPEC.md v2.0 |
 | [TECHNICAL-DESIGN-SPEC-PART2.md](TECHNICAL-DESIGN-SPEC-PART2.md) | ~~Superseded~~ — merged into TECHNICAL-DESIGN-SPEC.md v2.0 |
 | [TECHNICAL-DESIGN-SPEC-PART3.md](TECHNICAL-DESIGN-SPEC-PART3.md) | ~~Superseded~~ — merged into TECHNICAL-DESIGN-SPEC.md v2.0 |
 
 **Source of truth for product requirements:** [unified-multi-agent-system-prd.md](unified-multi-agent-system-prd.md)
-**Modularisation assessment:** [modularisation-assessment.md](modularisation-assessment.md)
 
 ### Standalone component specs
 
@@ -26,15 +26,17 @@ Reusable parts of the design are specified separately. Each one is usable withou
 
 | Set | Index | Contents |
 |-----|-------|----------|
-| Tier 1, libraries (12) | [libs/README.md](libs/README.md) | [hook-store](libs/hook-store.md), [event-log](libs/event-log.md), [merge-queue](libs/merge-queue.md), [test-adapters](libs/test-adapters.md), [budget-meter](libs/budget-meter.md), [llm-gateway](libs/llm-gateway.md), [watchdog](libs/watchdog.md), [decision-artifacts](libs/decision-artifacts.md), [error-classifier](libs/error-classifier.md), [agent-platform](libs/agent-platform.md), [agent-session](libs/agent-session.md), [metrics-store](libs/metrics-store.md) |
-| Tier 2, content packs (8) | [packs/README.md](packs/README.md) | [minimalism-ladder](packs/minimalism-ladder.md), [anti-slop](packs/anti-slop.md), [communication-modes](packs/communication-modes.md), [two-axis-review](packs/two-axis-review.md), [specialist-agents](packs/specialist-agents.md), [router-heuristic](packs/router-heuristic.md), [grilling](packs/grilling.md), [test-policy](packs/test-policy.md) |
+| Tier 1, libraries (13) | [libs/README.md](libs/README.md) | [hook-store](libs/hook-store.md), [event-log](libs/event-log.md), [merge-queue](libs/merge-queue.md), [test-adapters](libs/test-adapters.md), [budget-meter](libs/budget-meter.md), [llm-gateway](libs/llm-gateway.md), [watchdog](libs/watchdog.md), [decision-artifacts](libs/decision-artifacts.md), [error-classifier](libs/error-classifier.md), [agent-platform](libs/agent-platform.md), [agent-session](libs/agent-session.md), [metrics-store](libs/metrics-store.md), [task-queue](libs/task-queue.md) |
+| Tier 2, content packs (9) | [packs/README.md](packs/README.md) | [minimalism-ladder](packs/minimalism-ladder.md), [anti-slop](packs/anti-slop.md), [communication-modes](packs/communication-modes.md), [two-axis-review](packs/two-axis-review.md), [specialist-agents](packs/specialist-agents.md), [router-heuristic](packs/router-heuristic.md), [grilling](packs/grilling.md), [test-policy](packs/test-policy.md), [playbook-runner](packs/playbook-runner.md) |
 
 ### Key changes in v2.0
 
 - All four design files merged into a single `TECHNICAL-DESIGN-SPEC.md`. The Part 2/3 files and `UMAS-TECH-DESIGN-SPEC.md` are now superseded stubs.
 - **TimescaleDB removed as a hard dependency.** Metrics storage is now a JSONL ledger (Phase 1–2) → standard PostgreSQL `metrics` table (Phase 3+). TimescaleDB is an optional one-statement upgrade. See [libs/metrics-store.md](libs/metrics-store.md).
 - **Dashboard confirmed as minimal HTML.** The React stack is retained as a Phase 4 option only ([ADR-0001](docs/decisions/ADR-0001-minimal-html-dashboard.md)).
-- Two new libs registered: [agent-session](libs/agent-session.md) (shared lifecycle for all 6 agent types) and [metrics-store](libs/metrics-store.md).
+- **IBM Bob removed.** Harness list is now Claude Code, OpenAI Codex, Gemini CLI, GitHub Copilot. IBM Bob is no longer a harness or a provider.
+- Three new libs registered: [agent-session](libs/agent-session.md), [metrics-store](libs/metrics-store.md), and [task-queue](libs/task-queue.md).
+- **Playbook engine added.** [playbook-runner](packs/playbook-runner.md) makes the workflow SDD-agnostic: any phase-gated process is a Markdown playbook. Ships with `production-gatekeeper` and `autonomous-loop` built-ins. Default workflow unchanged.
 - All inline code moved to `libs/` and `packs/` reference appendices (§12 sections). Source files tombstoned.
 
 ---
@@ -432,8 +434,8 @@ WebSocket: /ws/events
 
 ### Authentication & Authorization
 - API keys in environment variables
-- JWT tokens for dashboard
-- Role-based access control (Admin, Developer, Viewer)
+- OIDC sign-in through Keycloak; JWT access tokens for the dashboard and API
+- Role-based access control (seven human roles; see modularisation-assessment.md section 5)
 
 ### Data Protection
 - Secrets never committed to version control

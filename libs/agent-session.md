@@ -56,9 +56,13 @@ crashed         unhandled exception; session ended without a done signal
 done            task completed; done commit written
 budget_paused   period budget exhausted; session suspended until budget resets
 provider_failed both primary and fallback LLM providers failed; session suspended
+machine_paused  host machine shut down or suspended; session paused at last checkpoint commit
+auth_expired    OIDC token expired while machine was off; re-authentication required before resume
 ```
 
-`handoff`, `budget_paused`, and `provider_failed` are **resumable**: a successor session reads `STATE.md` and the event log to continue the work. `crashed` and `done` are terminal within a session run; the task may be retried externally.
+`handoff`, `budget_paused`, `provider_failed`, `machine_paused`, and `auth_expired` are **resumable**: a successor session reads `STATE.md` (and `PAUSE.md` if present) and the event log to continue. `crashed` and `done` are terminal within a session run; the task may be retried externally.
+
+`machine_paused` and `auth_expired` carry **no timeout** — they wait indefinitely for the machine to boot or the human to re-authenticate. They are never promoted to `crashed` by the watchdog.
 
 ### 3.3 SessionConfig
 
@@ -153,7 +157,8 @@ Written atomically to the worktree root after every step. Plain Markdown; both h
 | `done(session, step) -> CommitRef` | Write final `STATE.md`, commit the worktree with the done message, append a `session_ended` event with `status: done`. |
 | `escalate(session, blocked) -> ()` | Append a `session_escalated` event with the severity and reason. Does not stop execution; the caller decides whether to continue or abort. |
 | `handoff(session) -> HandoffPacket` | Pack context via `budget-meter.pack()`, write `HANDOFF.md`, commit with handoff message, append a `handoff_initiated` event. Returns the packet. |
-| `recover(hook_path, event_log_dir, task_id) -> RecoveredSession` | Reconstruct session state from `STATE.md` and the event log. Section 5.5. |
+| `pause(session, reason) -> CommitRef` | Write `PAUSE.md` and `STATE.md`, commit with pause message, set status `machine_paused`, append a `session_paused` event. Safe to call from a signal handler. Section 5.6. |
+| `recover(hook_path, event_log_dir, task_id) -> RecoveredSession` | Reconstruct session state from `STATE.md` and the event log. Reads `PAUSE.md` in preference to `STATE.md` if both exist. Section 5.5. |
 | `status(hook_path) -> SessionStatus` | Read current status from `STATE.md` without loading full history. |
 
 Also `agent-session <op> --json`.
@@ -220,14 +225,43 @@ The `[done]` prefix is the signal the Scheduler uses to detect task completion. 
 
 `recover(hook_path, event_log_dir, task_id)` rebuilds enough context for a successor agent to continue:
 
-1. Read `STATE.md` from the worktree: current task, next steps, recent decisions, file pointers.
-2. If `HANDOFF.md` exists, read it (it has more structured content than `STATE.md`).
-3. Fold the event log (filtered to `scope = task_id`) to extract `step_complete` events since the last `session_started`.
-4. Return a `RecoveredContext` — the same shape as what `execute_step_fn` receives on first call, so the successor agent code is identical whether starting fresh or resuming.
+1. If `PAUSE.md` exists in the worktree, read it first — it is the most recent clean checkpoint.
+2. Otherwise read `STATE.md` from the worktree: current task, next steps, recent decisions, file pointers.
+3. If `HANDOFF.md` exists, read it (it has more structured content than `STATE.md`).
+4. Fold the event log (filtered to `scope = task_id`) to extract `step_complete` events since the last `session_started`.
+5. Return a `RecoveredContext` — the same shape as what `execute_step_fn` receives on first call, so the successor agent code is identical whether starting fresh or resuming.
 
-Recovery deliberately does **not** replay the full conversation history. The incoming agent reads the `STATE.md` summary and the handoff packet; it does not need the prior session's LLM turns.
+Recovery deliberately does **not** replay the full conversation history. The incoming agent reads the `STATE.md`/`PAUSE.md` summary and the handoff packet; it does not need the prior session's LLM turns.
 
-### 5.6 Context registration for handoff packing
+### 5.6 Pause behaviour (machine shutdown)
+
+`pause(session, reason)` is the clean-shutdown path. It is designed to be called from a signal handler or a shutdown-triggered callback:
+
+1. Complete any in-progress atomic write (never interrupt mid-file).
+2. Write `PAUSE.md` to the worktree root atomically (write temp, rename). `PAUSE.md` contains all `STATE.md` fields plus `paused_reason` and `paused_at`.
+3. Write `STATE.md` with `Status: machine_paused`.
+4. Commit both files: `[umas:checkpoint] <agent_id> — machine shutdown [tokens: <n>]`.
+5. Set session `status = machine_paused`.
+6. Append `session_paused` event to the event log.
+7. Delete the agent's heartbeat file so the watchdog does not raise a false alarm on next boot.
+
+**Shutdown grace window:** The consuming application broadcasts a pause signal by writing `<hook-path>/.pause`. Each agent polls for this file at every step boundary. On detection it calls `pause()`. Agents that do not finish within `shutdown_grace_seconds` (default 30 s) are left in whatever state their last commit captured — no data is lost, but `PAUSE.md` will not exist and recovery falls back to `STATE.md`.
+
+**`.pause` file format:**
+```json
+{ "v": 1, "reason": "machine_shutdown", "ts": "<RFC 3339>", "grace_seconds": 30 }
+```
+The file is deleted by the orchestrator after all agents have responded or the grace window expires.
+
+**Agent step-boundary poll** (pseudocode):
+```
+after each step:
+  if file_exists(hook_path + "/.pause"):
+    pause(session, reason=read_json(hook_path + "/.pause").reason)
+    exit
+```
+
+### 5.7 Context registration for handoff packing
 
 The caller registers context sections throughout the session so `handoff()` can pack them efficiently:
 
@@ -250,7 +284,7 @@ Recommended sections the caller should register:
 
 If the caller never calls `register_context`, `handoff()` builds the packet from `STATE.md` as plain text (degraded mode, flagged in the packet manifest).
 
-### 5.7 Event types emitted
+### 5.8 Event types emitted
 
 All events are appended via [event-log](event-log.md) `append()`. The `scope` field is set to `task_id`; `source` is set to `config.event_source`.
 
@@ -260,6 +294,8 @@ All events are appended via [event-log](event-log.md) `append()`. The `scope` fi
 | `step_complete` | `checkpoint()` | `step_n`, `summary`, `token_used`, `decisions[]` |
 | `session_escalated` | `escalate()` | `severity`, `reason` |
 | `handoff_initiated` | `handoff()` | `token_used`, `token_limit`, `reason` |
+| `session_paused` | `pause()` | `reason`, `token_used`, `pause_file: "PAUSE.md"` |
+| `session_resumed` | boot recovery in consuming app | `resumed_from: "machine_paused"\|"auth_expired"`, `session_id` |
 | `session_ended` | `done()` or unhandled exception | `status`, `token_used`, `step_count` |
 
 ## 6. Configuration
@@ -278,10 +314,14 @@ commit_prefixes:
   checkpoint: "[checkpoint]"
   done:       "[done]"
   handoff:    "[handoff]"
+  pause:      "[umas:checkpoint]"   # pause uses checkpoint prefix + "— machine shutdown" suffix
 
 state_file: STATE.md
 handoff_file: HANDOFF.md
+pause_file: PAUSE.md
+pause_signal_file: ".pause"         # relative to hook_path; polled at each step boundary
 
+shutdown_grace_seconds: 30          # max time to finish current step before shutdown proceeds
 decisions_in_state: 10       # how many recent decisions to keep in STATE.md
 decisions_in_packet: 10      # how many recent decisions to include in handoff packet
 ```

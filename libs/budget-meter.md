@@ -74,6 +74,48 @@ Operations: `reserve`, `commit`, `release`, `adjust` (manual limit change), `res
 
 Also `budget-meter <op> --json`.
 
+### 4.1 CLI output (AXI)
+
+Follows [CLI Conventions (AXI)](README.md#cli-conventions-axi). `--json` is unchanged and is what orchestrators and the `admit` callback use. The default view matters for `status`.
+
+**Why it fits.** An agent deciding whether to start more work, or how much context to load, needs "how much is left and when does it reset" in a few tokens, not the ledger.
+
+**No-argument view = `status` for every budget** (read-only; folds the snapshot plus ledger tail):
+
+```
+bin: budget-meter
+description: token and cost budgets with reservations and thresholds
+budgets[2]{id,used,available,percent}:
+  proj-a/day,812400,187600,81
+  proj-b/day,40200,959800,4
+crossed: proj-a/day 80%
+resets: proj-a/day 2026-10-20T00:00Z (in 13h)
+help[1]:
+  budget-meter status proj-a/day --fields reserved,thresholds
+```
+
+| Rule | Applied here |
+|------|--------------|
+| Minimal fields | `id`, `used`, `available`, `percent`. `--fields reserved,limit,reset_at,unit` adds more. Units are stated once in the header when all rows share one |
+| Aggregates | Percent, the thresholds already crossed, and time to reset are computed, not left for the agent to derive |
+| Empty states | `budgets: none defined` with `help: budget-meter define ...`. A budget with no usage in the window shows `used 0`, not nothing |
+| Truncation | The ledger is never printed by `status`. `cost` and `pack` print summaries; `pack --full` lists the manifest of kept, truncated and dropped sections |
+| Hints | Over a threshold: the live-change command `define --limit` is mentioned only if the caller has set the budget as adjustable. Deferred: the `retry_after` time |
+
+**Decisions are answers, not errors.** `reserve` exits 0 for both outcomes and prints `result: admit` with the `reservation` id, or `result: defer` with `reason` and `retry_after`. A shell caller reads the `result` line, or uses `--json`. Failures of the tool itself (`unknown_budget`, unreadable ledger, `unsupported_version`) exit 1.
+
+**Idempotence.** `release` and `commit` on a reservation already released or committed exit 0 (`already committed`) and change nothing. `define` with an identical budget exits 0 with `unchanged`. `reserve` is not idempotent today: two calls hold twice. A retried launcher could double-hold; see the open point.
+
+**Exit codes.** `0` success, empty, `admit`, or `defer`. `1` a typed error. `2` usage.
+
+**How to use it.**
+- **Agent checking headroom:** `budget-meter status` before starting a large task.
+- **Orchestrator:** `budget-meter reserve --json ...` inside the `admit` callback; read `result`.
+- **Session start (application's choice):** the no-argument view from a hook, so the agent knows when it is near a limit.
+
+**Open point.** Make `reserve` idempotent on `(budget, actor, ref)`: a second call with the same trio returns the existing reservation. This protects against retried launchers and matches AXI's rule for mutations, but it changes section 4 and needs `ref` to be required.
+
+
 ## 5. Behaviour
 
 ### 5.1 Threshold semantics
@@ -169,6 +211,9 @@ This library keeps its own typed errors and does not import any error library. A
 4. Killing a process holding a reservation: its hold expires and headroom returns.
 5. `pack` with required sections that fit never drops them; the manifest lists everything truncated or dropped.
 6. Ledger replay after deleting the snapshot yields identical status.
+7. `budget-meter` with no arguments prints every budget with used, available and percent, and `budgets: none defined` when there are none, exiting 0 in both cases.
+8. `reserve` that defers exits 0, prints `result: defer` with a reason, and a script reading `--json` gets the same decision.
+9. `commit` of an already committed reservation exits 0 with `already committed` and the ledger gains no line.
 
 ## 9. How UMAS Uses It
 

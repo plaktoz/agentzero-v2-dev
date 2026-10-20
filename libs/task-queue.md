@@ -114,6 +114,55 @@ Every operation that changes state takes the lock, reads any log lines past the 
 
 Also `task-queue <command> --json` for every operation above, so a worker in any language can use it by subprocess.
 
+### 4.1 CLI output (AXI)
+
+Follows [CLI Conventions (AXI)](README.md#cli-conventions-axi). `--json` is unchanged and remains the contract for workers and launchers.
+
+**Why it fits.** A coordinating agent asks "what is ready, what is stuck, what is running" many times a session. The queue can hold hundreds of tasks, almost all `done`.
+
+**No-argument view** (content first; read-only, takes no lock, replays the tail only):
+
+```
+bin: task-queue
+description: dependency-aware work queue with leased claims
+queue: 7 ready, 12 blocked, 5 claimed (max 5), 311 done, 2 failed
+ready[3 of 7]{id,priority,tags}:
+  01JC4A,10,"coding"
+  01JC4B,10,"coding"
+  01JC4C,5,"review"
+claimed[5]{id,owner,lease_left_s}:
+  01JC31,w-alice,212
+  ...
+failed[2]{id,attempts,error}:
+  01JB90,2,"build_error"
+  ...
+help[2]:
+  task-queue get 01JB90          # why it failed
+  task-queue list --state blocked
+```
+
+| Rule | Applied here |
+|------|--------------|
+| Minimal fields | Task rows show `id`, `state` or `priority`, and `tags` or `owner`. `payload` is opaque and large, so it is **only** shown with `--fields payload`, and then truncated |
+| Aggregate | The `queue:` line counts every state. `ready[3 of 7]` gives shown and total |
+| Empty states | `ready: none (12 blocked, 5 claimed at the cap of 5)` says why nothing is ready. `blocked: none` and `failed: none` are printed, not omitted |
+| Why blocked | `get` on a blocked task lists the dependencies still open and any `blocked_by_failed`, so the agent need not walk the graph |
+| Hints | After a truncated list: how to see the rest. After `failed`: `get <id>`. After a claim: the `complete` and `fail` commands with the id and owner filled in |
+
+**Mutations are idempotent.** `complete`, `cancel` and `release` on a task already in that state by the same owner exit 0 and print `already done`. `complete` or `renew` from a worker that no longer owns the claim is refused with `not_owner` and exit 1 (this is a real failure: the worker must stop). `add_batch` with identical content to an earlier batch is not detected; see open point below.
+
+**Claim is an answer, not an error.** `task-queue claim` exits 0 whether or not it got a task. Output is either the task or `claimed: none` with the reason (`none_ready`, `at_capacity`, `deferred: <reason>`). This keeps a polling worker's loop free of exit-code special cases.
+
+**Exit codes.** `0` success, no-op, empty, or `claimed: none`. `1` a typed error (`cycle`, `unknown_dependency`, `not_owner`, `lock_timeout`, `log_gap`, `unsupported_version`), named in the output. `2` usage.
+
+**How to use it.**
+- **Coordinating agent:** run `task-queue` with no arguments to see the state; `task-queue get <id>` to look into a task.
+- **Worker (any language):** `claim --json`, do the work, `complete --json` or `fail --json`. Never parse the default view.
+- **Session start (application's choice):** run the no-argument view from a session hook so the agent starts with the queue state.
+
+**Open point.** Should `add` with a caller-supplied `id` that already exists with identical content be a no-op (`already added`, exit 0) and with different content an error? That would make `add` idempotent for retried launchers. It needs a new typed error (`id_conflict`).
+
+
 ## 5. Behaviour
 
 ### 5.1 Claim
@@ -197,6 +246,10 @@ This library keeps its own typed errors. A consumer that wants one error vocabul
 9. A deferred task (by `admit` or the cap) keeps its place in the queue order.
 10. `complete` from a worker that no longer owns the claim is refused and changes nothing.
 11. The whole CLI works with `--json` and exits non-zero on typed errors.
+12. `task-queue` with no arguments prints the per-state counts and the first ready tasks, takes no lock, and exits 0, including on an empty queue (`queue: empty`).
+13. `claim` with nothing ready, at the cap, or deferred exits 0 and says which; a polling loop needs no exit-code handling.
+14. `complete` twice by the same owner exits 0 with `already done` and changes nothing; by a different worker it exits 1 with `not_owner`.
+15. A task with a 50 KB payload does not print it by default; `--fields payload` prints it cut at 200 characters, and `--full` prints it whole.
 
 ## 9. How UMAS Uses It
 

@@ -6,11 +6,12 @@
 **Based on:** [unified-multi-agent-system-prd.md](unified-multi-agent-system-prd.md)
 **Supersedes:** TECHNICAL-DESIGN-SPEC.md v1.1 · TECHNICAL-DESIGN-SPEC-PART2.md · TECHNICAL-DESIGN-SPEC-PART3.md · UMAS-TECH-DESIGN-SPEC.md
 
+> **Before reading this document, read [UMAS-DNA.md](UMAS-DNA.md) — the project DNA.** It encodes the six non-negotiable principles, architecture invariants, shared vocabulary, and signal protocol that govern every module. This spec is the *how*; the DNA is the *why* and the *never*.
+>
 > This is the single authoritative technical design document. The four-file split from v1.x has been collapsed here.
 > All code that was inline in the previous documents has been moved into `libs/` and `packs/` reference appendices.
-> **Reusable components:** [libs/README.md](libs/README.md) (13 libraries) · [packs/README.md](packs/README.md) (8 content packs)
+> **Reusable components:** [libs/README.md](libs/README.md) (14 libraries) · [packs/README.md](packs/README.md) (9 content packs)
 > **Product requirements:** [unified-multi-agent-system-prd.md](unified-multi-agent-system-prd.md)
-> **Modularisation assessment:** [modularisation-assessment.md](modularisation-assessment.md)
 
 ---
 
@@ -107,18 +108,25 @@ metrics_storage:
 
 ### 1.3 LLM Providers
 
+> **Harness ≠ provider.** The harness is the CLI tool that runs an agent session (`claude-code`, `openai-codex`, `antigravity`, `copilot`). The provider is the LLM API that generates tokens. They are registered and replaced independently. See [agent-platform](libs/agent-platform.md) for harness adapters.
+
 ```yaml
 # Providers are configuration. Replacing one is an edit to the llm-gateway alias table.
+# llm-gateway alias: "google-gemini" → used by the antigravity harness adapter
 tier_1_full_integration:
   anthropic_claude:
     models: [claude-3-5-sonnet-20241022, claude-3-opus-20240229]
     features: [hooks_support, streaming, function_calling, max_tokens_200k]
+    harness: claude-code
   openai_gpt:
     models: [gpt-4-turbo, gpt-4]
     features: [streaming, function_calling, max_tokens_128k]
+    harness: openai-codex
   google_gemini:
+    alias: google-gemini                     # referenced by the antigravity adapter config
     models: [gemini-1.5-pro, gemini-1.5-flash]
     features: [streaming, max_tokens_1m]
+    harness: antigravity                     # Antigravity is the CLI harness for this provider
 
 tier_2_basic_integration:
   local_llm:
@@ -216,7 +224,7 @@ agents_to_database:
 dashboard_to_api:
   protocol: HTTP/HTTPS polling (Phase 1–3) / WebSocket (Phase 4)
   format: JSON
-  auth: JWT Bearer tokens
+  auth: OIDC access tokens issued by Keycloak (JWT Bearer)
   base_path: "/api/v1"
 
 telemetry:
@@ -269,6 +277,7 @@ Parts of the design are extracted as standalone units with no dependency on UMAS
 | Platform adapters, work assignment, cross-platform transfer (§5.3) | [agent-platform](libs/agent-platform.md) |
 | Agent session lifecycle (§5.3) | [agent-session](libs/agent-session.md) |
 | Metrics recording, query, retention (§1.2) | [metrics-store](libs/metrics-store.md) |
+| Dependency graph, leased task queue, concurrency cap, retry (§5.2) | [task-queue](libs/task-queue.md) |
 
 ### Tier 2 — Content Packs ([index](packs/README.md))
 
@@ -282,6 +291,7 @@ Parts of the design are extracted as standalone units with no dependency on UMAS
 | Router scoring heuristic (§5.2) | [router-heuristic](packs/router-heuristic.md) |
 | Grilling and the propulsion rule (§5.2) | [grilling](packs/grilling.md) |
 | Test coverage policy (§5.4) | [test-policy](packs/test-policy.md) |
+| Playbook engine — phase-gated workflow wrapper (§5.2) | [playbook-runner](packs/playbook-runner.md) |
 
 ---
 
@@ -331,15 +341,18 @@ CREATE TABLE agent_sessions (
     -- done            : task completed
     -- budget_paused   : daily token budget exhausted
     -- provider_failed : primary + fallback providers unavailable
+    -- machine_paused  : host machine shut down or suspended; session paused at last checkpoint
+    -- auth_expired    : OIDC token expired while machine was off; re-authentication required before resume
   token_used     INTEGER DEFAULT 0,
   token_limit    INTEGER NOT NULL,
   last_heartbeat DATETIME,
+  paused_at      DATETIME,          -- set when status enters machine_paused or auth_expired
   started_at     DATETIME NOT NULL,
   ended_at       DATETIME
 );
 ```
 
-Sessions in `budget_paused` or `provider_failed` are resumable. They are not treated as failures unless they remain in that state beyond the configurable timeout (default: 24 hours).
+Sessions in `budget_paused`, `provider_failed`, `machine_paused`, or `auth_expired` are resumable. They are not treated as failures unless they remain in that state beyond the configurable timeout (default: 24 hours for `budget_paused`/`provider_failed`; no timeout for `machine_paused`/`auth_expired` — they wait until the human acts).
 
 ---
 
@@ -424,6 +437,19 @@ coordinator_config:
   specialized_agents: {pm: true, architect: true, ux: true, analyst: true}
   session_resumable_statuses: [budget_paused, provider_failed]
   resumable_timeout_hours: 24
+
+  # Playbook — optional. null = default implicit workflow (unchanged behaviour)
+  # See packs/playbook-runner.md for the full schema.
+  playbook: null
+```
+
+**Playbook routing:** When `playbook` is non-null the Coordinator loads the named playbook from the registry and drives a phase loop instead of the implicit sequence. Each phase step calls an existing pack, agent role, or lib op — the underlying execution is identical. Human gates pause the work bundle; the human resumes via `umas work-bundle approve <id>`. Escape hatches write a `[checkpoint]` commit and a `RESUME.md` then escalate. Without a playbook the implicit default workflow is unchanged.
+
+```bash
+# Per-request playbook override:
+umas request "add login" --playbook production-gatekeeper
+umas request "fix crash" --playbook autonomous-loop --exit-predicate "tests pass"
+umas request "refactor" --playbook none   # force default implicit workflow
 ```
 
 #### Router
@@ -518,12 +544,12 @@ Invoked by the Router for medium/large tasks:
 
 UMAS supports four first-class coding agent harnesses. Each is an adapter in [agent-platform](libs/agent-platform.md). None is built into the core, so any can be replaced by changing configuration.
 
-| Harness | Registers in | Notes |
+| Harness | Adapter name | Notes |
 |---------|-------------|-------|
-| Claude Code | [agent-platform](libs/agent-platform.md) | Completion via commit-message hook |
-| OpenAI Codex | [agent-platform](libs/agent-platform.md) | Completion via commit-message hook |
-| Gemini CLI | [agent-platform](libs/agent-platform.md) | Completion via commit-message hook |
-| GitHub Copilot | [agent-platform](libs/agent-platform.md) | Completion via file mtime (IDE tool) |
+| Claude Code | `claude-code` | Completion via commit-message hook |
+| OpenAI Codex | `openai-codex` | Completion via commit-message hook |
+| Antigravity | `antigravity` | Google's Gemini CLI harness. Completion via commit-message hook. Provider (`google-gemini`) registered separately in `llm-gateway`. |
+| GitHub Copilot | `copilot` | Completion via file mtime (IDE tool) |
 
 `agent-platform` handles work assignment, context packing, and completion signalling. `llm-gateway` handles inference routing. They are separate concerns at separate layers, so a harness and a provider are replaced independently.
 
@@ -882,6 +908,96 @@ If `git commit` fails `ENOSPC`: retry once after 5 s, then append P0 escalation 
 
 ---
 
+### 6.17 Machine Shutdown and Boot Recovery
+
+> **Issue:** [#6 — agent pause feature](https://github.com/plaktoz/agentzero-v2-dev/issues/6) · daily laptop shutdown; must resume on next boot.
+
+#### The problem
+
+When the host machine is shut down, the OS kills processes without guaranteeing `SIGTERM` delivery before power-off. The daemon and all agents die. On next boot, nothing auto-resumes; sessions that were `active` are indistinguishable from crashed sessions. Additionally, OIDC access tokens (Keycloak JWT, default 5–15 min) expire while the machine is off — even sessions that checkpointed cleanly cannot re-authenticate without human action.
+
+Two distinct sub-scenarios, two distinct statuses:
+
+| Scenario | Status on detection | Resume path |
+|----------|--------------------|----|
+| Machine shut down while sessions were `active` | `machine_paused` | `umas start-all` on next boot auto-resumes |
+| OIDC token expired (machine was off > token TTL) | `auth_expired` | Human re-authenticates; `umas auth login` then `umas start-all --resume` |
+
+#### Pre-shutdown: clean pause (best case)
+
+The daemon listens for `SIGTERM` and OS shutdown events (`systemd PreStop` / launchd `StopSignal`). When received:
+
+1. Broadcast a `pause` signal to all active agents by writing `<hook-path>/.pause` (agents poll this file at each step boundary).
+2. Each agent completes its current atomic step, commits `[umas:checkpoint] <summary> — machine shutdown`, sets status `machine_paused`, and writes `PAUSE.md` in the worktree root (same fields as `STATE.md` plus `paused_reason: machine_shutdown`).
+3. Daemon writes `~/.umas/daemon.pid` with `status: paused` and exits cleanly.
+
+Shutdown grace window: 30 seconds (configurable). Agents that do not checkpoint within the window have their last `STATE.md` treated as the recovery surface (graceful degradation, no data loss because all prior steps were committed).
+
+#### Boot recovery: what `umas start-all` does
+
+```
+1. Daemon starts.
+2. Read all sessions with status in {active, machine_paused, auth_expired}.
+3. For each session:
+   a. Check if an OIDC token is available and valid.
+      - Valid  → status = active (re-attach to the worktree via agent-platform)
+      - Expired → status = auth_expired; emit event; surface to human
+   b. Check if PAUSE.md exists in the worktree.
+      - Yes → clean pause: recover via recover(hook_path) → resume dispatch
+      - No  → unclean shutdown: treat as crashed; follow §6.8 stale-worktree rules
+4. Resume dispatch for all sessions that cleared step (a) and (b).
+5. Emit a boot_recovery summary event to events.jsonl.
+```
+
+**`umas start-all` is idempotent.** Running it when the daemon is already up detects the existing PID and skips recovery.
+
+#### Auth expiry recovery
+
+```bash
+umas auth login               # re-authenticate via OIDC; updates ~/.umas/token-cache
+umas start-all --resume       # daemon starts, picks up auth_expired sessions,
+                              # re-validates tokens, promotes to active, resumes dispatch
+```
+
+Sessions with `auth_expired` status are never auto-promoted without a fresh token. The human controls when to re-authenticate.
+
+#### `PAUSE.md` format
+
+Written to the worktree root alongside `STATE.md` on any clean pause (machine shutdown, `umas stop-all`, or manual `umas agents pause <id>`).
+
+```markdown
+# PAUSE: <task_id>
+
+**Paused at:** <RFC 3339 UTC>
+**Paused by:** <machine_shutdown | user | budget>
+**Agent:** <agent_id>
+**Session:** <session_id>
+**Token usage at pause:** <token_used> / <token_limit>
+
+## State at pause
+<same fields as STATE.md — current task, next steps, recent decisions, file pointers>
+```
+
+#### Session state additions
+
+The `machine_paused` and `auth_expired` statuses slot into the existing state machine between `active` and the resumable states:
+
+```
+active → machine_paused → active           (boot recovery, token still valid)
+active → machine_paused → auth_expired     (token expired during downtime)
+auth_expired → active                      (after umas auth login + umas start-all --resume)
+```
+
+Sessions that were `spawned` (never started) at shutdown time are reset to `pending` in the task queue — they had no state to lose.
+
+#### No timeout for `machine_paused` / `auth_expired`
+
+Unlike `budget_paused` (24-hour timeout), these statuses have **no expiry**. A laptop that stays off for a week resumes cleanly. `umas health-check` surfaces them as informational (`machine_paused`) or actionable (`auth_expired`) — never as failures.
+
+> **Standalone lib impact:** `agent-session` adds `machine_paused` and `auth_expired` to `SessionStatus` and a `pause()` operation (§3.2, §4). `watchdog` adds a boot-time stale-detection rule (§7). `agent-platform` must honour `<hook-path>/.pause` polling at step boundaries.
+
+---
+
 ## 7. API Specifications
 
 ### CLI Commands
@@ -890,8 +1006,9 @@ If `git commit` fails `ENOSPC`: retry once after 5 s, then append P0 escalation 
 # System
 umas init
 umas init --project
-umas start-all
-umas stop-all
+umas start-all                    # start daemon; auto-resumes machine_paused sessions if token valid
+umas start-all --resume           # start daemon + re-check auth_expired sessions after umas auth login
+umas stop-all                     # graceful pause: checkpoints all active sessions before stopping
 umas status
 umas health-check
 umas update
@@ -910,6 +1027,7 @@ umas agents status <agent-id>
 umas agents handoff <from> <to>
 umas agents reconcile
 umas agents resume <session-id>
+umas agents pause <session-id>    # manual clean pause (writes PAUSE.md + machine_paused status)
 
 # Work
 umas request "<description>" [--route simple|medium|large|greenfield]
@@ -927,6 +1045,10 @@ umas metrics tokens
 umas metrics cost
 umas metrics quality
 umas metrics agents
+
+# Auth
+umas auth login                   # OIDC sign-in; updates ~/.umas/token-cache; required after auth_expired
+umas auth status                  # show current token validity and expiry time
 
 # Debug
 umas debug replay --session <id>
@@ -963,7 +1085,7 @@ WebSocket: /ws/events   (Phase 4 only)
 ## 8. Security Architecture
 
 - **Secrets:** API keys in environment variables only. Never hardcoded, never committed. `.gitignore` created by `umas init`.
-- **Auth:** JWT tokens for dashboard. RBAC roles: Admin, Developer, Viewer. RBAC data model design is an open item (see §14).
+- **Auth:** OIDC sign-in through Keycloak; the API validates the access token. RBAC roles, permissions and bindings are in [modularisation-assessment.md](modularisation-assessment.md) section 5. Setup and agent CLI: [libs/kc-axi.md](libs/kc-axi.md).
 - **Network:** All services bind to `127.0.0.1`. TLS 1.2+ for all external communication. Certificate validation enforced.
 - **Agents:** Least-privilege process isolation. No agent has write access outside its worktree.
 - **Audit:** 90-day retention for `events.jsonl` and database records (PRD requirement).
@@ -1036,10 +1158,12 @@ Production:
 
 ## 14. Open Questions
 
-1. **RBAC data model** — Security gap. Roles, permissions, middleware hook. Should be a Phase 1 decision, currently unspecced.
+1. **RBAC data model** — Roles and model approved; Keycloak (OIDC) chosen for sign-in. Two questions await confirmation (agent permission intersection; security-finding recipient).
 2. **Scheduler glue** — The queue half is extracted as [libs/task-queue.md](libs/task-queue.md). The dispatch loop, routing tags, per-task hook creation and the `admit` rule still need a short UMAS-side spec.
-3. **`structured-output-parser` decision** — Each pack defines output schemas but the parsing mechanism (Pydantic v2?) has no decision record. ADR needed.
-4. **CLI launcher** — Coding Workers run as external CLI harnesses (hybrid model decided; see [modularisation-assessment.md](modularisation-assessment.md) section 4.8). The component that launches and supervises those processes is not specified.
+3. **`structured-output-parser` decision** — Resolved: Pydantic v2 is the standard parsing mechanism for Python agents; no dedicated lib needed. Each pack's output schema is the contract; Pydantic validates against it. Playbook steps validate step outputs against `schema/<role>.json` before passing them to the next step.
+4. **CLI launcher** — Coding Workers run as external CLI harnesses. The component that launches and supervises those processes is not specified.
 5. **IPC at scale** — File-based `events.jsonl` is fine for Phase 1–2. Phase 3 bottleneck risk flagged in [event-log §11](libs/event-log.md). Broker interface design deferred.
 6. **Dashboard backend framework** — FastAPI vs. Express not yet chosen.
 7. **25M-token dashboard estimate** — The `UMAS-BUILD-ASSESSMENT.md` estimate was for React. Re-base for the minimal HTML page.
+8. **Commit signal format alignment** — Spec uses `[umas:done]`/`[umas:checkpoint]`; agent-platform uses `[done]`/`[blocked]`. One must change. Decision pending.
+9. **Playbook SDD standard mapping** — The OpenSpec / SDD standard may define a canonical phase vocabulary. If adopted, `production-gatekeeper` phase names should be aliased to match it. See [packs/playbook-runner.md](packs/playbook-runner.md) §11.4.

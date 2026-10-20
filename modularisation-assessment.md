@@ -2,7 +2,7 @@
 
 Merged from two assessments: Bob (IBM), written 2026-10-18 and updated 2026-10-21, and Claude, written 2026-10-19 and updated 2026-10-20. Where they disagree, both views are shown.
 
-Reviewed against the state of the repo on 2026-10-21: 13 library specs, 8 content-pack specs, the section 12 reference-code appendices, and the dashboard decision record.
+Reviewed against the state of the repo on 2026-10-21: 14 library specs, 8 content-pack specs, the section 12 reference-code appendices, and the dashboard decision record.
 
 Every file is linked once, in the tables of section 2 and the decisions table in section 6. Everywhere else it is named in backticks.
 
@@ -27,7 +27,7 @@ The 10 modules in the spec are feature domains, not reusable components. Both as
 | Tier | Contents | State |
 |---|---|---|
 | 0. Contracts | Event schema, hook layout and `STATE.md`, commit trailers, error record, CLI/daemon JSON-RPC surface | Partial. The contracts live inside the libs rather than as a separate set; the JSON-RPC surface is not specified anywhere. The SQL schema was dropped from the libs on purpose (files or git only). |
-| 1. Libraries | Code with no UMAS dependency | Done. 13 specs. |
+| 1. Libraries | Code with no UMAS dependency | Done. 14 specs. |
 | 2. Content packs | Prompts, rules, skills (not code) | Done as specs. No `SKILL.md` has been built yet. |
 | 3. UMAS glue | Coordinator, Scheduler, Project Monitors, Triage, Patrol | Not done. Still in the original specs. |
 | 4. Shells | CLI, dashboard, installers | Partial. Only the dashboard is decided. |
@@ -51,11 +51,13 @@ Tier 1 and Tier 2 is a cleaner cut than Bob's original five categories, because 
 | [watchdog](libs/watchdog.md) | `umas-daemon` / `watchdog` | Done | A generic supervision library. The three-tier Daemon, Triage, Patrol design is three levels of it. The Rust Daemon is demoted to reference code. |
 | [decision-artifacts](libs/decision-artifacts.md) | not in Bob's plan / `decision-artifacts` | Done | PRFAQ/ADR/Spec/GLOSSARY templates and shortcut-debt tracking. |
 | [error-classifier](libs/error-classifier.md) | `error-classifier` / not in plan | Done | Added after Bob's review found the gap. A shared record format with deterministic rules, not a shared import. Adds redaction, `retry_plan`, agent and human renderings, fingerprinting and pattern alerts. Ships no catalog. Five open questions in its section 11 (for example whether unmatched errors default to P2 or P1). The other libs map to it by data only (see section 8). |
-| [agent-platform](libs/agent-platform.md) | `CodingAgentAdapter` plugin registry (Category D) / platform adapters in Tier 4 | Done, Changed | Moved from Tier 4 to Tier 1. Harness adapters only, never LLM providers. `assign` writes files and does not spawn processes. `read_signal` is non-blocking. Context packs carry a SHA-256 checksum and reject path traversal. Built-in adapters: `claude-code`, `openai-codex`, `gemini-cli`, `copilot`. Bob's original advice to unify it with `llm-gateway` was wrong: one routes work to harnesses, the other routes inference calls. |
+| [agent-platform](libs/agent-platform.md) | `CodingAgentAdapter` plugin registry (Category D) / platform adapters in Tier 4 | Done, Changed | Moved from Tier 4 to Tier 1. Harness adapters only, never LLM providers. `assign` writes files and does not spawn processes. `read_signal` is non-blocking. Context packs carry a SHA-256 checksum and reject path traversal. Built-in adapters: `claude-code`, `openai-codex`, `antigravity` (Google Gemini CLI harness), `copilot`. `gemini-cli` renamed to `antigravity` — Antigravity is the product name for Google's Gemini CLI tool. Bob's original advice to unify it with `llm-gateway` was wrong: one routes work to harnesses, the other routes inference calls. |
 | [agent-session](libs/agent-session.md) | `agent-session` / not in plan | Done | Shared lifecycle skeleton for all six agent types (`spawned`, `active`, `handoff`, `crashed`, `done`), durable `STATE.md`, checkpoint commits, handoff packets, token thresholds. Reference code for `WorkerAgent` and `CoordinatorAgent` is in its section 12. |
 | [metrics-store](libs/metrics-store.md) | `umas-metrics-collector` / not in plan | Done | Two backends behind one interface: JSONL ledger (Phase 1-2), then a relational table in SQLite or PostgreSQL (Phase 3+). TimescaleDB is an optional one-line upgrade, not a dependency. Source adapters turn `budget-meter`, `event-log` and `test-adapters` callbacks into metric rows. |
 
 | [task-queue](libs/task-queue.md) | Scheduler `ready_queue` / not in plan | Done, New | Extracted from the Scheduler (section 8). Dependency graph, ready queue, leased claims, concurrency cap, retry, parent/child groups. Event log plus snapshot on files. Admission is a callback, so it never imports `budget-meter`. Evaluate existing tools before building (its section 10). |
+
+| [kc-axi](libs/kc-axi.md) | GitHub issue 18 / not in plan | Done, New | Run a Keycloak container (Docker or Podman) and administer it through an agent-friendly CLI. Standalone: Go static binary for Linux and Windows, REST API, no shell dependency. The realm and client definitions are UMAS data, not part of the lib. |
 
 Merged, with no library of their own:
 
@@ -256,7 +258,7 @@ Consequences:
 
 ## 5. RBAC data model and roles
 
-Gap 1 in section 7 and stack item 8. This section proposes the roles, the permissions behind them and the data model. The roles and data model are approved; the open questions in 5.9 are not yet answered. RBAC is UMAS-specific (Tier 0 contract plus Tier 3 enforcement). It is not a library, because the standalone libs must stay free of identity and authorisation (see 5.7).
+Gap 1 in section 7 and stack item 8. This section proposes the roles, the permissions behind them and the data model. The roles and data model are approved. Five of the seven questions in 5.9 are answered; two (5 and 7) await confirmation. RBAC is UMAS-specific (Tier 0 contract plus Tier 3 enforcement). It is not a library, because the standalone libs must stay free of identity and authorisation (see 5.7).
 
 ### 5.1 What the existing specs already say
 
@@ -269,7 +271,7 @@ Gap 1 in section 7 and stack item 8. This section proposes the roles, the permis
 | PRD, escalation | P0 goes to a human, P1 to the Coordinator. Security issues found in review "escalate to human immediately". Someone must own that inbox. |
 | PRD, platform config | Per-platform `roles` (`architect`, `reviewer`, `developer`, `security-reviewer`). These are **agent job roles** for routing, not access roles. Do not conflate the two. |
 
-Conflicts to settle: the PRD marks access control optional, while the stack spec, summary and build assessment treat it as required. Section 5.9 asks this as a question.
+Conflicts to settle: the PRD marks access control optional, while the stack spec, summary and build assessment treat it as required. Resolved: access control is mandatory for the first release (5.9, question 1), and the PRD's "(optional)" label is removed.
 
 ### 5.2 Principals
 
@@ -277,7 +279,7 @@ RBAC has to cover three kinds of principal, not only people.
 
 | Principal | Examples | How it authenticates | Note |
 |---|---|---|---|
-| Human user | Developer, admin, auditor | Login that issues a short-lived JWT; CLI uses a token or the local OS user (5.8) | Roles are granted per scope. |
+| Human user | Developer, admin, auditor | Signs in through Keycloak (OIDC) and receives a short-lived access token; the CLI uses a Keycloak token, or the local OS user on loopback only (5.8) | Roles are granted per scope. |
 | Agent identity | Worker `w-17`, Coordinator, Reviewer | A credential scoped to one worktree and one session, issued by the Coordinator at spawn and revoked at handoff or end | The specs say sessions are ephemeral while identity persists, so the identity row persists and credentials do not. |
 | Service account | Daemon, dashboard poller, CI runner, Merge Queue Processor | A long-lived key kept in a secret store, rotated on a schedule | Never used by a person. |
 
@@ -292,7 +294,7 @@ The PRD's three roles are kept as written. Four more are proposed because the sp
 | Admin | System | Manage users, providers, model mapping, limits and system configuration; see all projects | PRD | 1 |
 | Project Owner | Project | Run one project: members, budget within the system cap, review policy, escalation handling. This is what makes "own projects" mean something and keeps the Admin out of daily work | Proposed; implied by "own projects" | 1 |
 | Developer | Project | Submit work requests, spawn and stop agents in assigned projects, read everything in those projects | PRD | 1 |
-| Viewer | Project | Read-only access to metrics and assigned projects. Cannot see secrets or raw agent prompts | PRD | 1 |
+| Viewer | System | Read-only access to metrics, agents, tasks and all projects. Cannot see secrets or raw agent prompts | PRD, widened to all projects (5.9, question 3) | 1 |
 | Approver | Project | Human gate for merges, ADR acceptance and review overrides, separate from the person who requested the work (two-person rule) | Proposed; PRD "required reviewers" and "auto-merge rules" | 2 |
 | Operator | System | Respond to P0 escalations: acknowledge, pause or resume agents, reset a failed watchdog node, restart services. No access to project content or configuration | Proposed; PRD P0 "human intervention" | 3 |
 | Auditor | System | Read the audit log, metrics and cost only. No access to code or the ability to change anything | Proposed; PRD audit and enterprise compliance mode | 3 |
@@ -307,8 +309,8 @@ S means system-wide, P means within the projects the user is bound to, and a das
 
 | Capability | Admin | Project Owner | Developer | Approver | Operator | Auditor | Viewer |
 |---|---|---|---|---|---|---|---|
-| View agents, tasks, work bundles, merge queue | S | P | P | P | S | - | P |
-| View metrics and cost | S | P | P | P | S | S | P |
+| View agents, tasks, work bundles, merge queue | S | P | P | P | S | - | S |
+| View metrics and cost | S | P | P | P | S | S | S |
 | Submit a work request | S | P | P | - | - | - | - |
 | Spawn an agent | S | P | P | - | - | - | - |
 | Stop or pause an agent | S | P | P (own) | - | S | - | - |
@@ -322,6 +324,8 @@ S means system-wide, P means within the projects the user is bound to, and a das
 | Manage users and role bindings | S | P (members, up to Developer) | - | - | - | - | - |
 | Read the audit log | S | P | - | - | - | S | - |
 | Read or write secrets through the API | never | never | never | never | never | never | never |
+
+Self-approval: nobody can approve their own change by default. That exception is the separate permission `merge:approve_own`, which no built-in role holds. An Admin or Project Owner grants it through an access-control entry (a role binding that carries the permission, for one principal and one scope). Without the grant, the two-person rule applies (5.9, question 4).
 
 Secrets are not reachable through any role. They live in the environment or a vault and the API can only report whether one is set.
 
@@ -340,6 +344,7 @@ flowchart TB
         O1["Add members and bind roles"]
         O2["Set project budget within system cap"]
         O3["Set review and test policy"]
+        O4["Handle security finding"]
     end
 
     subgraph DEV["Developer - project scope"]
@@ -365,7 +370,7 @@ flowchart TB
     end
 
     subgraph RO["Read-only roles"]
-        V1["Viewer reads metrics and own projects"]
+        V1["Viewer reads metrics and all projects"]
         U1["Auditor reads audit log, metrics and cost"]
     end
 
@@ -374,7 +379,8 @@ flowchart TB
     D2 -.-> G1
     P1 -- "approved, author differs" --> M["Merged to target branch"]
     P1 -- "rejected" --> D1
-    G3 -- "security issue" --> X1
+    G3 -- "security issue" --> O4
+    O4 --> D1
     G5 -- "P0" --> X1
     G5 -- "P1" --> G1
     X1 --> X2 --> G1
@@ -384,9 +390,9 @@ flowchart TB
 
 Reading the diagram:
 - **Set-up (top lanes).** Only the Admin creates a project; the Project Owner then runs it. The Admin does not appear again unless system configuration changes.
-- **Normal flow.** A Developer submits the request. From there agents do the work and the Approver is the only human gate before the merge. The two-person rule means the Approver cannot be the person who submitted the request (open question 4 in 5.9).
-- **Escalation.** P0 events and review-found security issues go to the Operator, who acts on agents and services but never sees project content. P1 stays inside the agent layer with the Coordinator.
-- **Read-only.** Viewer and Auditor have no write path. The dotted lines show they observe results and are not part of the approval chain.
+- **Normal flow.** A Developer submits the request. From there agents do the work and the Approver is the only human gate before the merge. The two-person rule means the Approver cannot be the person who submitted the request (5.9, question 4; the exception is the `merge:approve_own` grant).
+- **Escalation.** P0 events go to the Operator, who acts on agents and services but never sees project content. A security issue found in review goes to the Project Owner of that project (the Admin if there is none), because the Operator cannot read the code it concerns. This routing is recommended and awaits confirmation (5.9, question 7). P1 stays inside the agent layer with the Coordinator.
+- **Read-only.** Viewer and Auditor have no write path. The Viewer sees all projects; the Auditor sees the audit log, metrics and cost. The dotted lines show they observe results and are not part of the approval chain.
 
 ### 5.5 Agent roles
 
@@ -415,13 +421,13 @@ Permissions are fixed in code, because middleware must check known names. Roles,
 
 | Entity | Fields | Notes |
 |---|---|---|
-| `principal` | `id`, `kind` (`user`, `agent`, `service`), `name`, `status` (`active`, `disabled`), `created_at`, `external_id` (identity provider subject, optional) | One table for all three kinds, so audit and bindings work the same way. |
+| `principal` | `id`, `kind` (`user`, `agent`, `service`), `name`, `status` (`active`, `disabled`), `created_at`, `external_id` (Keycloak `sub`; required for `user` principals, empty for agents) | One table for all three kinds, so audit and bindings work the same way. |
 | `role` | `id`, `name`, `kind` (`human`, `agent`), `builtin` (bool), `description` | Built-in roles cannot be edited or deleted. Custom roles are allowed only in a later phase. |
 | `permission` | `id`, `resource`, `action` | Written as `resource:action`, for example `agent:spawn`, `merge:approve`, `config:write`, `audit:read`. Seeded by code. |
 | `role_permission` | `role_id`, `permission_id`, `limit` (optional JSON) | The limit expresses caps such as a budget ceiling. |
 | `project` | `id`, `name`, `owner_principal_id`, `created_at` | Existing entity; only the owner link is new. |
 | `role_binding` | `id`, `principal_id`, `role_id`, `scope_type` (`system`, `project`, `worktree`), `scope_id`, `granted_by`, `granted_at`, `expires_at` (optional) | The core table. A principal holds many bindings. An agent binding sets `scope_type = worktree` and a short `expires_at`. |
-| `credential` | `id`, `principal_id`, `kind` (`jwt_session`, `api_key`, `agent_session`), `hash`, `issued_at`, `expires_at`, `revoked_at`, `last_used_at` | Only a hash of any key is stored. |
+| `credential` | `id`, `principal_id`, `kind` (`api_key`, `agent_session`), `hash`, `issued_at`, `expires_at`, `revoked_at`, `last_used_at` | Only a hash of any key is stored. Human sessions belong to Keycloak and are not stored here. |
 | `audit_event` | `id`, `ts`, `actor_id`, `acting_for_id` (optional), `action` (`resource:action`), `resource_type`, `resource_id`, `scope`, `decision` (`allow` or `deny`), `reason`, `correlation_id` | Append-only. Stored through `event-log`, not a mutable table (5.7). |
 
 Authorisation check, in order:
@@ -431,13 +437,14 @@ Authorisation check, in order:
 4. For an agent acting for a user, require both the agent's role and the user's permission to allow.
 5. Write an `audit_event` for every decision, including denials.
 
-JWT contents are kept small: `sub` (principal id), `iat`, `exp`, `jti`. Roles and permissions are resolved server-side on each request, so a role change or revocation takes effect at once and a stolen token is limited by its short expiry.
+Tokens for people are issued by Keycloak. UMAS reads `sub`, `iss`, `iat`, `exp` and `jti` and ignores any role claims. Roles and permissions are resolved server-side on each request, so a role change or revocation takes effect at once and a stolen token is limited by its short expiry (the lifespan is a Keycloak setting).
 
 ### 5.7 Where enforcement lives
 
 | Place | Rule |
 |---|---|
 | API middleware | Every route declares the permission it needs. The middleware resolves the principal and checks it before the handler runs. This is the "middleware hook point" the earlier reviews asked for. |
+| Identity provider | Keycloak authenticates people (OIDC) and holds their accounts. The API checks the access token (signature, issuer, expiry) and maps `sub` to a `principal`. Roles and bindings stay in UMAS data. Service accounts use Keycloak client credentials. Agent credentials are still issued by the Coordinator, not Keycloak. The setup and agent-facing admin CLI is described in `libs/kc-axi.md`. |
 | CLI | The CLI calls the same API, so it uses the same checks. Local use is covered in 5.8. |
 | Agents | Enforced by the harness and the sandbox: scoped credential, worktree-only filesystem, provider-only network, and branch protection so only the Merge Queue Processor can write to the target. The Coordinator issues and revokes agent credentials. |
 | Standalone libs | **No RBAC inside any lib.** The independence rules forbid identity concepts in the libs. The consuming application authorises first, then passes a plain `actor` string that the lib writes into its events (`event-log` already carries a source on each event). |
@@ -448,22 +455,26 @@ JWT contents are kept small: `sub` (principal id), `iat`, `exp`, `jti`. Roles an
 
 | Phase | What ships |
 |---|---|
-| 1 (MVP, single developer, SQLite) | The permission names, the middleware hook and deny-by-default are in place. One local principal holds Admin. The CLI trusts the local OS user. Agent credentials are scoped per worktree. Audit events are written through `event-log`. Roles Project Owner, Developer and Viewer exist as data but have no second user to use them. |
-| 2 (small team, PostgreSQL) | Login and JWT for the dashboard and API; multiple users; project scoping; Approver role and the two-person rule for merges. |
-| 3 (scale and compliance) | Operator and Auditor roles; optional identity provider (OIDC or SSO); audit hash chain; credential rotation. |
+| 1 (MVP, single developer, SQLite) | The permission names, the middleware hook and deny-by-default are in place. Sign-in goes through Keycloak (OIDC) from the start, run as a dev container, which makes Podman or Docker a Phase 1 prerequisite. One principal holds Admin and the `merge:approve_own` grant. The CLI trusts the local OS user on loopback only. Agent credentials are scoped per worktree. Audit events are written through `event-log`. Roles Project Owner, Developer and Viewer exist as data but have no second user to use them. |
+| 2 (small team, PostgreSQL) | Multiple users from Keycloak; project scoping; Approver role and the two-person rule for merges; Keycloak moves from dev mode to a production database and a pinned version. |
+| 3 (scale and compliance) | Operator and Auditor roles; optional federation to an external identity provider through Keycloak; audit hash chain; credential rotation. |
 | Later | Custom roles; per-resource grants; delegation beyond user-to-agent. |
 
 Doing the Phase 1 items early costs little and avoids adding an authorisation layer to a finished API later, which is the risk the earlier reviews flagged.
 
-### 5.9 Open questions
+### 5.9 Questions and answers
 
-1. Is access control mandatory for the first release? The PRD marks it optional and every other document treats it as required.
-2. Do you want an identity provider (OIDC, SSO) from the start, or local users first? An enterprise deployment will probably need the provider.
-3. Does Viewer see only assigned projects, or all projects? The PRD says "own projects", which implies assignment.
-4. Is the two-person rule (author cannot approve their own merge) required, or is a single developer allowed to self-approve in the MVP?
-5. Should agents be able to act with a user's full permission, or only the intersection described in 5.2?
-6. Build or adopt? Policy engines and identity servers exist in Go, Java, Python and Node ecosystems (for example Casbin, Open Policy Agent and Keycloak). Their licences, fit and maintenance have not been checked. The model above is small enough to build, but the choice depends on the language decision in section 4.
-7. Who receives a "security issue found" escalation: Operator, Project Owner or a separate security role?
+| # | Question | Answer | Status |
+|---|---|---|---|
+| 1 | Is access control mandatory for the first release? | Yes. The PRD's "(optional)" label is removed. | Decided |
+| 2 | Identity provider from the start? | Yes, OIDC. The plan is in GitHub issue 18 (Keycloak in a container, with an agent-friendly CLI wrapper, described in `libs/kc-axi.md`). | Decided |
+| 3 | Does Viewer see assigned projects or all? | All projects, read-only. Viewer becomes a system-scope role. | Decided |
+| 4 | Two-person rule required? | Yes by default. Self-approval is the separate permission `merge:approve_own`, held by no built-in role and granted through an access-control entry by an Admin or Project Owner. | Decided; this is my reading of "configured by ACL", so say if you meant something else |
+| 5 | Do agents act with a user's full permission, or the intersection? | Recommended: the intersection (5.2). With full permission, a Developer who may not approve a merge could get an agent to do it. Agents with no requesting user (Patrol, Watchdog) use only their own role. | To confirm |
+| 6 | Build or adopt? | Adopt Keycloak for sign-in and user accounts. Authorisation stays in UMAS, because the model is small and project-scoped. Casbin and Open Policy Agent are not adopted. | Decided; assumes "adopt Keycloak" does not extend to Keycloak's own authorization services |
+| 7 | Who receives a "security issue found" escalation? | Recommended: the Project Owner of the affected project (Admin if none). The Operator handles P0 service and infrastructure events only, since the Operator has no access to project content and cannot act on a code finding. | To confirm |
+
+Keycloak facts in this section come from the issue and general knowledge. Its licence, current version, production database requirements and the federation feature have not been checked.
 
 ---
 
@@ -477,18 +488,19 @@ Doing the Phase 1 items early costs little and avoids adding an authorisation la
 | External CLI agents or in-process SDK loop | See stack item 7 | Hybrid | Decided: hybrid, with coarse Worker token caps accepted. See 4.8 |
 | Publish Tier 1 and 2 as separate packages, or keep internal seams | Monorepo of independent packages, or separate repos | None given | Decided: option B, one monorepo with each lib built and versioned as its own package, and nothing published yet. A lib can be split into its own repo later (history-preserving) if someone outside UMAS needs it. |
 | Scheduler: UMAS-internal component, or extract a `task-queue` lib | Internal, or standalone lib | Extract if reusable | Decided: extract `task-queue`, because the dependency graph, leased claims and concurrency cap are a generic problem with no UMAS knowledge. Admission is a callback, so it does not import `budget-meter`. Dispatch loop, routing tags, hook creation and the CLI launcher stay as UMAS glue. An adopt-or-build check comes first (its section 10). |
+| Identity provider and policy engine | Build, Keycloak, Casbin, Open Policy Agent | Adopt if it fits | Decided: Keycloak for sign-in and accounts (OIDC) from Phase 1; authorisation stays in UMAS. Setup and the agent-facing CLI wrapper are in [kc-axi](libs/kc-axi.md). Adds a container runtime as a Phase 1 prerequisite. |
 | Dashboard | Terminal UI, minimal HTML, full React | Bob: TUI first, React in Phase 4 | Resolved: minimal read-only HTML |
 | TimescaleDB | Hard dependency, or optional upgrade | Optional | Resolved: JSONL ledger, then PostgreSQL, then TimescaleDB as a one-liner |
 | Router design | Keyword stub, or scoring heuristic | Interface now, keyword match fine for v1 | Resolved: scoring heuristic pack |
 | `CodingAgentAdapter` and `LLMGateway`; supported platforms | Two abstractions, or unified; which vendors | Keep separate | Resolved: kept separate. IBM Bob is removed from the solution. Claude, OpenAI and Gemini are supported, each registered independently as a harness in `agent-platform` and as a provider in `llm-gateway`, so either layer can be replaced by configuration |
 | IPC mechanism | Filesystem, or message broker | Broker interface now, filesystem implementation for Phase 1-2 | Decided with the message broker row: filesystem implementation for Phase 1-2 behind a transport interface (4.7). The broker itself stays deferred. `event-log` open question 1 (is a pure-file design enough at 20-30 writers) is still open |
-| Auth | Defer to Phase 4, or RBAC skeleton in Phase 1 | RBAC data model and middleware hook in Phase 1; roles and model in section 5 | Approved: the roles and data model in section 5 are accepted. The seven questions in 5.9 remain open and do not block the Phase 1 skeleton |
+| Auth | Defer to Phase 4, or RBAC skeleton in Phase 1 | RBAC data model and middleware hook in Phase 1; roles and model in section 5 | Approved: the roles and data model in section 5 are accepted. Questions 1 to 4 and 6 in 5.9 are answered. Questions 5 and 7 have recommendations and await confirmation. None blocks the Phase 1 skeleton |
 
 ---
 
 ## 7. Open gaps, in priority order
 
-1. **RBAC data model.** A security gap. The roles and model are approved in section 5 (seven human roles, seven agent roles, a binding-based data model). The open questions (5.9) still need answers, and the skeleton should land in Phase 1, not Phase 4.
+1. **RBAC data model.** A security gap. The roles and model are approved in section 5 and five of the seven questions in 5.9 are answered. Confirm questions 5 (agents act with the intersection of permissions) and 7 (security findings go to the Project Owner). The skeleton, including Keycloak sign-in, should land in Phase 1, not Phase 4.
 2. **Scheduler.** Decided: extract `task-queue` (see `libs/task-queue.md`). What remains is UMAS glue, not a library: the dispatch loop, routing tags, hook creation per task and the `admit` rule.
 3. **CLI launcher.** Nothing specifies the component that starts, supervises and stops the external harness CLIs (4.8). It is the second half of the Scheduler glue: it claims a task from `task-queue`, starts the harness as a `watchdog` node, and reports the result. Written in Go.
 4. **`structured-output-parser` decision record.**

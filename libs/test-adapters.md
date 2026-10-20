@@ -74,6 +74,43 @@ build_command(request) -> argv[] + env + report_paths
 parse(report_files, exit_code, stdout) -> TestResult
 ```
 
+### 4.2 CLI output (AXI)
+
+Follows [CLI Conventions (AXI)](README.md#cli-conventions-axi). `--json` is unchanged and is what [merge-queue](merge-queue.md) calls. This section covers only what is specific here.
+
+**Why it fits.** An agent runs tests after every change and reads the result. A full report from a large suite is mostly passing names the agent does not need.
+
+**Default view of `run`** (illustrative; layout is not a contract):
+
+```
+status: failed
+summary: 118 passed, 1 failed, 1 skipped of 120 (8.4s)
+failures[1 of 1]{name,file,line,message}:
+  tests/test_x.py::test_y,tests/test_x.py,42,"assert 1 == 2"
+flaky: none
+help[2]:
+  test-adapters run --select tests/test_x.py::test_y   # rerun only this
+  test-adapters run --full                              # untruncated messages
+```
+
+| Rule | Applied here |
+|------|--------------|
+| Minimal fields | A failure shows `name`, `file`, `line`, `message`. `--fields` adds `flaky`; `--full` lifts the message cut |
+| Pre-computed aggregate | One `summary` line with the counts and duration, so the agent never adds them up |
+| Definitive empty state | A passing run prints `failures: none` and `flaky: none`, never a blank |
+| Truncation | Messages cut at 200 characters with `… (N chars total)`. Stack traces are never inlined: `raw.stdout_path` is given and `--full` prints the first lines of it |
+| Failure limit | `failures[20 of 134]` when more than 20 fail, with a `help` line to see the rest |
+| Errors | `status: error` plus `error:` (for example `no_tests`) and a `help:` line. For these the tool could not run, so the exit code is 1 and the result is still a normal `TestResult` in `--json` |
+| No-argument view | `detect` plus `doctor` for the current directory: which framework was found and whether its reporter is installed. It does not run the tests (running is slow and has side effects, so it is not a safe session-start action) |
+| Next steps | Rerun just the failures; `doctor` when a reporter is missing |
+
+**Exit codes.** `0` only when `status == passed` (unchanged). `1` for `failed`, `error` and `timeout`; the output says which. `2` for a usage error, such as an unknown flag. No other codes.
+
+**How to use it.**
+- **Coding agent in a loop:** run `test-adapters run --select <files>`; read the failures; fix; run again. Only fall back to `--full` when a message is cut mid-explanation.
+- **Merge queue:** `test-adapters run --json`; exit 0 means green. Do not use the default view.
+- **Session start (application's choice):** run `test-adapters` with no arguments so the agent knows which test command applies.
+
 ## 5. Behaviour
 
 ### 5.1 Detection
@@ -160,6 +197,10 @@ Failing tests are results, not errors. A test failure is not an error record unl
 4. A test that fails once then passes with `retry_failed: 1` is listed under `flaky` and does not fail the run.
 5. The adapter for a new framework can be added without changing existing code (verified by a toy adapter in the test suite).
 6. `parse` on recorded report fixtures gives the same output as `run` on the same project.
+7. The default view of a passing run prints `failures: none` and exits 0; of a failing run it lists at most 20 failures with `n of total`, and exits 1.
+8. A failure message of 5,000 characters is cut in the default view and complete with `--full`; `--json` always carries the complete message.
+9. `status: error` runs (tool missing, no tests) exit 1 and carry a typed `error:` and a `help:` line; an unknown flag exits 2 and names the valid flags.
+10. Running with no arguments detects and checks the framework without executing any test.
 
 ## 9. How UMAS Uses It
 

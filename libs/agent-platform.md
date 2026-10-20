@@ -162,16 +162,18 @@ completion_signal: commit-message   # same [done] / [blocked] convention as clau
 assign:            writes TASK.md into the hook worktree
 ```
 
-**`gemini-cli`**
+**`antigravity`** *(Google Gemini CLI harness — formerly listed as `gemini-cli`)*
 ```
 capabilities:      [code-generation, code-review, refactoring, documentation]
 context_format:    markdown
 hook_support:      true
-completion_signal: commit-message   # same [done] / [blocked] convention as claude-code
-assign:            writes TASK.md into the hook worktree
+completion_signal: commit-message   # same [done] / [blocked] convention as claude-code and codex
+assign:            writes TASK.md into the hook worktree; SKILL.md written alongside if configured
+skill_file:        SKILL.md         # universal skill contract; see §5.8
+provider:          google-gemini    # configured in llm-gateway; harness and provider are independent
 ```
 
-The capability lists for `openai-codex` and `gemini-cli` are starting values, not tested facts. Adjust them in configuration after trying each tool.
+The `antigravity` harness is Google's CLI tool for running Gemini agents. The adapter identifier is `antigravity`; the LLM provider it calls is registered separately in `llm-gateway` as `google-gemini`. The capability list is a starting value — adjust after testing.
 
 **`copilot`**
 ```
@@ -223,6 +225,83 @@ Custom adapters override built-ins of the same name, so a caller can patch the `
 
 Nothing outside an adapter names a specific harness. A work assignment, completion signal and context pack have the same shape for every harness, and routing selects by capability and configuration. Replacing a harness means registering another adapter (or overriding a built-in) and changing the platform name in configuration. No consumer changes.
 
+### 5.8 Universal skill format
+
+A **skill** is a plain Markdown file (`SKILL.md`) that any harness listed in §5.1 can load without modification. The format is defined here so a skill written once runs on Claude Code, OpenAI Codex, Antigravity (Gemini), and any future hook-supporting harness without a platform-specific branch.
+
+#### Why one format works across harnesses
+
+All three hook-supporting harnesses (`claude-code`, `openai-codex`, `antigravity`) share three properties:
+- They accept work via a `TASK.md` file in the hook worktree (section §5.2).
+- They read supplementary context files from the hook worktree on startup.
+- They signal completion via a commit message pattern (section §5.3).
+
+A `SKILL.md` file in the hook worktree (or in `.umas/skills/`) is supplementary context. Each harness reads it at startup and applies its rules to the session. No harness-specific loader, no adapter-specific logic, no platform API call.
+
+#### `SKILL.md` file contract
+
+```markdown
+---
+skill_version: "1.0.0"        # semver; harnesses reject skills below their min_version
+name: "<stable-identifier>"   # snake_case, no spaces, e.g. "minimalism-enforcer"
+description: "<one sentence>" # shown in skill lists and logs; max 140 chars
+applies_to: [all | claude-code | openai-codex | antigravity | copilot]
+platforms: [windows, unix]    # both = runs on either; subset = load only on those
+---
+
+## Rules
+
+<!-- Plain prose rules. No shell commands, no OS paths, no harness-specific syntax. -->
+<!-- {{placeholders}} are filled by the consuming application before the file is written. -->
+
+## Prompt
+
+<!-- The system-prompt text loaded verbatim into the agent's context. -->
+<!-- MUST NOT contain: shell commands, absolute paths, platform-specific line endings. -->
+<!-- MAY contain: relative file references (forward slashes only), markdown, code blocks. -->
+```
+
+#### Cross-platform constraints (all skills MUST follow)
+
+| Rule | Why |
+|------|-----|
+| Forward slashes only in all file paths | `\` is a line-continuation or escape on Unix. Forward slashes work on Windows, Linux, and macOS. |
+| No shell syntax (`&&`, `\|`, `$VAR`, backticks) | Shell dialects differ between `cmd`, PowerShell, bash, and zsh. A skill is loaded by the harness, not executed by a shell. |
+| No absolute paths | `/home/...` is invalid on Windows; `C:\...` is invalid on Unix. Use relative paths from the project root. |
+| No line-ending assumptions | Skills are written with LF. Harnesses on Windows accept LF. A skill MUST NOT write `\r\n` sequences explicitly. |
+| `{{placeholder}}` for all environment-specific values | Host path, project name, OS, and model ID are supplied at load time by the consuming application, not hardcoded in the skill text. |
+| No harness-specific directives | A skill MUST NOT use Claude Code `/slash commands`, OpenAI function-call syntax, or any harness API. If a feature is harness-specific, it belongs in the adapter's `assign` callback, not in the skill file. |
+
+#### How a skill is loaded
+
+```
+1. The consuming application writes SKILL.md into the hook worktree alongside TASK.md.
+2. The adapter's assign() function names the skill file in the assignment description
+   (e.g. "Additional rules: see SKILL.md in this directory.").
+3. The harness reads SKILL.md as supplementary context at session start.
+4. No adapter code reads or interprets the skill content — it is plaintext for the harness.
+5. On handoff: pack_context() includes SKILL.md as a named artefact_path.
+   unpack_context() writes it into the target worktree unchanged.
+   Skills survive cross-harness handoffs transparently.
+```
+
+#### Skill registration (consuming application)
+
+Skills are registered per project in `umas.config.yaml` under `skills`. They are not managed by this library; the library only defines the file format contract and includes `skill_file` as an optional field in `PlatformAdapter` (defaulting to `SKILL.md`).
+
+```yaml
+# umas.config.yaml — consuming application's config, not this library's
+skills:
+  - name: minimalism-enforcer
+    file: .umas/skills/minimalism-enforcer.SKILL.md
+    applies_to: all
+  - name: test-policy
+    file: .umas/skills/test-policy.SKILL.md
+    applies_to: [claude-code, openai-codex, antigravity]
+```
+
+Multiple skills may be active simultaneously; the consuming application concatenates them into a single `SKILL.md` before writing to the worktree, separated by a `---` divider and each prefixed with its `name`.
+
 ## 6. Configuration
 
 ```yaml
@@ -234,16 +313,20 @@ platforms:
     enabled: true
     hook_base: ".hooks"         # root directory for hook-store worktrees
     signal_pattern: "\\[(done|blocked|escalated)\\]"   # regex on commit messages
+    skill_file: "SKILL.md"      # written alongside TASK.md; universal format (§5.8)
 
   openai-codex:
     enabled: true
     hook_base: ".hooks"
     signal_pattern: "\\[(done|blocked|escalated)\\]"
+    skill_file: "SKILL.md"
 
-  gemini-cli:
+  antigravity:                      # Google Gemini CLI harness
     enabled: true
     hook_base: ".hooks"
     signal_pattern: "\\[(done|blocked|escalated)\\]"
+    skill_file: "SKILL.md"
+    # provider: google-gemini — registered separately in llm-gateway config
 
   copilot:
     enabled: false
@@ -283,14 +366,17 @@ This library keeps its own typed errors and does not import any error library. A
 4. Registering a custom adapter with `name = "claude-code"` overrides the built-in; subsequent `assign` calls use the custom `assign` callback.
 5. `validate` returns an error when a configured platform's `hook_base` directory does not exist.
 6. An artefact path of `../../etc/passwd` in a context pack is rejected with `PathTraversal`.
-7. The same `WorkAssignment` is accepted by `claude-code`, `openai-codex` and `gemini-cli` with no change other than the platform name. Replacing one with another touches configuration only.
+7. The same `WorkAssignment` is accepted by `claude-code`, `openai-codex`, and `antigravity` with no change other than the platform name. Replacing one with another touches configuration only.
+8. A `SKILL.md` written with LF line endings and forward-slash paths is delivered unchanged by `assign` on both a Linux and a Windows host. The file content is not interpreted or modified by the adapter.
+9. A `SKILL.md` that contains a backslash path or a Windows absolute path (`C:\...`) is rejected at load time with a validation error listing the violating line.
+10. A cross-harness handoff from `claude-code` to `antigravity` includes `SKILL.md` in `artefact_paths` and writes it into the target worktree via `unpack_context`.
 
 ## 9. How UMAS Uses It
 
 | UMAS concept | Mapping |
 |---|---|
 | Module 7: Multi-Agent Platform Support | This library is the implementation of that module's adapter layer |
-| `ClaudeCodeAdapter`, `OpenAICodexAdapter`, `GeminiCliAdapter`, `CopilotAdapter` from the PRD | The four built-in adapters in §5.1 |
+| `ClaudeCodeAdapter`, `OpenAICodexAdapter`, `GeminiCliAdapter`, `CopilotAdapter`, `AntigravityAdapter` from the PRD | The five built-in adapters in §5.1 |
 | Agent selection strategy (PRD §Agent Selection Strategy) | Not this library. UMAS applies `packs/router-heuristic` to pick a platform, then calls `assign` here |
 | Cross-platform handoff flow from PRD §Cross-Platform Context Transfer | `pack_context` → `unpack_context` → `assign`, as described in §5.4 |
 | Platform-specific errors (`PLATFORM_UNAVAILABLE`, `HANDOFF_TIMEOUT`, etc.) | UMAS maps `CapabilityMissing` → route to another platform; `AssignmentWriteFailed` → P1 escalation; `ChecksumMismatch` → P1 escalation with the pack retained for inspection. Each can be expressed as an [error-classifier](error-classifier.md) record (section 7 suggests the recoverability) |

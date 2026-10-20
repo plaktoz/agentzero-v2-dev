@@ -77,6 +77,49 @@ Block reasons: `conflict` (cannot merge cleanly onto the batch so far), `test_fa
 
 A `BatchReport` lists, per candidate, the outcome, reason, verify log reference, and which verify runs happened. Also exposed as `merge-queue <op> --json`.
 
+### 4.1 CLI output (AXI)
+
+Follows [CLI Conventions (AXI)](README.md#cli-conventions-axi). `--json` is unchanged. The default view matters mainly for `status`, `submit` and the result of `run_once`.
+
+**Why it fits.** Agents submit work and then ask "where is my change". A `BatchReport` for a ten-candidate batch with a bisection is long, and the asker usually needs one row.
+
+**No-argument view = `status`** (read-only, no lock):
+
+```
+bin: merge-queue
+description: serialises merges to a target branch behind a verify command
+state: TESTING (target main, base ab12cd3, batch of 2)
+pending[3]{id,position,attempts}:
+  pr-6,1,0
+  pr-7,2,0
+  pr-8,3,0
+last_batch: 4 merged, 1 blocked (pr-3: test_failure)
+help[1]:
+  merge-queue report pr-3   # verify log reference and bisect steps
+```
+
+| Rule | Applied here |
+|------|--------------|
+| Minimal fields | A candidate shows `id`, `outcome` or `position`, and `reason`. `meta` is opaque and only shown with `--fields meta` |
+| Aggregates | The state line, the batch size, and `last_batch` counts of merged and blocked |
+| Empty states | `pending: none (state IDLE, last batch merged 3 at 10:20)`; `blocked: none`. An empty queue says it is idle and when it last ran |
+| Truncation | Verify logs are never inlined. A `blocked` row gives the log path; `--full` prints the last 40 lines of it |
+| Hints | A `blocked` candidate: the reason in words, the log path, and `merge-queue requeue <id>` when the reason is retryable (`timeout`, `max_attempts` excluded) |
+
+**Idempotence.** `cancel` of a candidate already removed exits 0 (`already removed`). `requeue` of an already pending candidate exits 0. `submit` with an existing `id` is **rejected** by section 4 today; the AXI-conformant form is that `submit` of the same `id` and the same `ref` is a no-op (`already queued, position 2`, exit 0) and a different `ref` is an error. See the open point below.
+
+**`run_once`.** A batch that finishes is a success even when some candidates were blocked: exit 0, and the output lists the blocked ones with reasons. Exit 1 only when the run itself could not finish: a git error, or `baseline_red` (the queue halts and a person must act). Callers that must know about blocked candidates read the report, not the exit code.
+
+**Exit codes.** `0` success, no-op, or empty. `1` a typed error or `baseline_red`. `2` usage.
+
+**How to use it.**
+- **Agent that submitted a change:** `merge-queue status` until its candidate is `merged` or `blocked`; then act on the reason.
+- **Scheduler / hook:** `merge-queue run_once --json`.
+- **Do not** parse the default view; the state names and reasons in `--json` are the contract.
+
+**Open point.** Changing `submit` for duplicate ids from reject to idempotent alters the current interface in section 4. It is listed for the follow-up review rather than changed here.
+
+
 ## 5. Behaviour
 
 ### 5.1 Verify command
@@ -195,6 +238,9 @@ This library keeps its own typed errors and does not import any error library. A
 5. Killing the process in each of TESTING, BISECTING, and MERGING and restarting leaves the repo with no temp branches and no lost or doubly merged candidate.
 6. A concurrent push to the target during TESTING causes a restart, never a merge onto a stale base.
 7. With a flaky verify (fails 1 in 3 runs) and `rerun_on_fail: 1`, a flaky pass is reported as `flaky_suspected`, not blamed on a candidate.
+8. `merge-queue` with no arguments prints state, pending candidates and the last batch summary without taking the queue lock, and exits 0 when the queue is empty.
+9. A blocked candidate's default row shows the reason and a log path, not the log; `--full` shows the last 40 lines.
+10. `run_once` where one of four candidates is blocked exits 0 and names the blocked one; `baseline_red` exits 1.
 
 ## 9. How UMAS Uses It
 
