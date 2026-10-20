@@ -106,7 +106,7 @@ Still open: no spec exists for the page or for the REST endpoints it reads; the 
 | 4 | Heavy observability and data stores | Partial | The libs need no OpenTelemetry, Prometheus or database. TimescaleDB is resolved (optional upgrade, see `metrics-store`). Claude's view that SQLite plus OpenTelemetry as the instrumentation API is enough at this scale still stands; Prometheus, Jaeger and Loki are not decided. Bob agrees OpenTelemetry is the right vendor-neutral choice. |
 | 5 | Build versus buy | Partial | `llm-gateway` is adopt-first. `merge-queue` is a full build spec with no evaluation (see 2.1). Build only what carries the design's novelty: hooks, signalling, minimalism, handoff. |
 | 6 | Stale model and pricing basis | Partial | `llm-gateway` forbids hard-coded IDs and `budget-meter` takes the pricing table from the caller. The original specs still pin `claude-3-5-sonnet-20241022` and the cost estimate is not re-based. |
-| 7 | External CLI agents or in-process LLM loop | Not decided | `agent-platform` is written as if agents are external harnesses. That is a stance in the spec, not your answer. If agents are external, the Python agent runtime is mostly a subprocess orchestrator and the Agent Execution estimate shrinks. |
+| 7 | External CLI agents or in-process LLM loop | Decided: hybrid | Coding Workers and Reviewers run as external CLI harnesses through `agent-platform`. The coordination agents call `llm-gateway` directly. See section 4.8. |
 | 8 | JWT/RBAC deferred to Phase 4 although the PRD requires RBAC from the start | Not done | No lib or pack addresses authentication. A proposed role set, permission model and data model are in section 5; the roles and model are approved, but nothing is built yet. A security risk until the Phase 1 skeleton lands. |
 | 9 | SQLite to PostgreSQL path; Python for agent logic | Holds up | Pragmatic; LLM SDKs are Python-first. |
 
@@ -231,6 +231,27 @@ Decided: the recommendation in 4.4 is accepted.
 Work this creates: define the transport interface (publish, subscribe, ack, dead-letter) with the file implementation, and decide which spec owns it. `event-log` is the likely owner for the event flows, but dispatch is Scheduler territory and the Scheduler capacity half is still unspecified (gap 2).
 
 ---
+
+### 4.8 Agent execution model decision
+
+Decided: hybrid, with coarse Worker token caps accepted.
+
+| Agent | Runs as | Reached through | Why |
+|---|---|---|---|
+| Worker (Developer), Reviewer, Specialist that edits files | External CLI harness (Claude Code, OpenAI Codex, Gemini CLI) | `agent-platform` adapter | Each CLI already has a coding loop. Replacing one is an adapter and configuration change. |
+| Coordinator, Router, Triage, Patrol, Project Monitors | UMAS Python code calling a model | `llm-gateway` | One prompt in, one answer out, so no coding loop is needed. UMAS meters each call exactly. |
+| Watchdog, Merge Queue Processor | Plain processes, no model | Go binaries | No model call. |
+
+Reasons: the available in-process loops (Claude Agent SDK, OpenAI's agents SDK, Google's ADK) are each tied to one vendor, and a vendor-neutral loop would be the largest build item. Using external harnesses keeps every vendor replaceable.
+
+Accepted cost: Worker token use is visible only as far as each CLI reports it, so `budget-meter` enforces per-task time and checkpoint limits for Workers, not exact token caps. Coordination agents are metered exactly. What each CLI reports (for example live or end-of-run usage) has not been checked.
+
+Consequences:
+- `agent-platform` stays as written: `assign` writes files, `read_signal` does not block, and nothing in it spawns processes.
+- Something must launch the CLI process. That is not in `agent-platform` and not yet specified. It is a launcher in UMAS glue, supervised by `watchdog`, written in Go (Option A). Gap 3 in section 7 tracks it.
+- `llm-gateway` serves only the coordination agents. Its open question 2 is answered: Workers bypass it.
+- `agent-session` applies to external Workers through files and signals, not through an in-process loop. Its section 12 reference code for `WorkerAgent` shows an in-process worker and needs a note.
+- Each CLI's real completion signal and usage reporting must be tested before Phase 2. The commit-message convention was copied from Claude Code.
 
 ## 5. RBAC data model and roles
 
@@ -452,7 +473,7 @@ Doing the Phase 1 items early costs little and avoids adding an authorisation la
 | Rust in the stack | Keep, optional, or remove | Claude: Python-first. Bob: keep Rust. | Resolved: Rust removed (learning curve too high). Language and messaging options are assessed in section 4 and are not yet chosen |
 | Implementation languages | Option A (Go core, Python agents), B (Python only), C (TypeScript only), D (Java only) | Section 4.3 | Decided: Option A. Go for the CLI and the file, git and process libs; Python for the agent layer and API. Split in 4.6 |
 | Message broker | None (files), RabbitMQ, ActiveMQ Classic, ActiveMQ Artemis | Section 4.4: keep files as the source of truth; RabbitMQ if a broker is added | Decided: files are the source of truth and no broker ships in Phase 1-2. If one is added (Phase 3-4), it is RabbitMQ as an optional outbox transport. ActiveMQ is not chosen. See 4.7 |
-| External CLI agents or in-process SDK loop | See stack item 7 | None given | Not decided. `agent-platform` assumes external harnesses (Claude Code, OpenAI Codex, Gemini CLI); the Coordinator and Monitors could call `llm-gateway` directly |
+| External CLI agents or in-process SDK loop | See stack item 7 | Hybrid | Decided: hybrid, with coarse Worker token caps accepted. See 4.8 |
 | Publish Tier 1 and 2 as separate packages, or keep internal seams | Monorepo of independent packages, or separate repos | None given | Not decided. The independence rules keep both options open. |
 | Dashboard | Terminal UI, minimal HTML, full React | Bob: TUI first, React in Phase 4 | Resolved: minimal read-only HTML |
 | TimescaleDB | Hard dependency, or optional upgrade | Optional | Resolved: JSONL ledger, then PostgreSQL, then TimescaleDB as a one-liner |
@@ -467,15 +488,16 @@ Doing the Phase 1 items early costs little and avoids adding an authorisation la
 
 1. **RBAC data model.** A security gap. The roles and model are approved in section 5 (seven human roles, seven agent roles, a binding-based data model). The open questions (5.9) still need answers, and the skeleton should land in Phase 1, not Phase 4.
 2. **Scheduler capacity extraction (`task-queue`)**, or a statement that it is a UMAS-internal component.
-3. **`structured-output-parser` decision record.**
-4. **Follow-ups from closed items:**
+3. **CLI launcher.** Nothing specifies the component that starts, supervises and stops the external harness CLIs (4.8). It belongs with the Scheduler decision in gap 2 and is written in Go.
+4. **`structured-output-parser` decision record.**
+5. **Follow-ups from closed items:**
    - Re-base the 25M dashboard token estimate for the HTML page, and decide whether it ships in Phase 2.
    - Choose the dashboard backend framework and write the shared OpenAPI definition.
    - Re-cost the build assessment's token estimates and redraw the phase plan around the tiers (offered by Claude, not done).
    - Add an adopt-or-build evaluation to `merge-queue`.
    - Build the `SKILL.md` files for the packs, and run them against a model.
    - Specify the CLI/daemon JSON-RPC surface and the REST endpoints.
-5. **Cross-library mention to check:** `metrics-store` names `error-classifier` as the source of two metrics (`error.p0_count`, `error.p1_count`). Check this against the no-import rule; it is acceptable only if it stays a data-format reference.
+6. **Cross-library mention to check:** `metrics-store` names `error-classifier` as the source of two metrics (`error.p0_count`, `error.p1_count`). Check this against the no-import rule; it is acceptable only if it stays a data-format reference.
 
 Closed since the earlier reviews: the IBM Bob sign-off (dropped because Bob was removed), `error-classifier`, `agent-session`, `metrics-store`, the dashboard decision, the TimescaleDB question, and the library count (the READMEs said "nine" while the folder had ten; the main spec and summary tables were missing `agent-platform`).
 

@@ -356,6 +356,8 @@ Extracted from `TECHNICAL-DESIGN-SPEC-PART3.md` §5.2 (`WorkerAgent`), `UMAS-TEC
 
 > Non-normative. Code moved verbatim from the original UMAS technical design. It illustrates one approach and uses UMAS names and paths. Sections 1–11 are authoritative. Excluded from the independence rules in [libs/README.md](README.md).
 
+> Execution model: coding Workers run as external CLI harnesses (see `modularisation-assessment.md` section 4.8), so the in-process `WorkerAgent` below is a reference for the session lifecycle only, not the intended runtime.
+
 ### 12.1 WorkerAgent (Python)
 
 Source: `TECHNICAL-DESIGN-SPEC-PART3.md` §5.2.2

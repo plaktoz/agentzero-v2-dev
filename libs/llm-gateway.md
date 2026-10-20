@@ -167,5 +167,5 @@ Extracted from `TECHNICAL-DESIGN-SPEC.md` §1.3 (providers), `UMAS-TECH-DESIGN-S
 ## 11. Open Questions
 
 1. Are Anthropic, OpenAI and Gemini each reached through their native APIs, or through a compatible endpoint? Native keeps provider features such as prompt caching. A compatible endpoint is simpler to replace.
-2. Do any workers call providers directly through a CLI agent (such as Claude Code), bypassing this gateway entirely? If agents are external CLIs, the gateway applies only to UMAS's own LLM calls (Coordinator, Router, Triage) and usage figures must come from the CLIs' reported usage instead.
+2. Answered: coding Workers run as external CLI harnesses and bypass this gateway, so it serves only UMAS's own calls (Coordinator, Router, Triage, Patrol, Monitors). Worker usage figures come from the CLIs' reported usage and are best-effort.
 3. Multi-model panels: is a synthesis helper worth including, or does it stay application logic?
