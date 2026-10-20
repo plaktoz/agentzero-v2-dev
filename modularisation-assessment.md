@@ -107,7 +107,7 @@ Still open: no spec exists for the page or for the REST endpoints it reads; the 
 | 5 | Build versus buy | Partial | `llm-gateway` is adopt-first. `merge-queue` is a full build spec with no evaluation (see 2.1). Build only what carries the design's novelty: hooks, signalling, minimalism, handoff. |
 | 6 | Stale model and pricing basis | Partial | `llm-gateway` forbids hard-coded IDs and `budget-meter` takes the pricing table from the caller. The original specs still pin `claude-3-5-sonnet-20241022` and the cost estimate is not re-based. |
 | 7 | External CLI agents or in-process LLM loop | Not decided | `agent-platform` is written as if agents are external harnesses. That is a stance in the spec, not your answer. If agents are external, the Python agent runtime is mostly a subprocess orchestrator and the Agent Execution estimate shrinks. |
-| 8 | JWT/RBAC deferred to Phase 4 although the PRD requires RBAC from the start | Not done | No lib or pack addresses authentication. A proposed role set, permission model and data model are in section 5; the choice is not made. A security risk until then. |
+| 8 | JWT/RBAC deferred to Phase 4 although the PRD requires RBAC from the start | Not done | No lib or pack addresses authentication. A proposed role set, permission model and data model are in section 5; the roles and model are approved, but nothing is built yet. A security risk until the Phase 1 skeleton lands. |
 | 9 | SQLite to PostgreSQL path; Python for agent logic | Holds up | Pragmatic; LLM SDKs are Python-first. |
 
 ---
@@ -205,7 +205,7 @@ Today there is no broker. The libs use files (`events.jsonl`, heartbeat files, s
 
 ## 5. RBAC data model and roles
 
-Gap 1 in section 7 and stack item 8. This section proposes the roles, the permissions behind them and the data model. It is a proposal; nothing here is decided. RBAC is UMAS-specific (Tier 0 contract plus Tier 3 enforcement). It is not a library, because the standalone libs must stay free of identity and authorisation (see 5.7).
+Gap 1 in section 7 and stack item 8. This section proposes the roles, the permissions behind them and the data model. The roles and data model are approved; the open questions in 5.9 are not yet answered. RBAC is UMAS-specific (Tier 0 contract plus Tier 3 enforcement). It is not a library, because the standalone libs must stay free of identity and authorisation (see 5.7).
 
 ### 5.1 What the existing specs already say
 
@@ -431,13 +431,13 @@ Doing the Phase 1 items early costs little and avoids adding an authorisation la
 | Router design | Keyword stub, or scoring heuristic | Interface now, keyword match fine for v1 | Resolved: scoring heuristic pack |
 | `CodingAgentAdapter` and `LLMGateway` | Two abstractions, or unified | Keep separate | Resolved. IBM Bob registers in both with separate credentials. Stakeholder sign-off still pending. |
 | IPC mechanism | Filesystem, or message broker | Broker interface now, filesystem implementation for Phase 1-2 | Deferred, flagged in `event-log` |
-| Auth | Defer to Phase 4, or RBAC skeleton in Phase 1 | RBAC data model and middleware hook in Phase 1; roles and model in section 5 | Not decided. Seven questions in 5.9 |
+| Auth | Defer to Phase 4, or RBAC skeleton in Phase 1 | RBAC data model and middleware hook in Phase 1; roles and model in section 5 | Approved: the roles and data model in section 5 are accepted. The seven questions in 5.9 remain open and do not block the Phase 1 skeleton |
 
 ---
 
 ## 7. Open gaps, in priority order
 
-1. **RBAC data model.** A security gap. A proposal now exists in section 5 (seven human roles, seven agent roles, a binding-based data model). It needs a decision on its open questions (5.9) and should land in Phase 1, not Phase 4.
+1. **RBAC data model.** A security gap. The roles and model are approved in section 5 (seven human roles, seven agent roles, a binding-based data model). The open questions (5.9) still need answers, and the skeleton should land in Phase 1, not Phase 4.
 2. **Scheduler capacity extraction (`task-queue`)**, or a statement that it is a UMAS-internal component.
 3. **`structured-output-parser` decision record.**
 4. **IBM Bob sign-off** on registering in both `agent-platform` and `llm-gateway`, needed before Phase 2.
