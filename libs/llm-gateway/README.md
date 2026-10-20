@@ -142,7 +142,10 @@ If a candidate passes all "yes" rows, adopt it and write only configuration plus
 5. No secret appears in logs, usage events, or error messages (tested with a canary key).
 6. With the primary breaker open, calls go to the fallback with no added latency.
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS concept | Mapping |
 |--------------|---------|

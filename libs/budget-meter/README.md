@@ -215,7 +215,10 @@ This library keeps its own typed errors and does not import any error library. A
 8. `reserve` that defers exits 0, prints `result: defer` with a reason, and a script reading `--json` gets the same decision.
 9. `commit` of an already committed reservation exits 0 with `already committed` and the ledger gains no line.
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS concept | Mapping |
 |--------------|---------|
@@ -249,7 +252,7 @@ Extracted from `UMAS-TECH-DESIGN-SPEC.md` §3.6 and §4.6, `TECHNICAL-DESIGN-SPE
 
 ## 12. Reference Implementation (Source Code)
 
-> Non-normative. Code moved verbatim from the original UMAS technical design. It illustrates one way to implement this spec and uses UMAS names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md).
+> Non-normative. Example code illustrating one way to implement this spec. May use consumer-specific names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md).
 
 ### 12.1 Scheduler with token budget (Rust)
 

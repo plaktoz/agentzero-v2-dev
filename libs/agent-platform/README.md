@@ -371,7 +371,10 @@ This library keeps its own typed errors and does not import any error library. A
 9. A `SKILL.md` that contains a backslash path or a Windows absolute path (`C:\...`) is rejected at load time with a validation error listing the violating line.
 10. A cross-harness handoff from `claude-code` to `antigravity` includes `SKILL.md` in `artefact_paths` and writes it into the target worktree via `unpack_context`.
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS concept | Mapping |
 |---|---|
@@ -408,7 +411,7 @@ Extracted from `unified-multi-agent-system-prd.md` §Multi-Agent Platform Suppor
 
 ## 12. Reference Implementation (Source Code)
 
-> Non-normative. Code moved verbatim from the original UMAS technical design. It illustrates one approach and uses UMAS names. Sections 1–11 are authoritative. Excluded from the independence rules in [libs/README.md](./README.md).
+> Non-normative. Example code illustrating one approach. May use consumer-specific names. Sections 1–11 are authoritative. Excluded from the independence rules in [libs/README.md](./README.md).
 
 ### 12.1 Adapter base class and platform implementations (Python)
 

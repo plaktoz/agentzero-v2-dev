@@ -193,7 +193,10 @@ skip_when_precise: true
 5. Run on the same transcript, the decision to skip is stable.
 6. The summary alone is enough for the [Analyst](../specialist-agents/README.md) to start without re-asking anything already answered (checked by feeding the summary and verifying `open_questions` contains none that the summary answers).
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS concept | Mapping |
 |--------------|---------|

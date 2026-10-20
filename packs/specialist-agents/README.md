@@ -199,7 +199,10 @@ max_open_questions: 7
 5. The hand-off from each role to the next works with only the structured output (the next role is run on the output with the conversation removed, and still produces a valid result).
 6. The full five-role sequence on one sample request yields consistent artifacts (the Developer's changes satisfy the PM's acceptance criteria and the Architect's contracts), checked by a person on the first release.
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS concept | Mapping |
 |--------------|---------|
@@ -233,7 +236,7 @@ Extracted from `UMAS-TECH-DESIGN-SPEC.md` §3.3 (Specialized Agents), `TECHNICAL
 
 ## 12. Reference Implementation (Source Code)
 
-> Non-normative. Code moved verbatim from the original UMAS technical design. It illustrates one way to implement this spec and uses UMAS names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [packs/README.md](./README.md).
+> Non-normative. Example code illustrating one way to implement this spec. May use consumer-specific names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [packs/README.md](./README.md).
 
 ### 12.1 Specialized agents (Python)
 

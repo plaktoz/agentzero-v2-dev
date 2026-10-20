@@ -266,7 +266,10 @@ Fixtures F1 to F10 ship with the library as input and expected-output files.
 10. The library works with an empty catalog, producing `UNCLASSIFIED` records.
 11. Two processes writing one ledger produce the same counts as one process (no lost lines).
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS concept | Mapping |
 |--------------|---------|

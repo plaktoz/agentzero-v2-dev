@@ -421,7 +421,10 @@ escape_hatch:
 
 ---
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS component | Role |
 |---|---|

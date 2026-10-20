@@ -251,7 +251,10 @@ This library keeps its own typed errors. A consumer that wants one error vocabul
 14. `complete` twice by the same owner exits 0 with `already done` and changes nothing; by a different worker it exits 1 with `not_owner`.
 15. A task with a 50 KB payload does not print it by default; `--fields payload` prints it cut at 200 characters, and `--full` prints it whole.
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS need | Mapping |
 |-----------|---------|

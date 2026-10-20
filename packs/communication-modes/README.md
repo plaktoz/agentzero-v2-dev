@@ -160,7 +160,10 @@ protected_patterns: [code_fence, inline_code, path, url, number, quoted]
 4. For F1, token count of compact output is at most 70 percent of plain output at intensity 2 (conservative: the source claims 40 to 50 percent).
 5. F4 contains no symbol from the compact set and no sentence fragment.
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS concept | Mapping |
 |--------------|---------|

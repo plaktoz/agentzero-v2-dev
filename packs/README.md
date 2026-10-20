@@ -1,10 +1,10 @@
-# Content Packs (Tier 2)
+# Content Packs
 
-> Nine reusable prompt-and-rule packs extracted from the UMAS design. Each is plain text (Markdown, YAML, JSON Schema) that any agent harness can load. Each has its own spec and can be versioned, tested, and used without UMAS.
+> Nine reusable prompt-and-rule packs. Each is plain text (Markdown, YAML, JSON Schema) that any agent harness can load without modification. None assumes a specific model, tool, or consuming application.
 >
 > **Status:** Draft v0.1 · **Date:** October 21, 2026
-> **Referenced from:** [TECHNICAL-DESIGN-SPEC.md](../umas/TECHNICAL-DESIGN-SPEC.md) §3 · [TECHNICAL-DESIGN-SUMMARY.md](../umas/TECHNICAL-DESIGN-SUMMARY.md)
-> **Sibling set:** [libs/](../libs/README.md) (Tier 1, code libraries)
+> **Used by:** [UMAS](../umas/TECHNICAL-DESIGN-SUMMARY.md) and any agent workflow that needs these capabilities independently.
+> **Sibling set:** [libs/](../libs/README.md) (code libraries)
 
 ---
 
@@ -34,7 +34,7 @@
 | Candidate | Decision | Reason |
 |-----------|----------|--------|
 | Audit skill (whole-repo impact-ranked analysis) | Not extracted | The PRD names it but gives no rule set to port. Nothing to specify beyond a title. Re-open when its behaviour is defined |
-| Handoff-packet compression levels | Not a pack | The mechanism is `pack()` in [budget-meter](libs/budget-meter/README.md). What goes into the packet is task-specific and is covered by the Developer prompt in specialist-agents |
+| Handoff-packet compression levels | Not a pack | The mechanism is `pack()` in [budget-meter](../libs/budget-meter/README.md). What goes into the packet is task-specific and is covered by the Developer prompt in specialist-agents |
 
 ---
 
@@ -42,7 +42,7 @@
 
 A pack that breaks one of these is defective.
 
-1. **No UMAS names, paths, or commands in the pack body.** No `.umas/`, no `[umas:...]` strings, no `umas` CLI. Anything environment-specific is an input placeholder such as `{{project_conventions}}`. UMAS mappings live only in each spec's "How UMAS uses it" section.
+1. **No consumer-specific names, paths, or commands in the pack body.** No tool-specific paths, CLI names, or application strings. Anything environment-specific is an input placeholder such as `{{project_conventions}}`. Consumer-specific mappings live only in each spec's "Known consumers" section.
 2. **No tool or model assumption.** A pack is usable as a system prompt, a skill file, or a checklist read by a human. It may assume the agent can read files. It assumes no model ID, vendor, or special tool.
 3. **No cross-pack dependency.** A pack does not import or require another. Where two meet (for example Router output feeding specialist-agents) the contract is a data shape, written in both specs.
 4. **Contracts before prose.** Every pack defines its input and its output as a schema. A consumer can validate a response without reading the prompt.
@@ -68,7 +68,7 @@ The spec in this directory describes all four. When the pack is built, `PACK.md`
 
 | Form | How |
 |------|-----|
-| Claude Code skill | `PACK.md` becomes `SKILL.md` with a short front-matter `description` |
+| Agent harness skill | `PACK.md` becomes a `SKILL.md` (or equivalent) with a short front-matter `description` for Claude Code, Antigravity, Codex, or any harness that loads skill files |
 | System prompt fragment | Concatenate the `## Prompt` section into the agent's system prompt |
 | Human checklist | Read the `## Rules` section directly |
 | CI linter (partial) | Deterministic parts only (forbidden phrases, finding schema). See each spec's "Deterministic checks" |
@@ -126,6 +126,6 @@ request --> grilling --> alignment summary --+
 
 ## Spec Template
 
-Every pack spec uses the same sections: 1 Purpose · 2 Scope and non-goals · 3 Pack contents and format · 4 Contract (input and output) · 5 The rules and prompt · 6 Configuration · 7 Failure modes · 8 Fixtures and acceptance criteria · 9 How UMAS uses it · 10 Source material and deviations · 11 Open questions.
+Every pack spec uses the same sections: 1 Purpose · 2 Scope and non-goals · 3 Pack contents and format · 4 Contract (input and output) · 5 The rules and prompt · 6 Configuration · 7 Failure modes · 8 Fixtures and acceptance criteria · 9 Known consumers · 10 Source material and deviations · 11 Open questions.
 
-A spec may end with an optional section 12, **Reference implementation (source code)**. It holds code moved verbatim from the original UMAS technical design. It is non-normative, may use UMAS names and paths, and is outside the independence rules; sections 1 to 11 are authoritative.
+A spec may end with an optional section 12, **Reference implementation (source code)**. It holds non-normative example code, which may use consumer-specific names and paths. It is outside the independence rules; sections 1 to 11 are authoritative.

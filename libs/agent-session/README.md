@@ -357,7 +357,10 @@ This library keeps its own typed errors and does not import any error library. A
 6. Two sessions with the same `task_id` but different `session_id`s append to the same event-log scope; `recover()` correctly identifies the most recent session.
 7. A session with no `register_context` calls produces a `HANDOFF.md` in degraded mode with `manifest.degraded: true`.
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS concept | Mapping |
 |---|---|
@@ -394,7 +397,7 @@ Extracted from `TECHNICAL-DESIGN-SPEC-PART3.md` §5.2 (`WorkerAgent`), `UMAS-TEC
 
 ## 12. Reference Implementation (Source Code)
 
-> Non-normative. Code moved verbatim from the original UMAS technical design. It illustrates one approach and uses UMAS names and paths. Sections 1–11 are authoritative. Excluded from the independence rules in [libs/README.md](./README.md).
+> Non-normative. Example code illustrating one approach. May use consumer-specific names and paths. Sections 1–11 are authoritative. Excluded from the independence rules in [libs/README.md](../README.md).
 
 > Execution model: coding Workers run as external CLI harnesses (see `modularisation-assessment.md` section 4.8), so the in-process `WorkerAgent` below is a reference for the session lifecycle only, not the intended runtime.
 

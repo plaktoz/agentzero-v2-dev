@@ -1,9 +1,9 @@
-# Standalone Libraries (Tier 1)
+# Standalone Libraries
 
-> Fourteen reusable libraries extracted from the UMAS design. Each has its own spec and can be built, versioned, tested, and used without UMAS.
+> Fourteen independent, reusable libraries. Each can be built, versioned, tested, and consumed by any project. None requires the others as imports — composition is the consuming application's job.
 >
 > **Status:** Draft v0.1 · **Date:** October 19, 2026
-> **Referenced from:** [UMAS-TECH-DESIGN-SPEC.md](../umas/UMAS-TECH-DESIGN-SPEC.md) §1.1 · [TECHNICAL-DESIGN-SUMMARY.md](../umas/TECHNICAL-DESIGN-SUMMARY.md)
+> **Used by:** [UMAS](../umas/TECHNICAL-DESIGN-SUMMARY.md) and any project that needs these capabilities independently.
 
 ---
 
@@ -49,7 +49,7 @@ These rules make a library standalone. A spec or implementation that breaks one 
 - Times are RFC 3339 UTC. IDs are ULIDs unless stated.
 - MUST, SHOULD, and MAY carry their RFC 2119 meaning.
 - Each library keeps its own typed errors. Where a spec has a "Failure Modes" section it may end with an "Error records" table giving a suggested `recoverability` for each error, so a consumer can express them as [error-classifier](../error-classifier/README.md) records. This is a data mapping, not an import.
-- Each spec ends with "How UMAS uses it". This is a mapping table for readers, and the library does not depend on anything in it.
+- Each spec ends with "Known consumers". This lists projects or systems that use this library, with a mapping table. The library does not depend on anything in it. UMAS is the reference consumer; other consumers are listed as they appear.
 
 ---
 
@@ -168,23 +168,25 @@ The default view is produced from the same data as `--json`, by an encoder at th
 
 ## Suggested Build Order
 
-1. **event-log** and **budget-meter**: smallest, and almost every other component emits to or reads from them.
-2. **hook-store**: the foundation Phase 1 of the build assessment depends on.
+This order minimises blocked work for any consumer.
+
+1. **event-log** and **budget-meter** — smallest, and almost every other library emits to or reads from them.
+2. **hook-store** — the durable state foundation everything else builds on.
 3. **test-adapters**, then **merge-queue**.
 4. **watchdog**.
-5. **error-classifier**: small, no dependencies. Build early so the other libraries' errors map to one record from the start.
-6. **decision-artifacts**: independent, can be built in parallel at any point.
-7. **llm-gateway**: adopt or wrap first. Build last, only if the evaluation in its spec fails.
-7. **agent-platform**: depends on `hook-store` being settled (worktree layout). Build after Phase 1; required before multi-platform work in Phase 4.
-8. **agent-session**: depends on `hook-store`, `event-log`, and `budget-meter`. Build in Phase 2 — it is the skeleton all agent implementations use.
-9. **task-queue**: depends on nothing. Build with Phase 1, because the Scheduler cannot dispatch without it. The `admit` callback is wired to `budget-meter` by the consuming application.
-10. **kc-axi**: depends on nothing. Build before the Phase 1 sign-in work, since the dashboard and API need a running identity provider.
-11. **metrics-store**: depends on nothing. JSONL backend can be wired in Phase 1 alongside `event-log`; SQL backend activated in Phase 3 when PostgreSQL is provisioned.
+5. **error-classifier** — small, no dependencies. Build early so all other libraries' typed errors can map to one shared record.
+6. **decision-artifacts** — independent, can be built in parallel at any point.
+7. **llm-gateway** — adopt an existing package first; build only if the evaluation in its spec fails.
+8. **agent-platform** — depends on `hook-store` being settled (worktree layout).
+9. **agent-session** — depends on `hook-store`, `event-log`, and `budget-meter`; the shared session skeleton.
+10. **task-queue** — depends on nothing; the `admit` callback is wired to `budget-meter` by the consuming application.
+11. **kc-axi** — depends on nothing; build when identity-provider setup is needed.
+12. **metrics-store** — depends on nothing; JSONL backend first, SQL backend when a relational store is provisioned.
 
 ---
 
 ## Spec Template
 
-Every library spec uses the same sections: 1 Purpose · 2 Scope and non-goals · 3 Concepts and data model · 4 Interface · 5 Behaviour · 6 Configuration · 7 Failure modes · 8 Acceptance criteria · 9 How UMAS uses it · 10 Source material and deviations · 11 Open questions.
+Every library spec uses the same sections: 1 Purpose · 2 Scope and non-goals · 3 Concepts and data model · 4 Interface · 5 Behaviour · 6 Configuration · 7 Failure modes · 8 Acceptance criteria · 9 Known consumers · 10 Source material and deviations · 11 Open questions.
 
-A spec may end with an optional section 12, **Reference implementation (source code)**. It holds code moved verbatim from the original UMAS technical design. It is non-normative, may use UMAS names and paths, and is outside the independence rules; sections 1 to 11 are authoritative.
+A spec may end with an optional section 12, **Reference implementation (source code)**. It holds non-normative example code, which may use consumer-specific names and paths. It is outside the independence rules; sections 1 to 11 are authoritative.

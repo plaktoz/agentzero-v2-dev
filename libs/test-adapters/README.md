@@ -202,7 +202,10 @@ Failing tests are results, not errors. A test failure is not an error record unl
 9. `status: error` runs (tool missing, no tests) exit 1 and carry a typed `error:` and a `help:` line; an unknown flag exits 2 and names the valid flags.
 10. Running with no arguments detects and checks the framework without executing any test.
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS concept | Mapping |
 |--------------|---------|
@@ -234,7 +237,7 @@ Extracted from `TECHNICAL-DESIGN-SPEC-PART3.md` §6.3 (Rust `TestRunner`) and `U
 
 ## 12. Reference Implementation (Source Code)
 
-> Non-normative. Code moved verbatim from the original UMAS technical design. It illustrates one way to implement this spec and uses UMAS names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md).
+> Non-normative. Example code illustrating one way to implement this spec. May use consumer-specific names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md).
 
 ### 12.1 TestRunner (Rust)
 

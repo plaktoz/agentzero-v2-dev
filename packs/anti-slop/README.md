@@ -213,7 +213,10 @@ Each fixture is a before text and the property the revised text must have.
 5. Running the reviewer twice on its own output yields no further changes (idempotent).
 6. Every entry in `changes` has a category from the list in 4.2.
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS concept | Mapping |
 |--------------|---------|

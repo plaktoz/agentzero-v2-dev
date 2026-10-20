@@ -187,7 +187,10 @@ F5 is the reason `bug_with_location` does not cancel `sensitive_domain`. With a 
 4. Every decision lists reasons that sum to the reported score.
 5. On 30 labelled historical requests, route agreement with a human labeller is at least 75 percent and no request labelled medium or large by the human is routed `simple`. (Targets are initial; the source gives none.)
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS concept | Mapping |
 |--------------|---------|
@@ -222,7 +225,7 @@ Extracted from `UMAS-TECH-DESIGN-SPEC.md` §3.2 (Router), `TECHNICAL-DESIGN-SPEC
 
 ## 12. Reference Implementation (Source Code)
 
-> Non-normative. Code moved verbatim from the original UMAS technical design. It illustrates one way to implement this spec and uses UMAS names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [packs/README.md](./README.md).
+> Non-normative. Example code illustrating one way to implement this spec. May use consumer-specific names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [packs/README.md](./README.md).
 
 ### 12.1 Router (Python)
 

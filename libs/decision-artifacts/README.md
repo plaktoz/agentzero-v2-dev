@@ -195,7 +195,10 @@ This library keeps its own typed errors and does not import any error library. A
 5. Regenerating the ledger twice with no source change produces a byte-identical file.
 6. `check` returns a non-zero exit on each rule marked error and zero on a clean repo.
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS concept | Mapping |
 |--------------|---------|
@@ -229,7 +232,7 @@ Extracted from `TECHNICAL-DESIGN-SPEC.md` §3.3 and `TECHNICAL-DESIGN-SPEC-PART2
 
 ## 12. Reference Implementation (Source Code)
 
-> Non-normative. Code moved verbatim from the original UMAS technical design. It illustrates one way to implement this spec and uses UMAS names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md).
+> Non-normative. Example code illustrating one way to implement this spec. May use consumer-specific names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md).
 
 ### 12.1 ArtifactService (Python)
 

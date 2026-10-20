@@ -170,7 +170,10 @@ require_evidence_rungs: [1, 2, 3, 4]
 4. Under `ultra`, F1 additionally prompts a one-line justification for any new file.
 5. Across a set of 20 realistic tasks, the median diff size with the pack is no larger than without. The source claims 53 percent less code, 26 percent less cost, and 41 percent less time; these are **unverified** and this criterion does not require them.
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS concept | Mapping |
 |--------------|---------|
@@ -204,7 +207,7 @@ Extracted from `UMAS-TECH-DESIGN-SPEC.md` §3.3, `TECHNICAL-DESIGN-SPEC-PART3.md
 
 ## 12. Reference Implementation (Source Code)
 
-> Non-normative. Code moved verbatim from the original UMAS technical design. It illustrates one way to implement this spec and uses UMAS names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [packs/README.md](./README.md).
+> Non-normative. Example code illustrating one way to implement this spec. May use consumer-specific names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [packs/README.md](./README.md).
 
 ### 12.1 MinimalismEnforcer (Python)
 

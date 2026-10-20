@@ -212,7 +212,10 @@ This library keeps its own typed errors and does not import any error library. A
 10. An event with 50 KB of `data` prints at most about 200 characters of it in the default view; `--full` and `--json` print all of it.
 11. `prune` run twice exits 0 both times; the second reports nothing removed.
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS use | Mapping |
 |----------|---------|
@@ -247,7 +250,7 @@ Extracted from `UMAS-TECH-DESIGN-SPEC.md` §3.1 (session discovery), §3.3 (sign
 
 ## 12. Reference Implementation (Source Code)
 
-> Non-normative. Code moved verbatim from the original UMAS technical design. It illustrates one way to implement this spec and uses UMAS names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md).
+> Non-normative. Example code illustrating one way to implement this spec. May use consumer-specific names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md).
 
 ### 12.1 Session history interface (Python)
 

@@ -217,7 +217,10 @@ This library keeps its own typed errors and does not import any error library. A
 7. Operation set works against a repository with 200 hooks in under 2 seconds for `list`.
 8. Every persisted file validates against its JSON/YAML schema; version N-1 files are readable.
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS concept | hook-store parameter or call |
 |--------------|-----------------------------|
@@ -250,7 +253,7 @@ Extracted from `TECHNICAL-DESIGN-SPEC.md` §3.2 (Rust `WorktreeService`), `UMAS-
 
 ## 12. Reference Implementation (Source Code)
 
-> Non-normative. Code moved verbatim from the original UMAS technical design. It illustrates one way to implement this spec and uses UMAS names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md).
+> Non-normative. Example code illustrating one way to implement this spec. May use consumer-specific names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md).
 
 ### 12.1 WorktreeService (Rust)
 

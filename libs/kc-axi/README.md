@@ -207,7 +207,10 @@ The tool keeps its own typed errors. A consumer that wants one error vocabulary 
 11. The same acceptance cases pass on Linux and on Windows.
 12. With the audit file unwritable, a write is refused and nothing changes.
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS need | Mapping |
 |-----------|---------|

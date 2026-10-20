@@ -201,7 +201,10 @@ max_findings_per_axis: 25
 5. Standards-pass output for a given diff does not change when the Spec pass is skipped (independence).
 6. On a labelled set of 20 diffs (10 with injected defects), at least 8 of 10 injected defects are found and no more than 2 false positives are filed. These counts are initial targets; they are not from the source.
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS concept | Mapping |
 |--------------|---------|
@@ -237,7 +240,7 @@ Extracted from `UMAS-TECH-DESIGN-SPEC.md` §3.4 (Code Review), `TECHNICAL-DESIGN
 
 ## 12. Reference Implementation (Source Code)
 
-> Non-normative. Code moved verbatim from the original UMAS technical design. It illustrates one way to implement this spec and uses UMAS names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [packs/README.md](./README.md).
+> Non-normative. Example code illustrating one way to implement this spec. May use consumer-specific names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [packs/README.md](./README.md).
 
 ### 12.1 CodeReviewAgent (Python)
 

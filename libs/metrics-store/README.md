@@ -238,7 +238,10 @@ This library keeps its own typed errors and does not import any error library. A
 6. The file backend returns `QueryTooLarge` when asked to aggregate more than 500k raw rows; the relational backend handles the same query without error.
 7. Switching `backend` from `file` to `postgres` in configuration (after migration) causes all subsequent `record()` calls to go to PostgreSQL; `raw()` and `query()` also read from PostgreSQL.
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS concept | Mapping |
 |---|---|

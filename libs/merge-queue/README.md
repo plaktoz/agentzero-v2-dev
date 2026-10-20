@@ -242,7 +242,10 @@ This library keeps its own typed errors and does not import any error library. A
 9. A blocked candidate's default row shows the reason and a log path, not the log; `--full` shows the last 40 lines.
 10. `run_once` where one of four candidates is blocked exits 0 and names the blocked one; `baseline_red` exits 1.
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS concept | Mapping |
 |--------------|---------|
@@ -276,7 +279,7 @@ Extracted from `UMAS-TECH-DESIGN-SPEC.md` §3.4 (merge queue, state machine, alg
 
 ## 12. Reference Implementation (Source Code)
 
-> Non-normative. Code moved verbatim from the original UMAS technical design. It illustrates one way to implement this spec and uses UMAS names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md).
+> Non-normative. Example code illustrating one way to implement this spec. May use consumer-specific names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md).
 
 ### 12.1 MergeQueueProcessor (Python)
 

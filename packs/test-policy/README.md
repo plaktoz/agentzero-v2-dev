@@ -166,7 +166,10 @@ risky_patterns_file: risky-patterns.yaml
 5. A coverage figure of 100 percent does not turn a `missing_tests` gate into `ok` when a risky unit has no test.
 6. Re-running on the same diff and tests gives the same gate.
 
-## 9. How UMAS Uses It
+## 9. Known Consumers
+
+> This section lists known consuming projects. The library does not depend on any of them.
+
 
 | UMAS concept | Mapping |
 |--------------|---------|
@@ -201,7 +204,7 @@ Extracted from `UMAS-TECH-DESIGN-SPEC.md` §3.4 (Test Coverage Policy), `TECHNIC
 
 ## 12. Reference Implementation (Source Code)
 
-> Non-normative. Code moved verbatim from the original UMAS technical design. It illustrates one way to implement this spec and uses UMAS names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [packs/README.md](./README.md).
+> Non-normative. Example code illustrating one way to implement this spec. May use consumer-specific names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [packs/README.md](./README.md).
 
 ### 12.1 Test coverage policy (YAML)
 
