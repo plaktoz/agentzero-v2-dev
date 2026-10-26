@@ -1,0 +1,27 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "This is a framework for integrating AI capabilities. It connects to Anthropic, OpenAI and Google models, and setup takes about 15 minutes.",
+  "changes": [
+    {
+      "category": "vague_claim",
+      "before": "This comprehensive solution serves as a robust framework",
+      "after": "This is a framework",
+      "reason": "'Comprehensive' and 'robust' are broad quality claims with no detail behind them. 'Serves as' is filler for 'is'.",
+      "behaviour_change": false
+    },
+    {
+      "category": "filler",
+      "before": "that empowers teams to seamlessly integrate cutting-edge AI capabilities",
+      "after": "for integrating AI capabilities",
+      "reason": "'Empowers teams to seamlessly' and 'cutting-edge' are filler with no fact behind them. The remaining phrase keeps the topic.",
+      "behaviour_change": false
+    }
+  ],
+  "kept": [],
+  "flags": [
+    {
+      "location": "sentence 1",
+      "issue": "The sentence says only that the framework is for integrating AI capabilities, which could describe any AI project. The author must state what the framework does and for whom."
+    }
+  ]
+}

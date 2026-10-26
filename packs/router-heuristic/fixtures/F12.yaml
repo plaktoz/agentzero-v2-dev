@@ -1,0 +1,14 @@
+id: F12
+title: "Unsupported security claim is set to false and noted"
+input:
+  request: "Rename `getUser` to `fetchUser` in `api.ts`. It is part of the auth fix."
+  scan:
+    files_estimate: 1
+    touches_ui: false
+    notes: "api.ts only re-exports functions; it has no auth logic."
+  override: null
+expect:
+  - "sensitive_domain is empty; the claim of an auth fix is not supported by the scan"
+  - "the evidence for sensitive_domain states the mismatch (request says auth, scan says no auth logic)"
+  - "files_affected is one, 0 points"
+  - "score is 0, band low, route simple"

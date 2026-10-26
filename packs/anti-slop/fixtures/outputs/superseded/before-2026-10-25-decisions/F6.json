@@ -1,0 +1,20 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "def load_records(data):\n    result = process(data)\n    if result is None:\n        return []\n    return result\n",
+  "changes": [
+    {
+      "category": "swallowed_error",
+      "before": "try: result = process(data) ... except Exception: return []",
+      "after": "result = process(data), with no try block; exceptions from process() propagate to the caller",
+      "reason": "The broad Exception handler turns any failure in process() into an empty result, which hides errors. Rule 3 requires that this be removed.",
+      "behaviour_change": true
+    }
+  ],
+  "kept": [],
+  "flags": [
+    {
+      "location": "lines 4-5",
+      "issue": "The None check returns [] when process() returns None. Removing it would change the return value, so it was left in place. The author must confirm whether None means no records, or a failure that should raise instead."
+    }
+  ]
+}

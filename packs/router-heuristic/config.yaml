@@ -1,0 +1,27 @@
+# router-heuristic defaults. Every tunable lives here. When this file is present, its
+# values replace the defaults stated in PACK.md.
+pack_version: "0.1.0"
+
+weights:
+  files_affected:
+    one: 0
+    few: 1
+    many: 3
+    unknown: 2
+  new_capability: 3
+  scope_ambiguous: 2
+  user_facing_ui: 2
+  sensitive_domain: 3          # counted once, not per category
+  bug_with_location: -3        # applied to the other signals only; never cancels sensitive_domain
+
+bands:
+  medium_at: 3                 # score 3 to 6 is medium
+  high_at: 7                   # score 7 or more is high
+
+routes:
+  low: simple
+  medium: medium
+  high: large
+  greenfield: greenfield
+
+default_when_unclear: medium   # route when the request is empty or cannot be read

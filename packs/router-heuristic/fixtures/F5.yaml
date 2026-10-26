@@ -1,0 +1,13 @@
+id: F5
+title: "Cited bug in an auth path still routes medium"
+input:
+  request: "Fix the bug in `login.py` line 10 where the password check is skipped"
+  scan: null
+  override: null
+expect:
+  - "bug_with_location is true, -3"
+  - "sensitive_domain is [auth] (password check), +3 once"
+  - "files_affected is one (login.py only), 0 points"
+  - "the -3 does not cancel the +3 sensitive points"
+  - "score is 3, band medium, route medium, not simple"
+  - "reasons are sensitive_domain +3, bug_with_location -3, floor at 0 +3, and they add up to 3"

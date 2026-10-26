@@ -1,0 +1,7 @@
+id: F7
+input: |
+  The new cache greatly improves performance. Users notice that the service is much more reliable now.
+expect:
+  - "Both vague claims appear in flags with a location and an issue"
+  - "The revised text contains no number that is absent from the input (no invented metric)"
+  - "The claims are unchanged or marked, not rewritten with a new figure"

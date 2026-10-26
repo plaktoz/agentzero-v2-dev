@@ -1,0 +1,29 @@
+id: F5
+title: "Date parser gains a slash-format branch"
+input:
+  mode: selective
+  existing_tests:
+    - "tests/test_dates.py: test_parses_iso_date (valid YYYY-MM-DD input only)"
+  coverage:
+    line_percent: null
+    changed_lines_percent: null
+  diff: |
+    diff --git a/dates.py b/dates.py
+    index 5699bd4..b5afa18 100644
+    --- a/dates.py
+    +++ b/dates.py
+    @@ -4,4 +4,6 @@ from datetime import datetime
+     def parse_date(text):
+         """Parse a date string into a date."""
+         text = text.strip()
+    +    if "/" in text:
+    +        return datetime.strptime(text, "%d/%m/%Y").date()
+         return datetime.strptime(text, "%Y-%m-%d").date()
+expect:
+  - "prefilter == needs_model"
+  - "change_class == normal"
+  - "a unit at dates.py has kind parser, risky true, tests_required true"
+  - "cases include invalid input (for example a malformed or empty string, or an impossible date)"
+  - "cases include the new slash-format branch"
+  - "the ISO-only existing test does not mark the unit present"
+  - "gate == missing_tests"

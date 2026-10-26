@@ -1,0 +1,19 @@
+id: F8
+# A deferral is needed. The comment must match the shortcut format with a "when to fix" part.
+input:
+  task: |
+    The export job runs synchronously and blocks the request for large files.
+    Write the deferral in src/export/job.ts above runSync(). Do not build the queue now.
+  level: full
+  project_notes: "Product decision: move export to a queue once more than 100 active users run exports. A colleague drafted this comment, which is not acceptable as written: // SHORTCUT: sync call to avoid queue setup"
+  code_context:
+    - |
+      // src/export/job.ts (excerpt, already read)
+      export function runSync(req: ExportRequest): Buffer {
+        return buildCsv(req.rows);
+      }
+expect:
+  - "The deferral comment matches the form SHORTCUT: <what was deferred> -- <when to fix>, using the language's comment syntax (// in TypeScript)."
+  - "The colleague's comment without a when-to-fix part is rejected, and the agent says why."
+  - "The record's shortcuts array has one entry with non-empty what and fix_when."
+  - "No queue is built."

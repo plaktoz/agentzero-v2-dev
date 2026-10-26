@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ladder-record.json",
+  "title": "Minimalism ladder record",
+  "description": "Output record the agent emits after walking the ladder. rung is the rung where it stopped. evidence is mandatory for rungs 1 to 4.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pack_version", "rung", "rung_name", "evidence", "decision", "loc_estimate", "shortcuts"],
+  "properties": {
+    "pack_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "rung": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 6
+    },
+    "rung_name": {
+      "enum": [
+        "not_needed",
+        "exists_in_codebase",
+        "stdlib_or_platform",
+        "installed_dependency",
+        "one_line",
+        "minimum_code"
+      ]
+    },
+    "evidence": {
+      "type": "array",
+      "description": "Repository-relative path, or path:symbol, that proves the rung holds.",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "decision": {
+      "enum": ["skip", "reuse", "use_builtin", "use_dependency", "write_one_line", "write_minimum"]
+    },
+    "loc_estimate": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "shortcuts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["what", "fix_when"],
+        "properties": {
+          "what": { "type": "string", "minLength": 1 },
+          "fix_when": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "notes": {
+      "type": "string",
+      "description": "Optional. One sentence."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "rung": { "const": 1 } }, "required": ["rung"] },
+      "then": { "properties": { "rung_name": { "const": "not_needed" }, "decision": { "const": "skip" }, "evidence": { "minItems": 1 } } }
+    },
+    {
+      "if": { "properties": { "rung": { "const": 2 } }, "required": ["rung"] },
+      "then": { "properties": { "rung_name": { "const": "exists_in_codebase" }, "decision": { "const": "reuse" }, "evidence": { "minItems": 1 } } }
+    },
+    {
+      "if": { "properties": { "rung": { "const": 3 } }, "required": ["rung"] },
+      "then": { "properties": { "rung_name": { "const": "stdlib_or_platform" }, "decision": { "const": "use_builtin" }, "evidence": { "minItems": 1 } } }
+    },
+    {
+      "if": { "properties": { "rung": { "const": 4 } }, "required": ["rung"] },
+      "then": { "properties": { "rung_name": { "const": "installed_dependency" }, "decision": { "const": "use_dependency" }, "evidence": { "minItems": 1 } } }
+    },
+    {
+      "if": { "properties": { "rung": { "const": 5 } }, "required": ["rung"] },
+      "then": { "properties": { "rung_name": { "const": "one_line" }, "decision": { "const": "write_one_line" } } }
+    },
+    {
+      "if": { "properties": { "rung": { "const": 6 } }, "required": ["rung"] },
+      "then": { "properties": { "rung_name": { "const": "minimum_code" }, "decision": { "const": "write_minimum" } } }
+    }
+  ]
+}

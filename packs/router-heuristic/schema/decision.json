@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "decision.json",
+  "title": "Router decision record",
+  "description": "Output of the router-heuristic rubric. score is always the computed score. route is the override when overridden is true. reasons add up to score. The signals definition is the same as schema/signals.json, inlined so this file validates alone.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pack_version", "score", "band", "route", "signals", "reasons", "overridden"],
+  "$defs": {
+    "signals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["files_affected", "new_capability", "scope_ambiguous", "user_facing_ui", "sensitive_domain", "bug_with_location", "greenfield", "evidence"],
+      "properties": {
+        "files_affected": { "enum": ["one", "few", "many", "unknown"] },
+        "new_capability": { "type": "boolean" },
+        "scope_ambiguous": { "type": "boolean" },
+        "user_facing_ui": { "type": "boolean" },
+        "sensitive_domain": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["security", "auth", "payments", "data_migration"] }
+        },
+        "bug_with_location": { "type": "boolean" },
+        "greenfield": { "type": "boolean" },
+        "evidence": {
+          "type": "object",
+          "propertyNames": {
+            "enum": ["files_affected", "new_capability", "scope_ambiguous", "user_facing_ui", "sensitive_domain", "bug_with_location", "greenfield"]
+          },
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "properties": {
+    "pack_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "score": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "band": {
+      "enum": ["low", "medium", "high", "n/a"]
+    },
+    "route": {
+      "enum": ["simple", "medium", "large", "greenfield"]
+    },
+    "signals": { "$ref": "#/$defs/signals" },
+    "reasons": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "overridden": { "type": "boolean" },
+    "reroute_reason": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

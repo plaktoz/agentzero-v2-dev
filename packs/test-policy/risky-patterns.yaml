@@ -1,0 +1,112 @@
+# Deterministic patterns per language. Used by scripts/prefilter.py.
+#
+# Two jobs:
+#   1. comment syntax, to tell whether a hunk changes only comments or whitespace
+#   2. candidate flags: added lines that match a pattern are reported as
+#      candidates for the model to confirm. A match is never a verdict.
+#
+# Every regex is matched case-insensitively with re.search against one added
+# line. The file stays inside the YAML subset read by scripts/yaml_subset.py
+# (block maps and lists, single-line flow lists, quoted scalars), so any YAML
+# library reads it too.
+
+# Words that make an identifier change a behaviour change. A rename whose old or
+# new name is in this list is never treated as a pure rename.
+reserved_words: [if, elif, else, for, while, do, switch, case, match, try, except, catch, finally, return, yield, await, async, break, continue, and, or, not, in, is, import, from, def, class, func, function, fn, var, let, const, new, delete, "true", "false", none, "null", nil, self, this, super, public, private, protected, static, final, with, as, go, defer, select, range]
+
+languages:
+  python:
+    extensions: [".py", ".pyi"]
+    line_comments: ["#"]
+    block_comments: false
+    indent_significant: true
+    patterns:
+      - kind: branching
+        regex: '\b(if|elif|else|match|case)\b'
+      - kind: loop
+        regex: '\b(for|while)\b'
+      - kind: parser
+        regex: '(parse|strptime|fromisoformat|json\.loads|re\.(match|search|compile|findall|sub|split)|tokeni[sz]e|deserial|\bsplit\()'
+      - kind: money
+        regex: '(decimal|price|tax\b|discount|currency|rounding|round\(|quantize|invoice|amount|cents|total)'
+      - kind: security
+        regex: '(auth|password|passwd|token|secret|crypto|hashlib|hmac|sanitiz|sanitis|permission|credential|encrypt|decrypt|login|csrf|jwt|is_admin|\\badmin\\b|\brole\b|\bowner\b|privilege|\bacl\b)'
+      - kind: state
+        regex: '(thread|\block\b|asyncio|\bawait\b|retry|retries|cache|\bglobal\b|mutex|semaphore|sleep\(|timeout)'
+
+  javascript:
+    extensions: [".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"]
+    line_comments: ["//"]
+    block_comments: true
+    indent_significant: false
+    patterns:
+      - kind: branching
+        regex: '(\b(if|else|switch|case)\b|\?\s*[^?:]+:)'
+      - kind: loop
+        regex: '\b(for|while|do)\b|\.(forEach|map|reduce|filter)\('
+      - kind: parser
+        regex: '(parse|JSON\.parse|RegExp|\.match\(|\.split\(|tokeni[sz]e|deserial)'
+      - kind: money
+        regex: '(decimal|price|tax\b|discount|currency|rounding|Math\.round|toFixed|invoice|amount|cents|total)'
+      - kind: security
+        regex: '(auth|password|token|secret|crypto|hmac|sanitiz|sanitis|permission|credential|encrypt|decrypt|login|csrf|jwt|isAdmin|\\badmin\\b|\brole\b|\bowner\b|privilege|\bacl\b)'
+      - kind: state
+        regex: '(setTimeout|setInterval|retry|retries|cache|\bawait\b|\block\b|mutex|semaphore|timeout|Promise\.)'
+
+  java:
+    extensions: [".java", ".kt", ".scala", ".cs"]
+    line_comments: ["//"]
+    block_comments: true
+    indent_significant: false
+    patterns:
+      - kind: branching
+        regex: '(\b(if|else|switch|case)\b|\?\s*[^?:]+:)'
+      - kind: loop
+        regex: '\b(for|while|do)\b|\.(forEach|stream)\('
+      - kind: parser
+        regex: '(parse|Pattern\.|Matcher|\.split\(|tokeni[sz]e|deserial|readValue)'
+      - kind: money
+        regex: '(BigDecimal|price|tax\b|discount|currency|RoundingMode|invoice|amount|cents|total)'
+      - kind: security
+        regex: '(auth|password|token|secret|crypto|MessageDigest|hmac|sanitiz|sanitis|permission|credential|encrypt|decrypt|login|csrf|jwt|isAdmin|\\badmin\\b|\brole\b|\bowner\b|privilege|\bacl\b)'
+      - kind: state
+        regex: '(synchronized|\bvolatile\b|Thread|Executor|AtomicInteger|retry|retries|cache|\block\b|mutex|semaphore|sleep\(|timeout)'
+
+  go:
+    extensions: [".go"]
+    line_comments: ["//"]
+    block_comments: true
+    indent_significant: false
+    patterns:
+      - kind: branching
+        regex: '\b(if|else|switch|case|select)\b'
+      - kind: loop
+        regex: '\b(for|range)\b'
+      - kind: parser
+        regex: '(parse|Parse|Unmarshal|regexp\.|strings\.Split|Scanner|tokeni[sz]e|decode)'
+      - kind: money
+        regex: '(decimal|price|tax\b|discount|currency|round|invoice|amount|cents|total)'
+      - kind: security
+        regex: '(auth|password|token|secret|crypto|hmac|sanitiz|sanitis|permission|credential|encrypt|decrypt|login|csrf|jwt|isAdmin|\\badmin\\b|\brole\b|\bowner\b|privilege|\bacl\b)'
+      - kind: state
+        regex: '(go func|\bgo\s+\w+\(|sync\.|chan\b|atomic\.|retry|retries|cache|\block\b|mutex|semaphore|time\.Sleep|timeout)'
+
+  # Used for any extension that no other entry lists.
+  default:
+    extensions: []
+    line_comments: []
+    block_comments: false
+    indent_significant: true
+    patterns:
+      - kind: branching
+        regex: '\b(if|else|elif|switch|case)\b'
+      - kind: loop
+        regex: '\b(for|while|do)\b'
+      - kind: parser
+        regex: '(parse|tokeni[sz]e|deserial|regex)'
+      - kind: money
+        regex: '(decimal|price|tax\b|discount|currency|rounding|invoice|amount|cents|total)'
+      - kind: security
+        regex: '(auth|password|token|secret|crypto|hmac|sanitiz|sanitis|permission|credential|encrypt|decrypt|login|csrf|jwt|\\badmin\\b|\brole\b|\bowner\b|privilege|\bacl\b)'
+      - kind: state
+        regex: '(thread|\block\b|retry|retries|cache|mutex|semaphore|sleep|timeout)'

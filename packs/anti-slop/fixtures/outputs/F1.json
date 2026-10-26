@@ -1,0 +1,41 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "Our framework is a set of coordination ideas. The system coordinates 20 to 30 agents, each in its own git worktree.",
+  "changes": [
+    {
+      "category": "generic_opening",
+      "before": "In today's rapidly evolving AI landscape, multi-agent systems are becoming increasingly pivotal for teams that need to delve into complex problem-solving scenarios. ",
+      "after": "",
+      "reason": "Generic opening sentence with no fact in it. It could appear in any project's docs. The AI-vocabulary words delve, pivotal and landscape leave with it.",
+      "behaviour_change": false
+    },
+    {
+      "category": "vague_claim",
+      "before": "Our robust framework",
+      "after": "Our framework",
+      "reason": "'robust' names no measurable property. Removing it keeps every fact.",
+      "behaviour_change": false
+    },
+    {
+      "category": "ai_vocabulary",
+      "before": "a tapestry of coordination ideas",
+      "after": "a set of coordination ideas",
+      "reason": "'tapestry' is an AI-vocabulary metaphor. 'set of' says the same thing plainly.",
+      "behaviour_change": false
+    },
+    {
+      "category": "ai_vocabulary",
+      "before": ", and it underscores one fact: the system",
+      "after": ". The system",
+      "reason": "'underscores' is an AI-vocabulary verb and 'one fact:' is a filler lead-in. The sentence states the fact directly.",
+      "behaviour_change": false
+    }
+  ],
+  "kept": [],
+  "flags": [
+    {
+      "location": "paragraph 1, sentence 1",
+      "issue": "'coordination ideas' names no mechanism, source or detail. The author must name the coordination ideas or cut the sentence."
+    }
+  ]
+}

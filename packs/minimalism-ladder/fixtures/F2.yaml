@@ -1,0 +1,31 @@
+id: F2
+# Rung 2 (exists in codebase). Reuse retry(), no new helper.
+input:
+  task: "Add a retry helper for the HTTP client so transient failures are retried up to 3 times."
+  level: full
+  project_notes: "Python 3.11 service. Internal utilities live under util/."
+  code_context:
+    - |
+      # util/retry.py (excerpt, already read)
+      import time
+
+      def retry(fn, attempts=3, backoff=0.5):
+          """Call fn until it succeeds or attempts run out. Re-raises the last error."""
+          last = None
+          for i in range(attempts):
+              try:
+                  return fn()
+              except Exception as exc:
+                  last = exc
+                  time.sleep(backoff * (2 ** i))
+          raise last
+    - |
+      # http/client.py (excerpt, already read)
+      import httpx
+
+      def get_json(url):
+          return httpx.get(url, timeout=5).json()
+expect:
+  - "Record has rung 2, rung_name exists_in_codebase, decision reuse."
+  - "evidence names util/retry.py (path or util/retry.py:retry)."
+  - "No new retry helper, module or function is written."

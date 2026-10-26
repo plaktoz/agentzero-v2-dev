@@ -1,0 +1,23 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "A review agent takes one pull request at a time. The worker it runs on opens a worktree for the pull request, runs the checks there, and posts one comment with the findings. The review agent is one process: it reports when it is done and marks the pull request as reviewed.\n",
+  "changes": [
+    {
+      "category": "synonym_overuse",
+      "before": "The assistant and the bot are the same process: this review agent reports",
+      "after": "The review agent is one process: it reports",
+      "reason": "\"assistant\", \"bot\" and \"review agent\" name one concept in successive sentences. Keep \"review agent\", the author's most-used term, and add no new term.",
+      "behaviour_change": false
+    }
+  ],
+  "kept": [
+    "\"worker\" is kept as a separate term: it is the host the review agent runs on, not another name for the agent.",
+    "\"pull request\" is used consistently and is unchanged."
+  ],
+  "flags": [
+    {
+      "location": "sentence 3",
+      "issue": "It is unclear whether \"the assistant and the bot\" both meant the review agent, or whether one meant the worker. If one meant the worker, the author must restore the claim about which parts are the same process."
+    }
+  ]
+}

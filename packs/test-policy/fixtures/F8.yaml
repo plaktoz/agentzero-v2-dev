@@ -1,0 +1,23 @@
+id: F8
+title: "Strict mode, new feature with no test"
+input:
+  mode: strict
+  existing_tests: []
+  coverage:
+    line_percent: null
+    changed_lines_percent: null
+  diff: |
+    diff --git a/greeting.py b/greeting.py
+    new file mode 100644
+    index 0000000..da8d791
+    --- /dev/null
+    +++ b/greeting.py
+    @@ -0,0 +1,2 @@
+    +def format_greeting(name):
+    +    return "Hello, " + name + "!"
+expect:
+  - "prefilter == needs_model"
+  - "mode == strict"
+  - "the unit at greeting.py has tests_required true even if it is not risky"
+  - "every unit with tests_required true lists at least one case"
+  - "gate == missing_tests"

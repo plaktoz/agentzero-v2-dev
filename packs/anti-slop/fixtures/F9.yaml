@@ -1,0 +1,7 @@
+id: F9
+input: |
+  I think the monorepo layout is the right call for this team, and I would choose it again. It keeps every pack in one place, so a reviewer sees the whole change at once.
+expect:
+  - "The first-person opinion (I think ... I would choose it again) is unchanged"
+  - "The opinion is listed in kept"
+  - "changes does not remove the opinion"

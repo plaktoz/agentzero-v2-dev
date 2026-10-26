@@ -1,0 +1,15 @@
+id: F7
+title: "Data migration across many files routes medium under default rubric"
+input:
+  request: "Migrate user table to add tenant_id"
+  scan:
+    files_estimate: 9
+    touches_ui: false
+    notes: null
+  override: null
+expect:
+  - "sensitive_domain is [data_migration], +3"
+  - "files_affected is many (scan estimate 9), +3"
+  - "new_capability is false (adding a column is not a new feature)"
+  - "score is 6, band medium, route medium"
+  - "Open Question 2 in the spec: whether this should be large. The default rubric gives medium; a change to weights or bands is an owner decision, not a prompt change"

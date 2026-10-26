@@ -1,0 +1,12 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "The review agent takes one pull request at a time. The worker opens a fresh worktree for that pull request and runs the checks there. The assistant posts the findings as one comment. The bot marks the pull request as reviewed once the comment is posted. In this system the agent, the worker, the assistant and the bot are one process.",
+  "changes": [],
+  "kept": [],
+  "flags": [
+    {
+      "location": "paragraph 1, sentences 1-5",
+      "issue": "Four names (review agent, worker, assistant, bot) are used for successive subjects, and the last sentence says they are one process. Unclear whether these are aliases for one component or separate roles. The author must confirm the system's name for it and use one term. Not changed: choosing a term needs that fact, and the last sentence depends on the four names."
+    }
+  ]
+}

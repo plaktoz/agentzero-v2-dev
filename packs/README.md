@@ -12,15 +12,15 @@
 
 | Pack | One-line purpose | Standalone use |
 |------|------------------|----------------|
-| [minimalism-ladder](./minimalism-ladder/README.md) | A six-rung check an agent runs after reading the code and before writing any | Cuts needless code in any coding agent |
-| [anti-slop](./anti-slop/README.md) | Writing and code rules plus a two-pass review that removes generic AI patterns without touching facts | A review skill for docs and code in any repo |
-| [communication-modes](./communication-modes/README.md) | Two registers (compact for agents, plain for humans) with intensity levels and a routing table | Token savings in agent-to-agent text, clarity in human-facing text |
-| [two-axis-review](./two-axis-review/README.md) | Independent Standards and Spec review passes, one finding format, severity-based gating | A PR review skill for any team |
-| [specialist-agents](./specialist-agents/README.md) | Prompts and output contracts for Analyst, Product Manager, UX Designer, Architect, Developer | A lightweight planning-to-code pipeline |
-| [router-heuristic](./router-heuristic/README.md) | A scoring rubric that sends a request to a direct worker, an architect plus worker, or a full panel | Right-sizing process to task size |
-| [grilling](./grilling/README.md) | A bounded questioning protocol that produces an alignment summary before work starts | Requirement clarification for any agent |
-| [test-policy](./test-policy/README.md) | A selective-versus-strict testing rule and a "risky logic" classifier | Deciding which changes need tests |
-| [playbook-runner](./playbook-runner/README.md) | A phase-gated workflow engine: any SDD or process workflow expressed as a Markdown playbook, executed by the Coordinator with human gates, auto gates, and a mandatory escape hatch | Running any phase-gated development process (production gatekeeper, autonomous loop, compliance workflow) against any project |
+| [minimalism-ladder](./minimalism-ladder/minimalism-ladder-spec.md) | A six-rung check an agent runs after reading the code and before writing any | Cuts needless code in any coding agent |
+| [anti-slop](./anti-slop/anti-slop-spec.md) | Writing and code rules plus a two-pass review that removes generic AI patterns without touching facts | A review skill for docs and code in any repo |
+| [communication-modes](./communication-modes/communication-modes-spec.md) | Two registers (compact for agents, plain for humans) with intensity levels and a routing table | Token savings in agent-to-agent text, clarity in human-facing text |
+| [two-axis-review](./two-axis-review/two-axis-review-spec.md) | Independent Standards and Spec review passes, one finding format, severity-based gating | A PR review skill for any team |
+| [specialist-agents](./specialist-agents/specialist-agents-spec.md) | Prompts and output contracts for Analyst, Product Manager, UX Designer, Architect, Developer | A lightweight planning-to-code pipeline |
+| [router-heuristic](./router-heuristic/router-heuristic-spec.md) | A scoring rubric that sends a request to a direct worker, an architect plus worker, or a full panel | Right-sizing process to task size |
+| [grilling](./grilling/grilling-spec.md) | A bounded questioning protocol that produces an alignment summary before work starts | Requirement clarification for any agent |
+| [test-policy](./test-policy/test-policy-spec.md) | A selective-versus-strict testing rule and a "risky logic" classifier | Deciding which changes need tests |
+| [playbook-runner](./playbook-runner/playbook-runner-spec.md) | A phase-gated workflow engine: any SDD or process workflow expressed as a Markdown playbook, executed by the Coordinator with human gates, auto gates, and a mandatory escape hatch | Running any phase-gated development process (production gatekeeper, autonomous loop, compliance workflow) against any project |
 
 ### Built-in playbooks (shipped inside `playbook-runner`)
 
@@ -56,19 +56,20 @@ A pack that breaks one of these is defective.
 
 ```text
 <pack>/
+  <pack>-spec.md   # the spec: design record (for example anti-slop/anti-slop-spec.md)
   PACK.md          # metadata + the prompt/rules text (the deliverable)
   schema/*.json    # input and output JSON Schemas
   fixtures/*.yaml  # { id, input, expect: [property ...] }
   config.yaml      # defaults for every tunable
 ```
 
-The spec in this directory describes all four. When the pack is built, `PACK.md` is the artifact that is loaded; the spec is its design record.
+The spec file (`<pack>-spec.md`) describes the files below it. When the pack is built, `PACK.md` is the artifact that is loaded; the spec is its design record.
 
 ### Consumption forms
 
 | Form | How |
 |------|-----|
-| Agent harness skill | `PACK.md` becomes a `SKILL.md` (or equivalent) with a short front-matter `description` for Claude Code, Antigravity, Codex, or any harness that loads skill files |
+| Agent harness skill | `PACK.md` becomes a `SKILL.md` (or equivalent) with a short front-matter `description` for Claude Code, Codex, or any harness that loads skill files |
 | System prompt fragment | Concatenate the `## Prompt` section into the agent's system prompt |
 | Human checklist | Read the `## Rules` section directly |
 | CI linter (partial) | Deterministic parts only (forbidden phrases, finding schema). See each spec's "Deterministic checks" |

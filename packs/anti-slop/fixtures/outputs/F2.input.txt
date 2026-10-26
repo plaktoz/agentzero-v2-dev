@@ -1,0 +1,1 @@
+This comprehensive solution serves as a robust framework that empowers teams to seamlessly integrate cutting-edge AI capabilities. It connects to Anthropic, OpenAI and Google models, and setup takes about 15 minutes.

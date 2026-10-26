@@ -1,0 +1,23 @@
+id: F3
+title: "Config value change only"
+input:
+  mode: selective
+  existing_tests: []
+  coverage:
+    line_percent: null
+    changed_lines_percent: null
+  diff: |
+    diff --git a/config/app.yaml b/config/app.yaml
+    index 195d950..080c029 100644
+    --- a/config/app.yaml
+    +++ b/config/app.yaml
+    @@ -1,3 +1,3 @@
+     name: shop
+    -timeout_seconds: 30
+    +timeout_seconds: 60
+     retries: 3
+expect:
+  - "prefilter == trivial"
+  - "change_class == trivial"
+  - "gate == ok"
+  - "units is empty"

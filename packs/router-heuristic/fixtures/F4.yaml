@@ -1,0 +1,15 @@
+id: F4
+title: "New payments service across many files routes large"
+input:
+  request: "Add a billing service with Stripe webhooks"
+  scan:
+    files_estimate: 8
+    touches_ui: false
+    notes: null
+  override: null
+expect:
+  - "new_capability is true, +3 (new billing service)"
+  - "sensitive_domain is [payments] (Stripe webhooks), +3 once"
+  - "files_affected is many (scan estimate 8), +3"
+  - "score is 9, band high, route large"
+  - "reasons are new_capability +3, files_affected many +3, sensitive_domain +3, and they add up to 9"

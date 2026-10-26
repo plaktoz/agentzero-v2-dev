@@ -9,7 +9,7 @@ created: 2026-10-20
 updated: 2026-10-20
 supersedes: []
 superseded_by: []
-links: [UMAS-BUILD-ASSESSMENT.md, TECHNICAL-DESIGN-SPEC.md, modularisation-assessment.md]
+links: [UMAS-BUILD-ASSESSMENT.md, TECHNICAL-DESIGN-SPEC.md]
 ---
 
 ## Context

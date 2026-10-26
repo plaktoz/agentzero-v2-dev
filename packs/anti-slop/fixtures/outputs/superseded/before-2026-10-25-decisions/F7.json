@@ -1,0 +1,31 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "The new cache improves performance. Users notice that the service is more reliable now.",
+  "changes": [
+    {
+      "category": "filler",
+      "before": "greatly improves",
+      "after": "improves",
+      "reason": "Intensifier adds no fact. The claim itself stays vague and is flagged for the author.",
+      "behaviour_change": false
+    },
+    {
+      "category": "filler",
+      "before": "much more reliable",
+      "after": "more reliable",
+      "reason": "Intensifier adds no fact. The claim itself stays vague and is flagged for the author.",
+      "behaviour_change": false
+    }
+  ],
+  "kept": [],
+  "flags": [
+    {
+      "location": "sentence 1",
+      "issue": "Claim has no source or number. The author must supply a measured performance figure (for example latency or throughput before and after) and its source."
+    },
+    {
+      "location": "sentence 2",
+      "issue": "Claim has no source or number. 'More reliable' needs a metric (for example error rate or uptime) and a source, and the reason users notice it must be stated."
+    }
+  ]
+}

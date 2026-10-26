@@ -45,8 +45,11 @@ An append-only file of usage entries, one JSON object per line (format per [even
 ```json
 { "v":1, "ts":"...", "budget":"proj-a/day", "op":"commit", "tokens":4120,
   "input_tokens":3000, "output_tokens":1120, "cached_tokens":0,
-  "actor":"alice", "ref":"task-7", "model":"model-x", "cost":0.031 }
+  "actor":"alice", "ref":"task-7", "model":"model-x", "cost":0.031,
+  "price_version":"2026-10-01" }
 ```
+
+Each `commit` and `record` line stores the `version` of the price table used to compute `cost`. The ledger is never rewritten, so old spend stays explainable after a price change.
 
 Operations: `reserve`, `commit`, `release`, `adjust` (manual limit change), `reset`. Current state is the fold of the ledger for the active window. A periodic snapshot file speeds startup.
 
@@ -67,16 +70,16 @@ Operations: `reserve`, `commit`, `release`, `adjust` (manual limit change), `res
 | `commit(reservation, actual) -> Status` | Replace the hold with actual usage (may exceed the estimate; see 5.2). |
 | `release(reservation)` | Drop an unused hold. Reservations also expire by `reservation_ttl`. |
 | `record(budget, usage, actor, ref)` | Commit usage with no prior reservation (for example, streaming calls that report at the end). |
-| `status(budget) -> { used, reserved, available, percent, thresholds_crossed[], reset_at }` | |
+| `status(budget) -> { used, reserved, available, percent, thresholds_crossed[], reset_at, warnings[] }` | `warnings[]` includes a stale price table notice (section 5.6). |
 | `subscribe(callback)` | Receive events in-process. Cross-process consumers read the ledger or use `poll_events(cursor)`. |
-| `cost(usage, price_table) -> amount` | Compute cost from per-model rates in the supplied table. |
+| `cost(usage, price_table) -> amount` | Compute cost from per-model rates in the supplied table. Fails on a model with no entry (section 5.6). |
 | `pack(sections, limit, counter) -> Packed` | Context packing (section 5.5). |
 
 Also `budget-meter <op> --json`.
 
 ### 4.1 CLI output (AXI)
 
-Follows [CLI Conventions (AXI)](./README.md#cli-conventions-axi). `--json` is unchanged and is what orchestrators and the `admit` callback use. The default view matters for `status`.
+Follows [CLI Conventions (AXI)](../README.md#cli-conventions-axi). `--json` is unchanged and is what orchestrators and the `admit` callback use. The default view matters for `status`.
 
 **Why it fits.** An agent deciding whether to start more work, or how much context to load, needs "how much is left and when does it reset" in a few tokens, not the ledger.
 
@@ -165,7 +168,18 @@ Pointers (path plus line range) are cheap and should be preferred over inline co
 
 ### 5.6 Cost
 
-`cost(usage, price_table)` multiplies token classes (input, output, cached) by per-model rates from a table **supplied by the caller**. No prices are embedded, so changing providers or model prices requires no library release. Unknown model -> `cost = null` with a warning, not an error.
+`cost(usage, price_table)` multiplies token classes (input, output, cached) by per-model rates from a table **supplied by the caller**. No prices are embedded, so changing providers or model prices requires no library release.
+
+The price table has this shape. Rates are per million tokens.
+
+```
+{ version, as_of, currency, models: { <model key>: { input, output, cached } } }
+```
+
+- `cost()` fails on a model key with no entry. It never returns zero or `null` for an unknown model.
+- Each `commit` and `record` writes the table `version` to its ledger line. A price change is a new `version`, applied from the next call.
+- `status` adds a warning to `warnings[]` when `as_of` is older than `price_staleness_days` (default 90).
+- The library detects missing and stale prices. It cannot detect a wrong rate.
 
 ## 6. Configuration
 
@@ -175,6 +189,7 @@ fsync: false
 reservation_ttl_seconds: 900
 hysteresis_points: 2
 snapshot_every_entries: 1000
+price_staleness_days: 90
 defaults:
   thresholds: [0.80, 0.90, 0.95]
 ```
@@ -187,6 +202,7 @@ Budgets themselves are defined by the caller through `define` or a budgets file;
 |-------|-------|-----------|
 | `Deferred` | Not enough headroom | Return reason and `retry_after` (next reset, if calendar) |
 | `UnknownBudget` | Not defined | Fail |
+| `UnknownModel` | `cost()` called for a model key with no price | Fail. The caller records the token counts and raises an alert. Never a zero cost |
 | `RequiredTooLarge` | Packing: required sections exceed limit | Fail with sizes per section |
 | `LedgerCorrupt` | Unparseable line | Skip the line, warn, continue. `rebuild` command re-folds from the snapshot |
 | `LockTimeout` | Writer lock held too long | Fail, retryable |
@@ -201,7 +217,7 @@ This library keeps its own typed errors and does not import any error library. A
 | `Deferred` | `transient`; `retry_after` supplies the delay |
 | `LockTimeout` | `transient` |
 | `LedgerCorrupt`, `ClockSkew` | `ambiguous` (the library continues; `rebuild` repairs) |
-| `UnknownBudget`, `RequiredTooLarge` | `permanent` |
+| `UnknownBudget`, `UnknownModel`, `RequiredTooLarge` | `permanent` |
 
 ## 8. Acceptance Criteria
 
@@ -222,7 +238,7 @@ This library keeps its own typed errors and does not import any error library. A
 
 | UMAS concept | Mapping |
 |--------------|---------|
-| Daily project budget; 80% warn; 100% exhaustion | Period budget with `calendar` window; thresholds `0.80 / 1.0`; the Scheduler calls `reserve` before dispatch |
+| Daily project budget; 80% warn; 100% exhaustion | Period budget with `calendar` window; thresholds `0.80 / 0.90 / 0.95`; the Scheduler calls `reserve` before dispatch |
 | Session limit; 90% graceful handoff; 95% emergency | Session budget per worker; `soft` -> the worker commits state and requests handoff; `hard` -> Project Monitor forces handoff |
 | `umas project config --budget N` | `define(budget, limit=N)`; takes effect immediately (exception flow 4.6 alt. flow) |
 | `budget_paused` session status | Set by UMAS when `reserve` returns `Deferred` |
@@ -252,14 +268,14 @@ Extracted from `UMAS-TECH-DESIGN-SPEC.md` §3.6 and §4.6, `TECHNICAL-DESIGN-SPE
 
 ## 12. Reference Implementation (Source Code)
 
-> Non-normative. Example code illustrating one way to implement this spec. May use consumer-specific names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md).
+> Non-normative. Example code illustrating one way to implement this spec. May use consumer-specific names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md). The code is in Rust, which is not in the stack. It is legacy and will be ported to Python.
 
-### 12.1 Scheduler with token budget (Rust)
+### 12.1 Scheduler with token budget (Rust, legacy: language not in stack, port to Python)
 
 Source: `TECHNICAL-DESIGN-SPEC-PART2.md` §4.4.2
 
 ```rust
-// Rust implementation for performance
+// Rust implementation for performance (legacy: language not in stack, port to Python)
 use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::{Mutex, Semaphore};

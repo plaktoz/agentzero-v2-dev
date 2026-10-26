@@ -116,7 +116,7 @@ Also `task-queue <command> --json` for every operation above, so a worker in any
 
 ### 4.1 CLI output (AXI)
 
-Follows [CLI Conventions (AXI)](./README.md#cli-conventions-axi). `--json` is unchanged and remains the contract for workers and launchers.
+Follows [CLI Conventions (AXI)](../README.md#cli-conventions-axi). `--json` is unchanged and remains the contract for workers and launchers.
 
 **Why it fits.** A coordinating agent asks "what is ready, what is stuck, what is running" many times a session. The queue can hold hundreds of tasks, almost all `done`.
 
@@ -266,7 +266,7 @@ This library keeps its own typed errors. A consumer that wants one error vocabul
 | Worker crash, task returns to the queue | Lease expiry (section 5.2). UMAS also asks [watchdog](../watchdog/README.md) to restart the process; the two are independent |
 | Task payload | UMAS puts the task type, hook path, and context reference in `payload`. The library does not read it |
 | Worker kind (coding, review) | `tags`, matched by the claim `filter` |
-| Launching the harness CLI after a claim | Not this library. UMAS's launcher claims a task, starts the harness as a [watchdog](../watchdog/README.md) node, and calls `complete` or `fail` from the commit-message signal. See [modularisation-assessment.md](../modularisation-assessment.md) section 4.8 |
+| Launching the harness CLI after a claim | Not this library. UMAS's launcher claims a task, starts the harness as a [watchdog](../watchdog/README.md) node, and calls `complete` or `fail` from the commit-message signal. See [TECHNICAL-DESIGN-SPEC.md Appendix A.4.8](../../umas/TECHNICAL-DESIGN-SPEC.md#a48-agent-execution-model-decision) |
 
 **What stays in UMAS.** The dispatch loop that connects `ready` events to the launcher, the routing that sets `tags`, the creation of a hook for each task, and the `admit` rule. That is glue, a few hundred lines, and it is not a library.
 
@@ -287,7 +287,7 @@ Extracted from `TECHNICAL-DESIGN-SPEC.md` section 5.2 (Scheduler: `ready_queue`,
 
 ### Adopt or build
 
-Reusability is real, but so are existing tools. Candidates to evaluate before building (not yet checked, since web search was unavailable when this was written): Taskwarrior (dependencies, local files, no leases), `make`/`ninja`-style graph runners (no persistent claims), Celery, RQ and Sidekiq-style queues (need a broker or database, no dependency graph by default), Temporal and Airflow (full workflow engines, heavy), and agent-oriented task trackers with dependency support. Criteria: files only, no server, dependency graph, leases with a concurrency cap, a CLI, and an embeddable Go package. If one fits, adopt it behind this spec's interface and drop the build. The spec is small enough (about 1,000 lines of Go) that building is a reasonable fallback.
+Reusability is real, but so are existing tools. Candidates to evaluate before building (not yet checked, since web search was unavailable when this was written): Taskwarrior (dependencies, local files, no leases), `make`/`ninja`-style graph runners (no persistent claims), Celery, RQ and Sidekiq-style queues (need a broker or database, no dependency graph by default), Temporal and Airflow (full workflow engines, heavy), and agent-oriented task trackers with dependency support. Criteria: files only, no server, dependency graph, leases with a concurrency cap, a CLI, and an embeddable Python package. If one fits, adopt it behind this spec's interface and drop the build. The spec is small enough (about 1,000 lines of code) that building is a reasonable fallback.
 
 ## 11. Open Questions
 

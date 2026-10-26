@@ -1,0 +1,20 @@
+# Defaults for the anti-slop pack.
+# scripts/lint.py reads only the top-level scalars phrases_file,
+# max_avg_paragraph_sentences and max_comment_ratio. The caller reads the rest.
+mode: two_pass            # off | two_pass
+preserve:
+  - facts
+  - examples
+  - structure
+phrases_file: phrases.yaml
+max_avg_paragraph_sentences: 4
+max_comment_ratio: 0.1
+kinds:
+  prd:
+    enabled: true
+  docs:
+    enabled: true
+  code:
+    enabled: true
+  prose:
+    enabled: true

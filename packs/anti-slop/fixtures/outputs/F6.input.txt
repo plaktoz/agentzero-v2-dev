@@ -1,0 +1,8 @@
+def load_records(data):
+    try:
+        result = process(data)
+        if result is None:
+            return []
+        return result
+    except Exception:
+        return []

@@ -11,20 +11,20 @@
 
 | Library | One-line purpose | Standalone use |
 |---------|------------------|----------------|
-| [hook-store](../hook-store/README.md) | Durable git-worktree "hooks" that hold a unit of work's state across crashes and handoffs | Crash-safe workspaces for any agent harness or long-running script |
-| [event-log](../event-log/README.md) | Append-only JSONL event log with cursor-based reading, rotation, and corruption recovery | Audit trail, replay, or lightweight message bus between local processes |
-| [merge-queue](../merge-queue/README.md) | Batch merge with prefix-bisect, driven by any verify command | A local or CI merge queue for any repo, with no agents involved |
-| [test-adapters](../test-adapters/README.md) | Run pytest, jest, or cargo test and get one normalised result | Any tool that needs test results without per-framework parsing |
-| [budget-meter](../budget-meter/README.md) | Token and cost budgets, threshold events, admission control, handoff-packet packing | Budget control for any LLM application |
-| [llm-gateway](../llm-gateway/README.md) | Provider-neutral LLM calls with retry, failover, and rate limiting | Provider portability. **Adopt an existing package first** |
-| [watchdog](../watchdog/README.md) | Heartbeat and progress supervision with a restart and escalation ladder | Supervising any set of long-running local processes |
-| [decision-artifacts](../decision-artifacts/README.md) | PRFAQ, ADR, Spec, and GLOSSARY files, plus a shortcut-debt ledger scanned from code | Decision-record tooling for any repo, and a CI lint |
-| [error-classifier](../error-classifier/README.md) | One error record (code, severity, recoverability), deterministic classification rules, retry advice, agent and human rendering, repeat-pattern alerts | A shared error vocabulary for any multi-component system |
-| [agent-platform](../agent-platform/README.md) | Adapter registry for coding agent harnesses (Claude Code, OpenAI Codex, Gemini CLI, Copilot, custom) with work assignment, completion signalling, and cross-platform context transfer | Assigning work to any agent harness and tracking completion without knowing which tool is running |
-| [agent-session](../agent-session/README.md) | Shared lifecycle skeleton for LLM agent sessions: spawn → execute → checkpoint → handoff → done, with STATE.md, token threshold monitoring, and handoff-packet construction | Any multi-agent system where agents must hand off work and successors must resume from a durable state |
-| [task-queue](../task-queue/README.md) | Dependency graph and ready queue with leased claims, a concurrency cap, retry, and parent/child groups, stored in an event log plus snapshot | A local work queue for any set of dependent jobs, with no broker or database |
-| [kc-axi](../kc-axi/README.md) | Run a local Keycloak in Docker or Podman and administer realms, clients and users through an agent-friendly CLI (lean output, fixed exit codes, no secrets printed), on Linux and Windows | Identity-provider set-up and admin for any project or any coding agent |
-| [metrics-store](../metrics-store/README.md) | Record scalar measurements (tokens, durations, costs, error rates) from multiple processes; queryable by time window and tag; two backends: JSONL ledger (Phase 1–2) and a relational table (Phase 3+) | Budget reporting, cost tracking, or quality trending for any multi-component system with a file-based or SQL backend |
+| [hook-store](./hook-store/README.md) | Durable git-worktree "hooks" that hold a unit of work's state across crashes and handoffs | Crash-safe workspaces for any agent harness or long-running script |
+| [event-log](./event-log/README.md) | Append-only JSONL event log with cursor-based reading, rotation, and corruption recovery | Audit trail, replay, or lightweight message bus between local processes |
+| [merge-queue](./merge-queue/README.md) | Batch merge with prefix-bisect, driven by any verify command | A local or CI merge queue for any repo, with no agents involved |
+| [test-adapters](./test-adapters/README.md) | Run pytest, jest, or cargo test and get one normalised result | Any tool that needs test results without per-framework parsing |
+| [budget-meter](./budget-meter/README.md) | Token and cost budgets, threshold events, admission control, handoff-packet packing | Budget control for any LLM application |
+| [llm-gateway](./llm-gateway/README.md) | Provider-neutral LLM calls with retry, failover, and rate limiting | Provider portability. Wraps the provider SDKs ([ADR-0003](../docs/decisions/ADR-0003-llm-gateway-wraps-provider-sdks.md)) |
+| [watchdog](./watchdog/README.md) | Heartbeat and progress supervision with a restart and escalation ladder | Supervising any set of long-running local processes |
+| [decision-artifacts](./decision-artifacts/README.md) | PRFAQ, ADR, Spec, and GLOSSARY files, plus a shortcut-debt ledger scanned from code | Decision-record tooling for any repo, and a CI lint |
+| [error-classifier](./error-classifier/README.md) | One error record (code, severity, recoverability), deterministic classification rules, retry advice, agent and human rendering, repeat-pattern alerts | A shared error vocabulary for any multi-component system |
+| [agent-platform](./agent-platform/README.md) | Adapter registry for coding agent harnesses (Claude Code, OpenAI Codex, which also runs Gemini models, Copilot, custom) with work assignment, completion signalling, and cross-platform context transfer | Assigning work to any agent harness and tracking completion without knowing which tool is running |
+| [agent-session](./agent-session/README.md) | Shared lifecycle skeleton for LLM agent sessions: spawn → execute → checkpoint → handoff → done, with STATE.md, token threshold monitoring, and handoff-packet construction | Any multi-agent system where agents must hand off work and successors must resume from a durable state |
+| [task-queue](./task-queue/README.md) | Dependency graph and ready queue with leased claims, a concurrency cap, retry, and parent/child groups, stored in an event log plus snapshot | A local work queue for any set of dependent jobs, with no broker or database |
+| [kc-axi](./kc-axi/README.md) | Run a local Keycloak in Docker or Podman and administer realms, clients and users through an agent-friendly CLI (lean output, fixed exit codes, no secrets printed), on Linux and Windows | Identity-provider set-up and admin for any project or any coding agent |
+| [metrics-store](./metrics-store/README.md) | Record scalar measurements (tokens, durations, costs, error rates) from multiple processes; queryable by time window and tag; two backends: JSONL ledger (Phase 1–2) and a relational table (Phase 3+) | Budget reporting, cost tracking, or quality trending for any multi-component system with a file-based or SQL backend |
 
 ---
 
@@ -48,7 +48,7 @@ These rules make a library standalone. A spec or implementation that breaks one 
 - `Result` means success or a typed error from that library's error table.
 - Times are RFC 3339 UTC. IDs are ULIDs unless stated.
 - MUST, SHOULD, and MAY carry their RFC 2119 meaning.
-- Each library keeps its own typed errors. Where a spec has a "Failure Modes" section it may end with an "Error records" table giving a suggested `recoverability` for each error, so a consumer can express them as [error-classifier](../error-classifier/README.md) records. This is a data mapping, not an import.
+- Each library keeps its own typed errors. Where a spec has a "Failure Modes" section it may end with an "Error records" table giving a suggested `recoverability` for each error, so a consumer can express them as [error-classifier](./error-classifier/README.md) records. This is a data mapping, not an import.
 - Each spec ends with "Known consumers". This lists projects or systems that use this library, with a mapping table. The library does not depend on anything in it. UMAS is the reference consumer; other consumers are listed as they appear.
 
 ---
@@ -82,18 +82,18 @@ Dependency arrows show what the consuming application wires together. They are n
 
 ## Implementation Language
 
-This is an open decision (see the stack review in the discussion that produced this directory). The specs are written so it does not block them.
+The language is decided: Python, per [TECHNICAL-DESIGN-SPEC.md Appendix A.4](../umas/TECHNICAL-DESIGN-SPEC.md#a4-technology-assessment-python-or-typescript-only). TypeScript is used only where no Python option exists. The specs are written so this does not block them.
 
 | Library | Natural fit | Reason |
 |---------|-------------|--------|
-| hook-store, merge-queue | Any | I/O-bound git subprocess work |
-| kc-axi | Go, as a static binary | Must run natively on Linux and Windows with no shell, `jq` or `grep`; the source script was Bash |
-| task-queue | Any (Go under the language decision) | File locking, an append-only log, and graph walks. A static binary suits a queue shared by many processes |
-| event-log, budget-meter | Any | File I/O and arithmetic |
-| test-adapters | Any | Subprocess and report parsing |
-| watchdog | Rust or Go gives a single static binary; Python is acceptable | Needs to outlive the things it supervises |
+| hook-store, merge-queue | Python | I/O-bound git subprocess work |
+| kc-axi | Python, installed as a package (`pip`, `uv` or `pipx`); an optional frozen single-file build per OS for users without Python | Must run natively on Linux and Windows with no shell, `jq` or `grep`; the source script was Bash |
+| task-queue | Python | File locking, an append-only log, and graph walks. A queue shared by many processes |
+| event-log, budget-meter | Python | File I/O and arithmetic |
+| test-adapters | Python | Subprocess and report parsing |
+| watchdog | Python, supervised by the OS service manager (launchd or systemd) | Needs to outlive the things it supervises |
 | decision-artifacts | Python or TypeScript | Text processing, easy skill packaging |
-| error-classifier | Any | Pure functions over data files; the record schema must be identical in every language |
+| error-classifier | Python | Pure functions over data files; the record schema must be identical in every language |
 | llm-gateway | Python or TypeScript | Where the provider SDKs live |
 | agent-platform | Python or TypeScript | Where the harness SDKs and file-format helpers live |
 | agent-session | Python or TypeScript | Where the LLM agent runtime lives |
@@ -104,7 +104,7 @@ Each library SHOULD also expose a thin CLI (`<name> <command> --json`) so a non-
 
 ## CLI Conventions (AXI)
 
-[AXI](https://github.com/kunchenguid/axi) (Agent eXperience Interface) is a set of ten design principles for command-line tools that coding agents call. It is a convention, not a dependency: no library imports it, and each library stays independent (rule 1). Its JavaScript SDK is not usable from a Go binary (not verified), so the principles are implemented by hand. The specs below were checked against AXI's `SKILL.md`; the AXI repository's own licence has not been confirmed here.
+[AXI](https://github.com/kunchenguid/axi) (Agent eXperience Interface) is a set of ten design principles for command-line tools that coding agents call. It is a convention, not a dependency: no library imports it, and each library stays independent (rule 1). Its JavaScript SDK is not usable from the Python libs (not verified), so the principles are implemented by hand. The specs below were checked against AXI's `SKILL.md`; the AXI repository's own licence has not been confirmed here.
 
 It applies where an agent runs the command and pays for every token of its output. A library whose CLI is only called by programs gains little (see the fit table).
 
@@ -138,7 +138,7 @@ The default view is produced from the same data as `--json`, by an encoder at th
 - A command whose job is to *judge* (`test-adapters run`) exits 1 when the verdict is not a pass, because callers branch on the exit code.
 - A command whose job is to *decide admission* (`task-queue claim`, `budget-meter reserve`) exits 0 for both answers, and the output says which. "Nothing to claim" and "deferred" are normal answers, not failures.
 
-**TOON note.** AXI names TOON as the encoding. The project's landing page says uniform arrays carry a `[N]{fields}` header, then rows, and that structure is by indentation; I did not read the full specification and did not find a Go implementation. The examples in the libs use that shape and are illustrative. Our libraries only emit flat objects and uniform arrays, so a small hand-written encoder for that subset is a fallback if no maintained Go package fits.
+**TOON note.** AXI names TOON as the encoding. The project's landing page says uniform arrays carry a `[N]{fields}` header, then rows, and that structure is by indentation; I did not read the full specification and did not check for a Python implementation. The examples in the libs use that shape and are illustrative. Our libraries only emit flat objects and uniform arrays, so a small hand-written encoder for that subset is a fallback if no maintained Python package fits.
 
 ### How to use it
 
@@ -151,17 +151,17 @@ The default view is produced from the same data as `--json`, by an encoder at th
 
 | Library | Fit | Why |
 |---------|-----|-----|
-| [test-adapters](../test-adapters/README.md), [task-queue](../task-queue/README.md), [event-log](../event-log/README.md) (reads), [merge-queue](../merge-queue/README.md) (`status`), [budget-meter](../budget-meter/README.md) (`status`) | Strong | Agents read their output often and it can be large. These five carry an AXI subsection in section 4 |
+| [test-adapters](./test-adapters/README.md), [task-queue](./task-queue/README.md), [event-log](./event-log/README.md) (reads), [merge-queue](./merge-queue/README.md) (`status`), [budget-meter](./budget-meter/README.md) (`status`) | Strong | Agents read their output often and it can be large. These five carry an AXI subsection in section 4 |
 | hook-store, metrics-store, decision-artifacts (`check`), watchdog (`check`), agent-session, error-classifier | Medium | Reviewed later |
 | llm-gateway, agent-platform | Low | Used by programs, not by an agent at a prompt |
 
 ### Open points for the AXI review
 
-1. Is TOON the default encoding, or plain key-value as in [kc-axi](../kc-axi/README.md) today? [kc-axi](../kc-axi/README.md) also still deviates (stderr errors, exit codes 3 to 7, default limit 3) and is to be revised against these rules.
-2. Exit code 1 for `test-adapters run` when tests fail, versus AXI's reading of 1 as "the tool errored". Kept as 1 here because [merge-queue](../merge-queue/README.md) depends on it.
+1. Is TOON the default encoding, or plain key-value as in [kc-axi](./kc-axi/README.md) today? [kc-axi](./kc-axi/README.md) also still deviates (stderr errors, exit codes 3 to 7, default limit 3) and is to be revised against these rules.
+2. Exit code 1 for `test-adapters run` when tests fail, versus AXI's reading of 1 as "the tool errored". Kept as 1 here because [merge-queue](./merge-queue/README.md) depends on it.
 3. Whether `reserve` should exit non-zero on `Deferred` for shell callers. Kept at 0 here.
 4. Which agent platforms get the session-start hook (AXI names Claude Code, Codex and OpenCode), and whether to also ship a skill file per lib.
-5. A shared Go package for the encoder and the flag rules, or each lib carrying its own copy. A shared package would be a dependency between libraries (rule 2), so the likely answer is a copy per lib, or a separate tiny library.
+5. A shared Python package for the encoder and the flag rules, or each lib carrying its own copy. A shared package would be a dependency between libraries (rule 2), so the likely answer is a copy per lib, or a separate tiny library.
 6. Whether the medium-fit libs adopt the same rules.
 
 ---
@@ -176,7 +176,7 @@ This order minimises blocked work for any consumer.
 4. **watchdog**.
 5. **error-classifier** — small, no dependencies. Build early so all other libraries' typed errors can map to one shared record.
 6. **decision-artifacts** — independent, can be built in parallel at any point.
-7. **llm-gateway** — adopt an existing package first; build only if the evaluation in its spec fails.
+7. **llm-gateway** — wrap the provider SDKs ([ADR-0003](../docs/decisions/ADR-0003-llm-gateway-wraps-provider-sdks.md)); the acceptance checklist in its spec section 6 must pass.
 8. **agent-platform** — depends on `hook-store` being settled (worktree layout).
 9. **agent-session** — depends on `hook-store`, `event-log`, and `budget-meter`; the shared session skeleton.
 10. **task-queue** — depends on nothing; the `admit` callback is wired to `budget-meter` by the consuming application.

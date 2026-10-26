@@ -79,7 +79,7 @@ A `BatchReport` lists, per candidate, the outcome, reason, verify log reference,
 
 ### 4.1 CLI output (AXI)
 
-Follows [CLI Conventions (AXI)](./README.md#cli-conventions-axi). `--json` is unchanged. The default view matters mainly for `status`, `submit` and the result of `run_once`.
+Follows [CLI Conventions (AXI)](../README.md#cli-conventions-axi). `--json` is unchanged. The default view matters mainly for `status`, `submit` and the result of `run_once`.
 
 **Why it fits.** Agents submit work and then ask "where is my change". A `BatchReport` for a ten-candidate batch with a bisection is long, and the asker usually needs one row.
 

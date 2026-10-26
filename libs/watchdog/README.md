@@ -20,7 +20,7 @@ Supervise long-running local processes by heartbeat and by **progress**, and app
 
 **Non-goals**
 - Judgement. Whether a stalled worker should be nudged, handed off, or restarted is expressed as a configured ladder plus an optional caller callback. The library has no model or heuristics beyond thresholds.
-- Replacing the OS service manager. The top of any chain should be supervised by launchd, systemd, or equivalent, and the library does not install itself as a service.
+- Replacing the OS service manager. The watchdog is a Python process and cannot restart itself. The top of any chain runs under the operating system's service manager: launchd on macOS, systemd on Linux, a Windows service on Windows. The library does not install itself as a service. Service unit files are not written yet.
 - Metrics/alerts backends. It emits events through a callback.
 
 ## 3. Concepts and Data Model
@@ -222,9 +222,9 @@ Extracted from `UMAS-TECH-DESIGN-SPEC.md` §3.5 (three-tier watchdog, Project Mo
 
 ## 12. Reference Implementation (Source Code)
 
-> Non-normative. Example code illustrating one way to implement this spec. May use consumer-specific names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md).
+> Non-normative. Example code illustrating one way to implement this spec. May use consumer-specific names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md). The code is in Rust, which is not in the stack. It is legacy and will be ported to Python.
 
-### 12.1 Daemon (Rust)
+### 12.1 Daemon (Rust, legacy: language not in stack, port to Python)
 
 Source: `TECHNICAL-DESIGN-SPEC-PART3.md` §7.3.2
 

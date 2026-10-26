@@ -103,7 +103,7 @@ A lease is **live** if `now - heartbeat_at < lease_ttl` (default 5 min) and, whe
 | `read_state(name) -> State` | Parse front matter from the working copy. |
 | `write_state(name, patch)` | Merge `patch` into the front matter atomically. Enforces `max_decisions`. |
 | `checkpoint(name, summary, signal?, files?) -> CommitId` | Stage `files` (default all tracked and new, minus ignored), commit. Message per section 5.2. A no-op commit returns the current `HEAD` without error. |
-| `find_signals(name, pattern, since?) -> [Commit]` | Return commits whose message matches `pattern`. Lets a scheduler detect completion with no shared database. |
+| `find_signals(name, pattern, after?) -> { commits: [Commit], cursor }` | Return the commits on the hook branch whose message matches `pattern`, oldest first. `after` is a commit SHA (section 5.2). Fails `UnknownCursor` if `after` is not an ancestor of the branch tip. Lets a scheduler detect completion with no shared database. |
 | `recover(name) -> Recovery` | Return `{ last_committed_state, last_commit, dirty, uncommitted_diff_stat, lease }`. Read-only. |
 | `transfer(name, from_owner, to_owner)` | Hand the lease over. Requires `from_owner` to hold it, or `force: true` when the lease is not live. |
 | `complete(name)` / `abandon(name, reason)` | Release the lease and set the terminal status in `STATE.md` (committed). |
@@ -137,6 +137,11 @@ Tokens: 41200          # only if the caller passes tags
 - `signal` is an opaque string supplied by the caller (`done`, `checkpoint`, ...), rendered through the `signal_format` template (default `[{signal}]`). The library assigns no meaning to any signal.
 - `tags` (a string map) become git trailers.
 - `find_signals` matches against the subject line and trailers.
+- `find_signals` scans the branch of hook `name` (`<branch_prefix>/<name>`). It returns the matching commits, oldest first, in `commits`.
+- `after` is a commit SHA. With `after`, the scan covers the commits after that commit, like `git log <after>..<branch tip>`. The commit `after` is not included. Without `after`, the scan covers the whole branch log.
+- `cursor` is the SHA of the newest commit scanned, matching or not. The caller can pass `cursor` as `after` in the next call. If no commit is newer than `after`, `cursor` equals `after`. If the branch has no commits, `cursor` is null.
+- The library does not store the cursor. The caller stores it and decides when to advance it.
+- If `after` is not an ancestor of the branch tip, for example after a history rewrite, `find_signals` fails `UnknownCursor`. The caller decides whether to rescan without `after`.
 
 ### 5.3 Concurrency
 
@@ -190,6 +195,7 @@ gc:
 | `LeaseHeld` | Another live lease | Fail. Caller may `transfer --force` only when not live |
 | `NotOwner` | Mutation without the lease | Fail |
 | `GitBusy` | Lock not released in time | Fail, retryable |
+| `UnknownCursor` | `find_signals` `after` is not an ancestor of the hook branch tip, or does not exist | Fail, no side effects. The caller can call again without `after` |
 | `StateCorrupt` | Front matter missing or invalid | `recover` still returns git facts and sets `state: null`. A merge conflict marker in `STATE.md` counts as corrupt |
 | `DirtyRefused` | `remove` without `force` on a dirty hook | Fail, return diff stat |
 | `WorktreeMissing` | Registered by git but directory gone | `list` reports `missing`; `git worktree prune` is run only by `gc` |
@@ -204,7 +210,7 @@ This library keeps its own typed errors and does not import any error library. A
 | `GitBusy` | `transient` |
 | `DiskFull` | `ambiguous` (clears only if space is freed) |
 | `StateCorrupt`, `WorktreeMissing` | `permanent` until `recover` or `gc` is run |
-| `NotAGitRepo`, `AlreadyExists`, `LeaseHeld`, `NotOwner`, `DirtyRefused` | `permanent` |
+| `NotAGitRepo`, `AlreadyExists`, `LeaseHeld`, `NotOwner`, `DirtyRefused`, `UnknownCursor` | `permanent` |
 
 ## 8. Acceptance Criteria
 
@@ -213,7 +219,7 @@ This library keeps its own typed errors and does not import any error library. A
 3. `gc --apply` never removes a dirty hook, under any age or policy.
 4. Two processes calling `create` with the same name: exactly one succeeds.
 5. `checkpoint` with no changes does not fail and does not create an empty commit.
-6. `find_signals` finds a signal commit written by a different process with no shared state besides git.
+6. `find_signals` finds a signal commit written by a different process with no shared state besides git. A second call with `after` set to the returned `cursor` returns no commits. A call with a SHA outside the branch history fails `UnknownCursor`.
 7. Operation set works against a repository with 200 hooks in under 2 seconds for `list`.
 8. Every persisted file validates against its JSON/YAML schema; version N-1 files are readable.
 
@@ -226,7 +232,7 @@ This library keeps its own typed errors and does not import any error library. A
 |--------------|-----------------------------|
 | `.umas/worktrees/<hook>/` | `root = .umas/worktrees` |
 | `[umas] <agent> <step> [tokens: N]` | `checkpoint(signal=null, tags={Tokens: N})` with `signal_format` customised |
-| `[umas:done] <task-id>` | `checkpoint(signal="umas:done")`; the Scheduler calls `find_signals("umas:done")` |
+| `[umas:done] <task-id>` | `checkpoint(signal="umas:done")`; the Scheduler calls `find_signals(name, "umas:done", after=cursor)` and stores the returned `cursor` |
 | `[umas:checkpoint] <summary>` | `checkpoint(signal="umas:checkpoint")`; Project Monitor reads `last_activity_at` |
 | Stale worktrees (exception flow 4.8) | `list` + `gc`; `umas worktrees recover` uses `recover` + `transfer` |
 | Handoff packet source | `read_state` (`decisions`, `next_steps`, `refs`) |
@@ -253,14 +259,14 @@ Extracted from `TECHNICAL-DESIGN-SPEC.md` §3.2 (Rust `WorktreeService`), `UMAS-
 
 ## 12. Reference Implementation (Source Code)
 
-> Non-normative. Example code illustrating one way to implement this spec. May use consumer-specific names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md).
+> Non-normative. Example code illustrating one way to implement this spec. May use consumer-specific names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md). The code is in Rust, which is not in the stack. It is legacy and will be ported to Python.
 
-### 12.1 WorktreeService (Rust)
+### 12.1 WorktreeService (Rust, legacy: language not in stack, port to Python)
 
 Source: `TECHNICAL-DESIGN-SPEC.md` §3.2.2
 
 ```rust
-// Core service implementation (Rust)
+// Core service implementation (Rust, legacy: language not in stack, port to Python)
 pub struct WorktreeService {
     repo_path: PathBuf,
     worktree_base: PathBuf,
@@ -425,7 +431,7 @@ impl WorktreeService {
 }
 ```
 
-### 12.2 Worktree data structures (Rust)
+### 12.2 Worktree data structures (Rust, legacy: language not in stack, port to Python)
 
 Source: `TECHNICAL-DESIGN-SPEC.md` §3.2.3
 

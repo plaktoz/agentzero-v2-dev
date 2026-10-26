@@ -1,0 +1,7 @@
+# Defaults for every tunable in the minimalism-ladder pack.
+level: full            # lite | full | ultra
+enforce: true          # reviewers treat a missed rung as a finding
+record: true           # agent emits the ladder record
+shortcut:
+  marker: "SHORTCUT:"
+require_evidence_rungs: [1, 2, 3, 4]

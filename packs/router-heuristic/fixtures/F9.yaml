@@ -1,0 +1,11 @@
+id: F9
+title: "New product from nothing routes greenfield"
+input:
+  request: "Build a new habit-tracker app"
+  scan: null
+  override: null
+expect:
+  - "greenfield is true (a new product from nothing)"
+  - "new_capability is true, +3; files_affected is unknown (no scan), +2"
+  - "score is 5 (reported), band n/a, route greenfield"
+  - "reasons are new_capability +3, files_affected unknown +2, and they add up to 5"

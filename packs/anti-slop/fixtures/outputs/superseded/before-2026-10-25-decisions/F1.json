@@ -1,0 +1,22 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "The system coordinates 20 to 30 agents, each in its own git worktree.",
+  "changes": [
+    {
+      "category": "generic_opening",
+      "before": "In today's rapidly evolving AI landscape, multi-agent systems are becoming increasingly pivotal for teams that need to delve into complex problem-solving scenarios.",
+      "after": "",
+      "reason": "Generic opening that could start any multi-agent document. It carries no fact and uses stock vocabulary (landscape, pivotal, delve).",
+      "behaviour_change": false
+    },
+    {
+      "category": "ai_vocabulary",
+      "before": "Our robust framework is a tapestry of coordination ideas, and it underscores one fact: the system coordinates",
+      "after": "The system coordinates",
+      "reason": "Stock vocabulary (robust, tapestry, underscores) and a vague claim wrapped around the only fact. The fact is kept and stated directly.",
+      "behaviour_change": false
+    }
+  ],
+  "kept": [],
+  "flags": []
+}

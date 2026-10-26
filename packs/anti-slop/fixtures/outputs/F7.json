@@ -1,0 +1,31 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "The new cache improves performance. Users notice that the service is more reliable now.",
+  "changes": [
+    {
+      "category": "vague_claim",
+      "before": "greatly improves",
+      "after": "improves",
+      "reason": "The intensifier adds no fact. Removing it keeps every fact in the sentence.",
+      "behaviour_change": false
+    },
+    {
+      "category": "vague_claim",
+      "before": "much more reliable",
+      "after": "more reliable",
+      "reason": "The intensifier 'much' has no number behind it. Removing it keeps every fact in the sentence.",
+      "behaviour_change": false
+    }
+  ],
+  "kept": [],
+  "flags": [
+    {
+      "location": "sentence 1",
+      "issue": "'improves performance' has no metric. The author must supply what improved and by how much, for example latency, throughput or hit rate, with before and after values."
+    },
+    {
+      "location": "sentence 2",
+      "issue": "'more reliable' and 'Users notice' have no number or source. The author must supply a measure, for example error rate or uptime before and after, or the user feedback behind the claim."
+    }
+  ]
+}

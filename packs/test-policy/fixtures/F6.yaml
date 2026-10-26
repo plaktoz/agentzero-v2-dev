@@ -1,0 +1,79 @@
+id: F6
+title: "calculate_total added together with tests covering the listed cases"
+input:
+  mode: selective
+  existing_tests:
+    - "tests/test_pricing.py (added in this diff)"
+  coverage:
+    line_percent: null
+    changed_lines_percent: null
+  diff: |
+    diff --git a/pricing.py b/pricing.py
+    new file mode 100644
+    index 0000000..00ba69f
+    --- /dev/null
+    +++ b/pricing.py
+    @@ -0,0 +1,12 @@
+    +from decimal import Decimal, ROUND_HALF_UP
+    +
+    +
+    +def calculate_total(unit_price, quantity, discount_percent=0):
+    +    """Return the order total, rounded to cents."""
+    +    if quantity < 0:
+    +        raise ValueError("quantity must not be negative")
+    +    if not 0 <= discount_percent <= 100:
+    +        raise ValueError("discount_percent must be between 0 and 100")
+    +    subtotal = Decimal(unit_price) * quantity
+    +    discount = subtotal * Decimal(discount_percent) / 100
+    +    return (subtotal - discount).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    diff --git a/tests/test_pricing.py b/tests/test_pricing.py
+    new file mode 100644
+    index 0000000..690ef21
+    --- /dev/null
+    +++ b/tests/test_pricing.py
+    @@ -0,0 +1,36 @@
+    +from decimal import Decimal
+    +
+    +import pytest
+    +
+    +from pricing import calculate_total
+    +
+    +
+    +def test_zero_quantity_is_zero():
+    +    assert calculate_total("9.99", 0) == Decimal("0.00")
+    +
+    +
+    +def test_negative_quantity_is_rejected():
+    +    with pytest.raises(ValueError):
+    +        calculate_total("9.99", -1)
+    +
+    +
+    +def test_no_discount():
+    +    assert calculate_total("10.00", 3) == Decimal("30.00")
+    +
+    +
+    +def test_full_discount_is_free():
+    +    assert calculate_total("10.00", 3, 100) == Decimal("0.00")
+    +
+    +
+    +def test_discount_below_zero_is_rejected():
+    +    with pytest.raises(ValueError):
+    +        calculate_total("10.00", 1, -5)
+    +
+    +
+    +def test_discount_above_hundred_is_rejected():
+    +    with pytest.raises(ValueError):
+    +        calculate_total("10.00", 1, 101)
+    +
+    +
+    +def test_rounds_half_up_at_half_cent():
+    +    assert calculate_total("0.005", 1) == Decimal("0.01")
+expect:
+  - "prefilter == needs_model"
+  - "change_class == normal"
+  - "a unit at pricing.py has kind money, risky true, tests_required true"
+  - "that unit lists at least one case"
+  - "that unit has present true, because the added tests cover every case"
+  - "no unit points at tests/test_pricing.py"
+  - "gate == ok"
+  - "reasons is empty"

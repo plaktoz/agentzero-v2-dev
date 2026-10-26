@@ -1,0 +1,18 @@
+id: F7
+# Required behaviour (input validation) is written. The ladder does not remove it.
+input:
+  task: |
+    Add POST /signup that accepts { email, password } and creates a user.
+    Input validation is required: reject a malformed email with 400, and reject a password shorter than 12 characters with 400.
+  level: full
+  project_notes: "Express on Node 20. package.json has no validation library. Node has no built-in schema validator."
+  code_context:
+    - |
+      // src/routes/auth.ts (excerpt, already read)
+      import { Router } from "express";
+      export const auth = Router();
+      auth.post("/login", loginHandler);
+expect:
+  - "Validation is written: a malformed email returns 400 and a password under 12 characters returns 400."
+  - "The ladder does not remove the validation. The record's rung is 6 or the validation is named as required behaviour in notes."
+  - "No validation library is added to package.json unless the record shows a rung 3 or 4 holds (none does here)."

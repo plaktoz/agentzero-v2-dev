@@ -1,0 +1,45 @@
+from abc import ABC, abstractmethod
+
+
+class Agent:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+class AbstractAgentFactory(ABC):
+    """Abstract factory for creating agents.
+
+    This class defines the interface that all agent factories must implement.
+    Subclasses decide which concrete agent type to build and how it is configured.
+    """
+
+    @abstractmethod
+    def create_agent(self, name: str) -> Agent:
+        """Create and return a new agent with the given name.
+
+        Args:
+            name: The name to give the new agent.
+
+        Returns:
+            A newly constructed Agent instance.
+        """
+
+
+class ConcreteAgentFactory(AbstractAgentFactory):
+    """Concrete implementation of AbstractAgentFactory.
+
+    This factory creates standard Agent instances. It is the only
+    implementation currently in use.
+    """
+
+    def create_agent(self, name: str) -> Agent:
+        """Create a standard Agent with the given name.
+
+        Args:
+            name: The name to give the new agent.
+
+        Returns:
+            A new standard Agent.
+        """
+        # Create the agent object and return it to the caller.
+        return Agent(name=name)

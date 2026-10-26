@@ -1,0 +1,24 @@
+id: F1
+# Rung 3 (platform). Native date input, not a picker component.
+input:
+  task: "Add a date picker to the booking form so users can choose a travel date."
+  level: full
+  project_notes: "React and TypeScript web app. Evergreen browsers only. No date-picker component exists in src/ or package.json."
+  code_context:
+    - |
+      // src/forms/booking.tsx (excerpt, already read)
+      export function BookingForm({ onSubmit }: Props) {
+        const [name, setName] = useState("");
+        return (
+          <form onSubmit={onSubmit}>
+            <input type="text" name="name" value={name} onChange={(e) => setName(e.target.value)} />
+            <input type="number" name="guests" min={1} />
+            <button type="submit">Book</button>
+          </form>
+        );
+      }
+expect:
+  - "Record has rung 3, rung_name stdlib_or_platform, decision use_builtin."
+  - "Output is a native HTML date input (type=\"date\") added to src/forms/booking.tsx, about 10 lines."
+  - "No date-picker component, new file or new dependency is added."
+  - "evidence names src/forms/booking.tsx, which exists in the repository."

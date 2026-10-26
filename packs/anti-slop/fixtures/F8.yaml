@@ -1,0 +1,10 @@
+id: F8
+# Spec 8.1 F8: one paragraph that uses "agent", "worker", "assistant" and "bot" for ONE thing.
+# Earlier inputs gave one of the terms a separate role, so they did not test the property.
+# Those runs are in outputs/superseded/ and described in RESULTS.md.
+input: |
+  The review agent takes one pull request at a time. The worker opens a fresh worktree for that pull request and runs the checks there. The assistant posts the findings as one comment. The bot marks the pull request as reviewed once the comment is posted. In this system the agent, the worker, the assistant and the bot are one process.
+expect:
+  - "One term is used for the one process throughout the revised text"
+  - "The numbers, names and identifiers equal the input's"
+  - "No other fact is changed"

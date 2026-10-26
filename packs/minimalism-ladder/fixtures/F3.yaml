@@ -1,0 +1,20 @@
+id: F3
+# Rung 3 (stdlib) or rung 5. Format a date with the standard library, no dependency added.
+input:
+  task: "Format a date as YYYY-MM-DD in the invoice export."
+  level: full
+  project_notes: "Python 3.11+. pyproject.toml lists no date library. The export module uses only the standard library."
+  code_context:
+    - |
+      # export/invoice.py (excerpt, already read)
+      import csv
+      import datetime
+
+      def export_rows(invoices):
+          for inv in invoices:
+              yield [inv.number, inv.issued_on, inv.total]
+expect:
+  - "Record has rung 3 (stdlib_or_platform, use_builtin) or rung 5 (one_line, write_one_line)."
+  - "The formatting uses the standard library (for example date.isoformat() or strftime('%Y-%m-%d')), not a new dependency."
+  - "No line is added to pyproject.toml or any lockfile."
+  - "If evidence is given for rung 3, it names a path that exists (export/invoice.py)."

@@ -1,0 +1,12 @@
+id: F10
+title: "Override replaces the route and keeps the computed score"
+input:
+  request: "Fix the off-by-one in `pager.py` line 42"
+  scan: null
+  override: large
+expect:
+  - "route is large"
+  - "overridden is true"
+  - "score is 0 (as in F1), reported, not recomputed from the override"
+  - "band is low"
+  - "reasons are bug_with_location -3, floor at 0 +3, and they add up to 0"

@@ -1,0 +1,13 @@
+# test-policy defaults. Every tunable lives here.
+pack_version: "0.1.0"
+
+mode: selective                # selective | strict
+coverage_target: null          # number 0-100; null disables. No default target is set.
+coverage_scope: changed_lines  # changed_lines | project
+exempt_globs: ["docs/**", "*.md", "*.lock", "config/**"]
+risky_patterns_file: risky-patterns.yaml
+
+# Pre-filter (scripts/prefilter.py) only.
+trivial_extensions: [".md", ".rst", ".txt", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".json", ".lock"]
+rename_detection: true         # a consistent identifier rename counts as trivial
+rename_min_occurrences: 2      # an old name must be replaced at least this many times

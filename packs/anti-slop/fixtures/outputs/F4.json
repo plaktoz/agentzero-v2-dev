@@ -1,0 +1,25 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "## Getting Started\n\nRun `pip install -e .` from the repository root, then start the service with `toolkit serve`. To check it works, run `pytest tests/` and look for a passing summary line.",
+  "changes": [
+    {
+      "category": "generic_opening",
+      "before": "Welcome to the project! We're thrilled you're here, and this section will help you embark on your journey with our powerful toolkit.",
+      "after": "",
+      "reason": "Generic greeting with no fact. It uses stock phrasing (\"embark on your journey\") and an unsupported claim (\"powerful\"). Removing it loses no fact.",
+      "behaviour_change": false
+    },
+    {
+      "category": "filler",
+      "before": "Let's dive in. ",
+      "after": "",
+      "reason": "Stock transition that adds no information. The paragraph now opens with the first command.",
+      "behaviour_change": false
+    }
+  ],
+  "kept": [
+    "The \"Getting Started\" heading and the document structure.",
+    "All commands (`pip install -e .`, `toolkit serve`, `pytest tests/`) and the instruction to look for a passing summary line."
+  ],
+  "flags": []
+}

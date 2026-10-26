@@ -1,0 +1,11 @@
+id: F6
+title: "Vague goal with unknown file count routes medium"
+input:
+  request: "Make the app faster"
+  scan: null
+  override: null
+expect:
+  - "scope_ambiguous is true (a goal with no entry point), +2"
+  - "files_affected is unknown (no scan, no named files), +2"
+  - "score is 4, band medium, route medium"
+  - "reasons are scope_ambiguous +2, files_affected unknown +2, and they add up to 4"

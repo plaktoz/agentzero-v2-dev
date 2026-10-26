@@ -1,0 +1,20 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "def load_records(data):\n    result = process(data)\n    if result is None:\n        return []\n    return result\n",
+  "changes": [
+    {
+      "category": "swallowed_error",
+      "before": "    try:\n        result = process(data)\n        if result is None:\n            return []\n        return result\n    except Exception:\n        return []",
+      "after": "    result = process(data)\n    if result is None:\n        return []\n    return result",
+      "reason": "The except Exception clause turns any error from process() into an empty list, which hides failures from the caller. Removing it lets errors propagate. This changes behaviour and needs a person or the test suite to confirm.",
+      "behaviour_change": true
+    }
+  ],
+  "kept": [],
+  "flags": [
+    {
+      "location": "lines 3-4 (if result is None: return [])",
+      "issue": "This returns [] as a fallback for a None result. Removing it would change behaviour for None, so it is not changed here. The author must confirm whether callers need [] when process() returns None, or whether None should be returned or raised."
+    }
+  ]
+}

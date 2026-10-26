@@ -1,0 +1,30 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "This PRD defines a unified multi-agent development system for AI-assisted software development at scale. The system combines distributed coordination, structured workflows, radical minimalism, and engineering fundamentals.\n\nReduces code by 53%, cost by 26%, time by 41%. Persists context across crashes. Coordinates 20-30+ agents.",
+  "changes": [
+    {
+      "category": "vague_claim",
+      "before": "designed to address the fundamental challenges of",
+      "after": "for",
+      "reason": "Names no challenge and could appear in any AI-development project's docs. The challenges are flagged for the author, not invented.",
+      "behaviour_change": false
+    },
+    {
+      "category": "synonym_overuse",
+      "before": " into a cohesive platform",
+      "after": "",
+      "reason": "'platform' is a second term for the same system in the same paragraph. 'Cohesive' adds no fact.",
+      "behaviour_change": false
+    }
+  ],
+  "kept": [
+    "'radical minimalism' is a named design principle, not a generic phrase. Left as written."
+  ],
+  "flags": [
+    { "location": "paragraph 1, sentence 1", "issue": "'at scale' has no number or context. The author must state the scale the system is built for, or confirm that the 20-30+ agent figure in paragraph 2 is that scale." },
+    { "location": "paragraph 2, sentence 1", "issue": "'Reduces code by 53%, cost by 26%, time by 41%' gives no baseline, measurement method, or source. The author must state what each figure is compared against and where it was measured." },
+    { "location": "paragraph 2, sentence 2", "issue": "'Persists context across crashes' names no mechanism, storage, or scope, and does not say what counts as a crash. The author must supply these." },
+    { "location": "paragraph 2, sentence 3", "issue": "'Coordinates 20-30+ agents' leaves the upper bound open. The author must state the tested maximum." },
+    { "location": "paragraph 2", "issue": "The paragraph holds three unrelated claims, against the one-idea-per-paragraph rule. Structure is preserved, so it is flagged, not split. The author may split it." }
+  ]
+}

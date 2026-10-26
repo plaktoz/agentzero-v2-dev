@@ -1,0 +1,11 @@
+id: F4
+input: |
+  ## Getting Started
+
+  Welcome to the project! We're thrilled you're here, and this section will help you embark on your journey with our powerful toolkit.
+
+  Let's dive in. Run `pip install -e .` from the repository root, then start the service with `toolkit serve`. To check it works, run `pytest tests/` and look for a passing summary line.
+expect:
+  - "The welcome text is replaced by the install, start and verify commands from the input"
+  - "The commands pip install -e ., toolkit serve and pytest tests/ are kept exactly"
+  - "The heading is kept; no command is invented"

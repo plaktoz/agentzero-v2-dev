@@ -1,0 +1,44 @@
+id: F4
+title: "New calculate_total with discount and rounding, no test"
+input:
+  mode: selective
+  existing_tests: []
+  coverage:
+    line_percent: null
+    changed_lines_percent: null
+  diff: |
+    diff --git a/pricing.py b/pricing.py
+    new file mode 100644
+    index 0000000..00ba69f
+    --- /dev/null
+    +++ b/pricing.py
+    @@ -0,0 +1,12 @@
+    +from decimal import Decimal, ROUND_HALF_UP
+    +
+    +
+    +def calculate_total(unit_price, quantity, discount_percent=0):
+    +    """Return the order total, rounded to cents."""
+    +    if quantity < 0:
+    +        raise ValueError("quantity must not be negative")
+    +    if not 0 <= discount_percent <= 100:
+    +        raise ValueError("discount_percent must be between 0 and 100")
+    +    subtotal = Decimal(unit_price) * quantity
+    +    discount = subtotal * Decimal(discount_percent) / 100
+    +    return (subtotal - discount).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+expect:
+  - "prefilter == needs_model"
+  - "change_class == normal"
+  - "a unit at pricing.py has kind money, risky true, tests_required true, present false"
+  - "that unit lists at least one case (for example zero quantity, negative quantity, discount at 0 and 100, rounding at .005)"
+  - "gate == missing_tests"
+  - "reasons names pricing.py"
+variants:
+  - name: "coverage 100 percent does not clear the gate"
+    input:
+      coverage:
+        line_percent: 100
+        changed_lines_percent: 100
+    expect:
+      - "gate == missing_tests"
+      - "the money unit still has present false"
+      - "reasons names pricing.py"

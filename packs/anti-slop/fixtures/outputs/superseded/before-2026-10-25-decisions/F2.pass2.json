@@ -1,0 +1,12 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "This is a framework for integrating AI capabilities. It connects to Anthropic, OpenAI and Google models, and setup takes about 15 minutes.",
+  "changes": [],
+  "kept": [],
+  "flags": [
+    {
+      "location": "sentence 1",
+      "issue": "Vague claim: 'a framework for integrating AI capabilities' names no specific function, scope or audience, so it could describe any AI project. Cutting it would leave 'It' in sentence 2 without a referent, and a replacement needs a fact the reviewer does not have. The author must state what the framework does."
+    }
+  ]
+}

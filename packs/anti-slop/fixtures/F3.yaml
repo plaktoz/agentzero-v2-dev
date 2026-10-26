@@ -1,0 +1,11 @@
+id: F3
+# Seed: docs/ANTI-SLOP-EXAMPLES.md, Example 1. Paragraph 1 is its BEFORE text.
+# Paragraph 2 is the metrics sentence its AFTER text keeps (the facts to preserve).
+input: |
+  This PRD defines a unified multi-agent development system designed to address the fundamental challenges of AI-assisted software development at scale. The system combines distributed coordination, structured workflows, radical minimalism, and engineering fundamentals into a cohesive platform.
+
+  Reduces code by 53%, cost by 26%, time by 41%. Persists context across crashes. Coordinates 20-30+ agents.
+expect:
+  - "The metrics 53%, 26% and 41% and the 20-30+ agent figure are kept unchanged"
+  - "The PRD phrases (designed to address the fundamental challenges, at scale, cohesive platform) are removed; the sentence keeps its facts without them, so they are not flagged instead"
+  - "No new number appears in the revised text"

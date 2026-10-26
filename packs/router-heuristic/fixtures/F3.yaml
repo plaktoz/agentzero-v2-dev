@@ -1,0 +1,15 @@
+id: F3
+title: "New UI capability in a few files routes medium"
+input:
+  request: "Add a CSV export button to the orders page"
+  scan:
+    files_estimate: 3
+    touches_ui: true
+    notes: null
+  override: null
+expect:
+  - "new_capability is true, +3"
+  - "user_facing_ui is true, +2 (orders page; touches_ui true)"
+  - "files_affected is few (scan estimate 3), +1"
+  - "score is 6, band medium, route medium"
+  - "reasons are new_capability +3, user_facing_ui +2, files_affected few +1, and they add up to 6"

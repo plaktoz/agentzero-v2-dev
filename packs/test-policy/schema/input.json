@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "test-policy input",
+  "description": "Input to the test-policy pack.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["diff"],
+  "properties": {
+    "diff": { "type": "string", "description": "Unified diff of the change." },
+    "mode": { "enum": ["selective", "strict"], "default": "selective" },
+    "existing_tests": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Paths, or a one-line summary each, of tests that touch the changed files."
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "line_percent": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "changed_lines_percent": { "type": ["number", "null"], "minimum": 0, "maximum": 100 }
+      }
+    }
+  }
+}

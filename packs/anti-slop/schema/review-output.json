@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "anti-slop/review-output.json",
+  "title": "anti-slop review output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pack_version", "revised", "changes", "kept", "flags"],
+  "properties": {
+    "pack_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "revised": { "type": "string", "description": "The full revised content. Equal to the input when there are no changes." },
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["category", "before", "after", "reason"],
+        "properties": {
+          "category": {
+            "enum": [
+              "ai_vocabulary", "vague_claim", "filler", "generic_opening",
+              "forced_structure", "synonym_overuse", "excess_formatting",
+              "premature_abstraction", "redundant_comment", "swallowed_error",
+              "unneeded_fallback"
+            ]
+          },
+          "before": { "type": "string" },
+          "after": { "type": "string" },
+          "reason": { "type": "string", "minLength": 1, "description": "One line." },
+          "behaviour_change": {
+            "type": "boolean",
+            "description": "True when the change alters what the code does (code rule 3). A person or the test suite must confirm it."
+          }
+        },
+        "if": { "properties": { "category": { "enum": ["swallowed_error"] } }, "required": ["category"] },
+        "then": { "required": ["behaviour_change"], "properties": { "behaviour_change": { "const": true } } }
+      }
+    },
+    "kept": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Deliberate style choices and first-person opinions left alone."
+    },
+    "flags": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["location", "issue"],
+        "properties": {
+          "location": { "type": "string" },
+          "issue": { "type": "string", "description": "A problem the reviewer must not fix because the fix needs a fact it does not have." }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "test-policy assessment",
+  "description": "Output record of the test-policy pack: which units of a change need tests, and whether tests are missing.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["mode", "change_class", "units", "gate", "reasons"],
+  "properties": {
+    "pack_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Version of the pack that produced the record. Optional."
+    },
+    "mode": { "enum": ["selective", "strict"] },
+    "change_class": { "enum": ["trivial", "normal"] },
+    "units": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/unit" }
+    },
+    "gate": { "enum": ["ok", "missing_tests"] },
+    "reasons": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "allOf": [
+    {
+      "description": "A trivial change has no units and passes.",
+      "if": { "properties": { "change_class": { "const": "trivial" } }, "required": ["change_class"] },
+      "then": {
+        "properties": {
+          "units": { "maxItems": 0 },
+          "gate": { "const": "ok" }
+        }
+      }
+    },
+    {
+      "description": "The gate is ok when no unit needs a test it does not have.",
+      "if": { "properties": { "gate": { "const": "ok" } }, "required": ["gate"] },
+      "then": {
+        "properties": {
+          "units": { "items": { "not": { "$ref": "#/$defs/untested_required_unit" } } },
+          "reasons": { "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "description": "The gate is missing_tests when some unit needs a test it does not have, and says why.",
+      "if": { "properties": { "gate": { "const": "missing_tests" } }, "required": ["gate"] },
+      "then": {
+        "properties": {
+          "units": { "contains": { "$ref": "#/$defs/untested_required_unit" } },
+          "reasons": { "minItems": 1 }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "unit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["location", "kind", "risky", "tests_required", "cases", "present"],
+      "properties": {
+        "location": {
+          "type": "string",
+          "minLength": 1,
+          "description": "File and line range in the new file, for example pricing.py:12-40."
+        },
+        "kind": { "enum": ["money", "security", "parser", "branching", "loop", "state", "none"] },
+        "risky": { "type": "boolean" },
+        "tests_required": { "type": "boolean" },
+        "cases": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "present": {
+          "type": "boolean",
+          "description": "True only when tests cover every listed case."
+        }
+      },
+      "allOf": [
+        {
+          "description": "A unit that requires tests lists at least one case.",
+          "if": { "properties": { "tests_required": { "const": true } }, "required": ["tests_required"] },
+          "then": { "properties": { "cases": { "minItems": 1 } } }
+        },
+        {
+          "description": "A risky unit requires tests and has a kind other than none.",
+          "if": { "properties": { "risky": { "const": true } }, "required": ["risky"] },
+          "then": {
+            "properties": {
+              "tests_required": { "const": true },
+              "kind": { "not": { "const": "none" } }
+            }
+          }
+        },
+        {
+          "description": "Kind none means the unit is not risky.",
+          "if": { "properties": { "kind": { "const": "none" } }, "required": ["kind"] },
+          "then": { "properties": { "risky": { "const": false } } }
+        }
+      ]
+    },
+    "untested_required_unit": {
+      "type": "object",
+      "properties": {
+        "tests_required": { "const": true },
+        "present": { "const": false }
+      },
+      "required": ["tests_required", "present"]
+    }
+  }
+}

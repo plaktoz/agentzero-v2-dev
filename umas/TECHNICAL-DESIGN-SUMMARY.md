@@ -1,5 +1,7 @@
 # Technical Design Specification Summary
 
+> **Stack note (2026-10-25):** The language choices in this document are superseded. The stack is Python (TypeScript only where no Python option exists). Rust and Go references describe the source design. See umas/TECHNICAL-DESIGN-SPEC.md Appendix A.4.
+
 **Version:** 2.0
 **Date:** October 21, 2026
 **Status:** Active — Unified
@@ -14,9 +16,6 @@ The full technical design is now a **single document**. The four-file split from
 |----------|------|
 | **[UMAS-DNA.md](./UMAS-DNA.md)** ← read this first | Project DNA — six principles, architecture invariants, shared vocabulary, signal protocol, module checklist. Authoritative for every module. |
 | **[TECHNICAL-DESIGN-SPEC.md](./TECHNICAL-DESIGN-SPEC.md)** | The single authoritative technical design (v2.0). Technology stack, architecture, all component designs, exception flows, APIs. |
-| [UMAS-TECH-DESIGN-SPEC.md](./UMAS-TECH-DESIGN-SPEC.md) | ~~Superseded~~ — merged into TECHNICAL-DESIGN-SPEC.md v2.0 |
-| [TECHNICAL-DESIGN-SPEC-PART2.md](./TECHNICAL-DESIGN-SPEC-PART2.md) | ~~Superseded~~ — merged into TECHNICAL-DESIGN-SPEC.md v2.0 |
-| [TECHNICAL-DESIGN-SPEC-PART3.md](./TECHNICAL-DESIGN-SPEC-PART3.md) | ~~Superseded~~ — merged into TECHNICAL-DESIGN-SPEC.md v2.0 |
 
 **Source of truth for product requirements:** [unified-multi-agent-system-prd.md](./unified-multi-agent-system-prd.md)
 
@@ -27,16 +26,16 @@ Reusable parts of the design are specified separately. Each one is usable withou
 | Set | Index | Contents |
 |-----|-------|----------|
 | Tier 1, libraries (13) | [libs/README.md](../libs/README.md) | [hook-store](../libs/hook-store/README.md), [event-log](../libs/event-log/README.md), [merge-queue](../libs/merge-queue/README.md), [test-adapters](../libs/test-adapters/README.md), [budget-meter](../libs/budget-meter/README.md), [llm-gateway](../libs/llm-gateway/README.md), [watchdog](../libs/watchdog/README.md), [decision-artifacts](../libs/decision-artifacts/README.md), [error-classifier](../libs/error-classifier/README.md), [agent-platform](../libs/agent-platform/README.md), [agent-session](../libs/agent-session/README.md), [metrics-store](../libs/metrics-store/README.md), [task-queue](../libs/task-queue/README.md) |
-| Tier 2, content packs (9) | [packs/README.md](../packs/README.md) | [minimalism-ladder](../packs/minimalism-ladder/README.md), [anti-slop](../packs/anti-slop/README.md), [communication-modes](../packs/communication-modes/README.md), [two-axis-review](../packs/two-axis-review/README.md), [specialist-agents](../packs/specialist-agents/README.md), [router-heuristic](../packs/router-heuristic/README.md), [grilling](../packs/grilling/README.md), [test-policy](../packs/test-policy/README.md), [playbook-runner](../packs/playbook-runner/README.md) |
+| Tier 2, content packs (9) | [packs/README.md](../packs/README.md) | [minimalism-ladder](../packs/minimalism-ladder/minimalism-ladder-spec.md), [anti-slop](../packs/anti-slop/anti-slop-spec.md), [communication-modes](../packs/communication-modes/communication-modes-spec.md), [two-axis-review](../packs/two-axis-review/two-axis-review-spec.md), [specialist-agents](../packs/specialist-agents/specialist-agents-spec.md), [router-heuristic](../packs/router-heuristic/router-heuristic-spec.md), [grilling](../packs/grilling/grilling-spec.md), [test-policy](../packs/test-policy/test-policy-spec.md), [playbook-runner](../packs/playbook-runner/playbook-runner-spec.md) |
 
 ### Key changes in v2.0
 
-- All four design files merged into a single `TECHNICAL-DESIGN-SPEC.md`. The Part 2/3 files and `UMAS-TECH-DESIGN-SPEC.md` are now superseded stubs.
+- All four design files merged into a single `TECHNICAL-DESIGN-SPEC.md`. The v1 files were deleted; their last full text is at commit `cc5570e` (see the note in `TECHNICAL-DESIGN-SPEC.md`).
 - **TimescaleDB removed as a hard dependency.** Metrics storage is now a JSONL ledger (Phase 1–2) → standard PostgreSQL `metrics` table (Phase 3+). TimescaleDB is an optional one-statement upgrade. See [libs/metrics-store.md](../libs/metrics-store/README.md).
-- **Dashboard confirmed as minimal HTML.** The React stack is retained as a Phase 4 option only ([ADR-0001](../docs/decisions/ADR-0001-minimal-html-dashboard.md)).
-- **IBM Bob removed.** Harness list is now Claude Code, OpenAI Codex, Gemini CLI, GitHub Copilot. IBM Bob is no longer a harness or a provider.
+- **Dashboard confirmed as minimal HTML.** The React stack is superseded and not planned ([ADR-0001](../docs/decisions/ADR-0001-minimal-html-dashboard.md)).
+- **IBM Bob removed.** Harness list is now Claude Code, OpenAI Codex (which also runs Gemini models, ADR-0002), GitHub Copilot. IBM Bob is no longer a harness or a provider.
 - Three new libs registered: [agent-session](../libs/agent-session/README.md), [metrics-store](../libs/metrics-store/README.md), and [task-queue](../libs/task-queue/README.md).
-- **Playbook engine added.** [playbook-runner](../packs/playbook-runner/README.md) makes the workflow SDD-agnostic: any phase-gated process is a Markdown playbook. Ships with `production-gatekeeper` and `autonomous-loop` built-ins. Default workflow unchanged.
+- **Playbook engine added.** [playbook-runner](../packs/playbook-runner/playbook-runner-spec.md) makes the workflow SDD-agnostic: any phase-gated process is a Markdown playbook. Ships with `production-gatekeeper` and `autonomous-loop` built-ins. Default workflow unchanged.
 - All inline code moved to `libs/` and `packs/` reference appendices (§12 sections). Source files tombstoned.
 
 ---
@@ -44,9 +43,9 @@ Reusable parts of the design are specified separately. Each one is usable withou
 ## Technology Stack Confirmed
 
 ### Core Languages
-- **Daemon & CLI:** Rust 1.70+ (performance, memory safety, cross-platform)
+- **Daemon & CLI:** Python 3.10+ (same language as the agent runtime; one toolchain)
 - **Agent Runtime:** Python 3.10+ (AI/ML ecosystem, LLM SDK support)
-- **Dashboard:** Minimal read-only HTML page polling the API, per [ADR-0001](../docs/decisions/ADR-0001-minimal-html-dashboard.md). React 18+ / TypeScript deferred to Phase 4.
+- **Dashboard:** Minimal read-only HTML page polling the API, per [ADR-0001](../docs/decisions/ADR-0001-minimal-html-dashboard.md). The backend is FastAPI. React is superseded and not planned.
 
 ### Databases
 - **Development:** SQLite 3.35+ (embedded, zero-config)
@@ -54,8 +53,10 @@ Reusable parts of the design are specified separately. Each one is usable withou
 - **Metrics:** JSONL file ledger (Phase 1–2) → PostgreSQL `metrics` table (Phase 3+) via [libs/metrics-store.md](../libs/metrics-store/README.md). TimescaleDB is an optional one-statement upgrade, not a hard dependency.
 
 ### LLM Providers (Tier 1)
-- Anthropic Claude (claude-3-5-sonnet-20241022)
-- OpenAI GPT-4
+- Anthropic Claude
+- OpenAI GPT
+
+Model IDs are not fixed in the design. They are llm-gateway alias-table values (see [libs/llm-gateway](../libs/llm-gateway/README.md)).
 - Google Gemini
 
 ### Observability
@@ -70,15 +71,15 @@ Reusable parts of the design are specified separately. Each one is usable withou
 
 ```
 1. Human Interface Layer
-   - CLI (Rust)
-   - Dashboard (minimal HTML polling API; React deferred to Phase 4)
+   - CLI (Python)
+   - Dashboard (minimal HTML polling API; React superseded)
    - Metrics Display
    - Escalation Channels
 
 2. Orchestration Layer
    - Coordinator Agent (Python)
    - Router (Python)
-   - Scheduler (Rust)
+   - Scheduler (Python)
 
 3. Agent Execution Layer
    - Worker Agents (Python)
@@ -87,11 +88,11 @@ Reusable parts of the design are specified separately. Each one is usable withou
 
 4. Verification Layer
    - Merge Queue Processor (Python)
-   - Test Runner (Rust)
+   - Test Runner (Python)
    - Minimalism Checker (Python)
 
 5. Monitoring Layer
-   - Daemon (Rust)
+   - Daemon (Python)
    - Triage Agent (Python)
    - System Patrol (Python)
    - Project Monitors (Python)
@@ -112,7 +113,7 @@ Reusable parts of the design are specified separately. Each one is usable withou
 **Purpose:** Ensure agent work state survives crashes and restarts.
 
 **Submodules:**
-1. **Git Worktree Manager** (Rust)
+1. **Git Worktree Manager** (Python)
    - Create/remove worktrees for agents
    - Commit agent state
    - Recover state after crash
@@ -154,7 +155,7 @@ Reusable parts of the design are specified separately. Each one is usable withou
    - Match request to workflow
    - Support user overrides
 
-3. **Scheduler** (Rust)
+3. **Scheduler** (Python)
    - Capacity management
    - Token budget tracking
    - Queue management
@@ -206,7 +207,7 @@ Reusable parts of the design are specified separately. Each one is usable withou
    - Bisecting to isolate failures
    - Prevent broken main branch
 
-2. **Test Runner** (Rust)
+2. **Test Runner** (Python)
    - Execute tests (pytest, jest, cargo)
    - Parallel execution
    - Coverage tracking
@@ -230,14 +231,14 @@ Reusable parts of the design are specified separately. Each one is usable withou
 
 **Architecture:**
 ```
-Daemon (Rust) ← heartbeat every 3 min
+Daemon (Python) ← heartbeat every 3 min
 └── Triage Agent (Python) ← intelligent triage
     └── System Patrol (Python) ← continuous patrol
         └── Project Monitors (Python) ← per-project health
 ```
 
 **Submodules:**
-1. **Daemon** (Rust)
+1. **Daemon** (Python)
    - Monitor Triage Agent via heartbeat
    - Restart on failure
    - System-level watchdog
@@ -262,14 +263,14 @@ Daemon (Rust) ← heartbeat every 3 min
 ### Module 6: Human Interface System
 
 **Submodules:**
-1. **CLI** (Rust)
+1. **CLI** (Python)
    - Primary interface
    - Commands: init, start-all, agents, request, watch, metrics
    - Shell completion support
 
 2. **Dashboard** (minimal HTML + polling REST API — [ADR-0001](../docs/decisions/ADR-0001-minimal-html-dashboard.md))
    - Read-only view of agent activity, work bundles, merge queue state, metrics
-   - React 18+ / TypeScript is the Phase 4 option
+   - React 18+ / TypeScript is superseded and not planned
 
 3. **Metrics Display**
    - Cost per task
@@ -286,7 +287,7 @@ Daemon (Rust) ← heartbeat every 3 min
 **Tier 1 Platforms:**
 - Claude Code (full integration)
 - OpenAI Codex (full integration)
-- Gemini CLI (full integration)
+- OpenAI Codex also runs Gemini models (full integration, ADR-0002); no separate Gemini CLI harness
 - GitHub Copilot (code completion)
 
 **Key Components:**
@@ -435,7 +436,7 @@ WebSocket: /ws/events
 ### Authentication & Authorization
 - API keys in environment variables
 - OIDC sign-in through Keycloak; JWT access tokens for the dashboard and API
-- Role-based access control (seven human roles; see modularisation-assessment.md section 5)
+- Role-based access control (seven human roles; see TECHNICAL-DESIGN-SPEC.md Appendix A.5)
 
 ### Data Protection
 - Secrets never committed to version control
@@ -508,7 +509,7 @@ WebSocket: /ws/events
 ### Development Environment
 ```
 Local Machine
-├── Daemon (Rust binary)
+├── Daemon (Python process)
 ├── Agents (Python processes)
 ├── SQLite database
 └── Git repository

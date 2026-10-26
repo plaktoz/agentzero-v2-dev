@@ -1,5 +1,7 @@
 # UMAS Setup & Multi-Project Operations Guide
 
+> **Stack note (2026-10-25):** The language choices in this document are superseded. The stack is Python (TypeScript only where no Python option exists). Rust and Go references describe the source design. See umas/TECHNICAL-DESIGN-SPEC.md Appendix A.4.
+
 > Final outcome reference for running the Unified Multi-Agent Development System across multiple projects.
 
 ---

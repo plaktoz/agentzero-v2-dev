@@ -1,0 +1,16 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "The new cache improves performance. Users notice that the service is more reliable now.",
+  "changes": [],
+  "kept": [],
+  "flags": [
+    {
+      "location": "sentence 1",
+      "issue": "Claim has no source or number. The author must supply a measured figure (for example latency or throughput before and after) or a source for the claim."
+    },
+    {
+      "location": "sentence 2",
+      "issue": "Claim has no source or number. The author must supply evidence (for example an incident count, uptime figure or user report) for the claim that the service is more reliable."
+    }
+  ]
+}

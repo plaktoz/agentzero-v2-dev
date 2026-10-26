@@ -1,0 +1,12 @@
+id: F2
+title: "Rename in one named file routes simple"
+input:
+  request: "Rename `getUser` to `fetchUser` in `api.ts`"
+  scan: null
+  override: null
+expect:
+  - "files_affected is one, 0 points"
+  - "new_capability, scope_ambiguous, user_facing_ui and sensitive_domain are false or empty, 0 points"
+  - "bug_with_location is false (a rename is not a bug fix)"
+  - "score is 0, band low, route simple"
+  - "reasons add up to 0"

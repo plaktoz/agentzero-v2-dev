@@ -81,7 +81,7 @@ Also exposed as `event-log <op> --json`. `append` over the CLI reads the JSON `d
 
 ### 4.1 CLI output (AXI)
 
-Follows [CLI Conventions (AXI)](./README.md#cli-conventions-axi). `--json` is unchanged (one envelope per line) and is what other libraries and programs read.
+Follows [CLI Conventions (AXI)](../README.md#cli-conventions-axi). `--json` is unchanged (one envelope per line) and is what other libraries and programs read.
 
 **Why it fits.** `read` is how an agent asks "what happened". A day of events can be tens of thousands of lines, and each carries a `data` object of any size.
 

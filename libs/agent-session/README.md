@@ -7,7 +7,7 @@
 
 ## 1. Purpose
 
-Provide the shared lifecycle skeleton for any agent that runs an LLM-assisted session inside a worktree: spawn → execute → checkpoint → handoff → done. The library tracks state transitions, emits the standard signals that orchestrators read, enforces the token threshold policy, and builds the handoff packet when transitioning to a successor agent. All six agent types in UMAS (WorkerAgent, Analyst, ProductManager, Architect, UXDesigner, Developer) share this skeleton.
+Provide the shared lifecycle skeleton for any agent that runs an LLM-assisted session inside a worktree: spawn → execute → checkpoint → handoff → done. The library tracks state transitions, emits the standard signals that orchestrators read, enforces the context threshold policy, and builds the handoff packet when transitioning to a successor agent. All six agent types in UMAS (WorkerAgent, Analyst, ProductManager, Architect, UXDesigner, Developer) share this skeleton.
 
 ## 2. Scope and Non-Goals
 
@@ -16,7 +16,7 @@ Provide the shared lifecycle skeleton for any agent that runs an LLM-assisted se
 - Durable session state written to the worktree's `STATE.md` after every major step
 - Checkpoint commits (`[checkpoint] <summary>`) at configurable intervals
 - Done commits (`[done] <task-id>`) on completion
-- Handoff packet construction: compress full context to a size-limited packet when the token threshold is reached
+- Handoff packet construction: compress full context to a size-limited packet when the context threshold is reached
 - Escalation events appended to the event log when the agent is blocked
 - Token usage tracking and threshold monitoring (soft at 90%, hard at 95%)
 - Recovery: reconstruct session state from `STATE.md` and the event log on restart or handoff
@@ -41,7 +41,8 @@ Session:
   event_log_dir:   string          # dir for event-log appends
   config:          SessionConfig
   status:          SessionStatus
-  token_used:      int             # cumulative tokens this session
+  token_used:      int             # cumulative tokens this session (spend detail; not a trigger)
+  context_tokens:  int             # tokens in the context window at the last step (the handoff trigger)
   started_at:      string          # RFC 3339
   ended_at:        string?
 ```
@@ -51,7 +52,7 @@ Session:
 ```
 spawned         session created, execute() not yet called
 active          execute() is running
-handoff         token threshold reached; successor session being prepared
+handoff         context threshold reached; successor session being prepared
 crashed         unhandled exception; session ended without a done signal
 done            task completed; done commit written
 budget_paused   period budget exhausted; session suspended until budget resets
@@ -68,9 +69,9 @@ auth_expired    OIDC token expired while machine was off; re-authentication requ
 
 ```
 SessionConfig:
-  token_limit:         int       # max tokens this session may use
-  handoff_threshold:   float     # fraction of token_limit that triggers soft handoff (default 0.90)
-  emergency_threshold: float     # fraction that triggers hard handoff (default 0.95)
+  context_limit:       int       # model context window in tokens, from config (context_windows.<alias>)
+  handoff_threshold:   float     # fraction of context_limit that triggers soft handoff (default 0.90)
+  emergency_threshold: float     # fraction of context_limit that triggers hard handoff (default 0.95)
   checkpoint_every:    int       # commit STATE.md after every N steps (default 1)
   handoff_packet_size: int       # max tokens in the handoff packet (default 15000)
   compression_level:   string    # "lite" | "full" | "ultra" — passed to budget-meter pack()
@@ -86,7 +87,8 @@ Step:
   summary:    string          # one sentence, written to STATE.md and the checkpoint commit
   decisions:  Decision[]      # { summary, rationale } — choices made this step
   files:      string[]        # files read or written
-  token_usage: int            # tokens consumed by this step's LLM call(s)
+  token_usage: int            # tokens consumed by this step's LLM call(s), spend detail
+  context_tokens: int         # tokens in the context window after this step's LLM call
   done:       bool            # true if the task is complete after this step
   blocked:    Blocked?        # present if the agent cannot proceed
 ```
@@ -99,7 +101,7 @@ Blocked:
 
 ### 3.5 HandoffPacket
 
-Built by the library when the token threshold is reached and written as `HANDOFF.md` in the worktree root for the successor to read.
+Built by the library when the context threshold is reached and written as `HANDOFF.md` in the worktree root for the successor to read.
 
 ```
 HandoffPacket:
@@ -111,8 +113,8 @@ HandoffPacket:
   next_steps:      string[]     # explicit next actions
   decisions:       Decision[]   # last N decisions (N = config)
   file_pointers:   FilePointer[] # { path, line_start?, line_end?, note }
-  token_used:      int
-  token_limit:     int
+  context_used:    int          # context_tokens at handoff
+  context_limit:   int          # SessionConfig.context_limit
   packed_at:       string
 ```
 
@@ -128,7 +130,7 @@ Written atomically to the worktree root after every step. Plain Markdown; both h
 **Status:** active | handoff | done | blocked
 **Agent:** <agent_id>
 **Session:** <session_id>
-**Token usage:** <token_used> / <token_limit> (<pct>%)
+**Context usage:** <context_tokens> / <context_limit> (<pct>%)
 **Last updated:** <ts>
 
 ## Current task
@@ -175,7 +177,8 @@ create session → write STATE.md → append session_started
 loop:
   call execute_step_fn(context) → Step
 
-  track token_used += step.token_usage
+  track token_used += step.token_usage          # spend detail
+  track context_tokens = step.context_tokens    # the handoff trigger
   append step to session history
 
   if step.blocked:
@@ -188,11 +191,11 @@ loop:
 
   checkpoint(session, step)  →  STATE.md update + checkpoint commit
 
-  if token_used >= emergency_threshold * token_limit:
+  if context_tokens >= emergency_threshold * context_limit:
     handoff(session)  →  HANDOFF.md + handoff commit + handoff_initiated event
     break (status: handoff)
 
-  if token_used >= handoff_threshold * token_limit:
+  if context_tokens >= handoff_threshold * context_limit:
     handoff(session)  →  same as above
     break (status: handoff)
 ```
@@ -218,7 +221,7 @@ The `[done]` prefix is the signal the Scheduler uses to detect task completion. 
 ### 5.4 Handoff commit message format
 
 ```
-[handoff] <agent_id> at <token_used>/<token_limit> tokens
+[handoff] <agent_id> at <context_tokens>/<context_limit> context tokens
 ```
 
 ### 5.5 Recovery
@@ -290,10 +293,10 @@ All events are appended via [event-log](../event-log/README.md) `append()`. The 
 
 | type | When emitted | Key `data` fields |
 |------|-------------|-------------------|
-| `session_started` | `create()` | `task_id`, `hook_path`, `token_limit` |
+| `session_started` | `create()` | `task_id`, `hook_path`, `context_limit` |
 | `step_complete` | `checkpoint()` | `step_n`, `summary`, `token_used`, `decisions[]` |
 | `session_escalated` | `escalate()` | `severity`, `reason` |
-| `handoff_initiated` | `handoff()` | `token_used`, `token_limit`, `reason` |
+| `handoff_initiated` | `handoff()` | `context_used`, `context_limit`, `reason` (`context_graceful` or `context_emergency`) |
 | `session_paused` | `pause()` | `reason`, `token_used`, `pause_file: "PAUSE.md"` |
 | `session_resumed` | boot recovery in consuming app | `resumed_from: "machine_paused"\|"auth_expired"`, `session_id` |
 | `session_ended` | `done()` or unhandled exception | `status`, `token_used`, `step_count` |
@@ -302,7 +305,7 @@ All events are appended via [event-log](../event-log/README.md) `append()`. The 
 
 ```yaml
 # Defaults; all overridable per session via SessionConfig
-token_limit: 200000
+context_limit: 200000       # set per model from config; the value here is an example
 handoff_threshold: 0.90
 emergency_threshold: 0.95
 checkpoint_every: 1          # commit STATE.md after every step
@@ -350,7 +353,7 @@ This library keeps its own typed errors and does not import any error library. A
 ## 8. Acceptance Criteria
 
 1. A session that completes normally produces: (a) a done commit with the configured prefix, (b) a `session_ended` event with `status: done`, (c) a `STATE.md` with `Status: done`.
-2. A session that reaches `handoff_threshold` produces: (a) a `HANDOFF.md` that fits within `handoff_packet_size` tokens, (b) a handoff commit, (c) a `handoff_initiated` event.
+2. A session whose context reaches `handoff_threshold` of `context_limit` produces: (a) a `HANDOFF.md` that fits within `handoff_packet_size` tokens, (b) a handoff commit, (c) a `handoff_initiated` event.
 3. `recover()` on a hook that has a handoff commit and `HANDOFF.md` returns a `RecoveredContext` with the correct `next_steps` and `decisions`.
 4. A step that raises an unhandled exception sets `STATE.md` to `Status: crashed` and appends `session_ended(status=crashed)` before re-raising.
 5. `checkpoint_every: 3` produces a checkpoint commit exactly on steps 3, 6, 9, … regardless of whether `done` or `handoff` fires in between.
@@ -367,7 +370,7 @@ This library keeps its own typed errors and does not import any error library. A
 | `WorkerAgent.execute()` | `agent_session.execute(session, execute_step_fn)` where `execute_step_fn` calls the LLM and applies the minimalism ladder |
 | `WorkerAgent._trigger_handoff()` | `agent_session.handoff(session)` |
 | All 5 specialised agents (Analyst, PM, Architect, UX, Developer) | Each calls `create()` → `execute()` using its own `execute_step_fn`; the session lifecycle is identical |
-| `AgentConfig` (TECHNICAL-DESIGN-SPEC-PART3.md) | `SessionConfig` with the same fields (`model`, `token_limit`, `handoff_threshold`, `compression_level`) |
+| `AgentConfig` (TECHNICAL-DESIGN-SPEC-PART3.md) | `SessionConfig` with the same fields (`model`, `context_limit`, `handoff_threshold`, `compression_level`) |
 | Agent session record in `agent_sessions` table (UMAS-TECH-DESIGN-SPEC.md §2) | UMAS maintains this DB row; the library writes `STATUS` to `STATE.md` and the event log. UMAS reads those to update the row. |
 | `[umas:done]`, `[umas:checkpoint]`, `[umas:handoff]` commit prefixes | The `[done]`, `[checkpoint]`, `[handoff]` prefixes here. UMAS configures `commit_prefixes.done = "[umas:done]"` etc. at startup. |
 | Signalling protocol (UMAS-TECH-DESIGN-SPEC.md §3.3) | `done()` writes the done commit (Scheduler reads it). `escalate()` appends to event-log (Coordinator reads it). `handoff()` appends the handoff event (Scheduler reads it). |
@@ -399,7 +402,7 @@ Extracted from `TECHNICAL-DESIGN-SPEC-PART3.md` §5.2 (`WorkerAgent`), `UMAS-TEC
 
 > Non-normative. Example code illustrating one approach. May use consumer-specific names and paths. Sections 1–11 are authoritative. Excluded from the independence rules in [libs/README.md](../README.md).
 
-> Execution model: coding Workers run as external CLI harnesses (see `modularisation-assessment.md` section 4.8), so the in-process `WorkerAgent` below is a reference for the session lifecycle only, not the intended runtime.
+> Execution model: coding Workers run as external CLI harnesses (see `umas/TECHNICAL-DESIGN-SPEC.md` Appendix A.4.8), so the in-process `WorkerAgent` below is a reference for the session lifecycle only, not the intended runtime.
 
 ### 12.1 WorkerAgent (Python)
 
@@ -414,7 +417,8 @@ import asyncio
 class AgentConfig:
     agent_id: str
     model: str
-    token_limit: int
+    context_limit: int
+    max_output_tokens: int
     compression_level: str
     handoff_threshold: float
 
@@ -484,12 +488,12 @@ class WorkerAgent:
         response = await self.llm_client.generate(
             prompt=prompt,
             model=self.config.model,
-            max_tokens=self.config.token_limit,
+            max_tokens=self.config.max_output_tokens,
         )
         
         self.token_usage += response.token_usage
         
-        if self.token_usage >= self.config.token_limit * self.config.handoff_threshold:
+        if self.context_tokens >= self.config.context_limit * self.config.handoff_threshold:
             await self._trigger_handoff()
         
         result = self._parse_response(response)
@@ -505,7 +509,7 @@ class WorkerAgent:
         """
         
         await self._commit_state_for_handoff(
-            message=f"[umas:checkpoint] handoff at {self.token_usage} tokens"
+            message=f"[umas:checkpoint] handoff at {self.context_tokens} context tokens"
         )
         
         await self.session_history.log_event(
@@ -513,9 +517,9 @@ class WorkerAgent:
             agent_id=self.config.agent_id,
             event_type="handoff_request",
             data={
-                "reason": "token_exhaustion",
-                "token_usage": self.token_usage,
-                "token_limit": self.config.token_limit,
+                "reason": "context_graceful",
+                "context_used": self.context_tokens,
+                "context_limit": self.config.context_limit,
                 "task_id": self.task.id,
             },
         )
@@ -529,8 +533,9 @@ Source: `TECHNICAL-DESIGN-SPEC-PART3.md` §5.2.3
 
 ```yaml
 worker_agent_config:
-  default_model: claude-3-5-sonnet-20241022
-  token_limit: 200000
+  default_model: default                  # llm-gateway alias, not a model ID
+  context_limit: 200000
+  max_output_tokens: 8000
   compression_level: lite
   handoff_threshold: 0.90
   

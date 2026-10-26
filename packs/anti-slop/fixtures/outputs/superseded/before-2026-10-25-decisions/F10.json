@@ -1,0 +1,7 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "The parser reads each line of the file and returns a list of records. Each record is a dict with the keys `id`, `name` and `size`. Malformed lines raise `ValueError` with the line number. Run `python parse.py data.txt` to print the records as JSON.\n",
+  "changes": [],
+  "kept": [],
+  "flags": []
+}

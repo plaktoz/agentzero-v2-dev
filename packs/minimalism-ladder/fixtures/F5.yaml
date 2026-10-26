@@ -1,0 +1,18 @@
+id: F5
+# Rung 4 (installed dependency). Use csv-parse, which is already installed. No second parser.
+input:
+  task: "Parse this CSV file of orders into typed records."
+  level: full
+  project_notes: "TypeScript on Node 20. Node has no CSV parser in its standard library. package.json lists csv-parse ^5.5.6 and package-lock.json contains the csv-parse entry."
+  code_context:
+    - |
+      // src/orders/load.ts (excerpt, already read)
+      import { readFile } from "node:fs/promises";
+
+      export async function loadOrders(path: string): Promise<string> {
+        return readFile(path, "utf8");
+      }
+expect:
+  - "Record has rung 4, rung_name installed_dependency, decision use_dependency."
+  - "evidence names package.json (the manifest that declares csv-parse)."
+  - "The change uses csv-parse. No hand-written CSV splitter or second CSV parser is added, and no new dependency is added to package.json or the lockfile."

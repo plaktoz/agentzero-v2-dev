@@ -1,0 +1,12 @@
+id: F1
+title: "Bug fix with a cited line routes simple"
+input:
+  request: "Fix the off-by-one in `pager.py` line 42"
+  scan: null
+  override: null
+expect:
+  - "files_affected is one (the request names pager.py only), so 0 points"
+  - "bug_with_location is true, -3"
+  - "score is 0 (floor at 0 +3 in reasons), band low, route simple"
+  - "reasons add up to 0"
+  - "overridden is false"

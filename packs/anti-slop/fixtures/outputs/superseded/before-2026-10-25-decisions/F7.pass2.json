@@ -1,0 +1,16 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "The new cache improves performance. Users notice that the service is more reliable now.",
+  "changes": [],
+  "kept": [],
+  "flags": [
+    {
+      "location": "sentence 1",
+      "issue": "Vague claim: \"improves performance\" has no source, number, or detail. The author must supply the measured effect (for example, latency or throughput before and after) or a source."
+    },
+    {
+      "location": "sentence 2",
+      "issue": "Vague claim: \"more reliable\" has no source, number, or detail, and \"Users notice\" gives no evidence. The author must supply the reliability measure (for example, error rate or uptime before and after) or a source."
+    }
+  ]
+}

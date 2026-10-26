@@ -1,0 +1,16 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "Our framework is a set of coordination ideas. The system coordinates 20 to 30 agents, each in its own git worktree.",
+  "changes": [],
+  "kept": [],
+  "flags": [
+    {
+      "location": "sentence 1",
+      "issue": "'a set of coordination ideas' does not say what the ideas are. This is a vague claim. The author must supply the concrete content of the framework."
+    },
+    {
+      "location": "sentences 1 and 2",
+      "issue": "'Our framework' and 'The system' appear in successive sentences and may name the same thing. Synonym overuse is possible. The author must confirm whether they are the same concept and use one term for it."
+    }
+  ]
+}

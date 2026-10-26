@@ -1,0 +1,7 @@
+id: F1
+input: |
+  In today's rapidly evolving AI landscape, multi-agent systems are becoming increasingly pivotal for teams that need to delve into complex problem-solving scenarios. Our robust framework is a tapestry of coordination ideas, and it underscores one fact: the system coordinates 20 to 30 agents, each in its own git worktree.
+expect:
+  - "One concrete sentence stating what the system does and a number"
+  - "The number 20 to 30 and the git worktree fact are kept"
+  - "No listed phrase remains (the phrase lint reports zero hits on the revised text)"

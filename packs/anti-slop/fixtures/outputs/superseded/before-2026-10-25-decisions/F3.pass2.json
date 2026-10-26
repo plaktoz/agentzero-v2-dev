@@ -1,0 +1,28 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "This PRD defines a unified multi-agent development system for AI-assisted software development at scale. The system combines distributed coordination, structured workflows, radical minimalism, and engineering fundamentals.\n\nReduces code by 53%, cost by 26%, time by 41%. Persists context across crashes. Coordinates 20-30+ agents.",
+  "changes": [],
+  "kept": [],
+  "flags": [
+    {
+      "location": "paragraph 1, sentence 1, 'at scale'",
+      "issue": "Vague claim: 'at scale' gives no number, team size or agent count. The author must supply the scale or remove the phrase."
+    },
+    {
+      "location": "paragraph 1, sentence 2",
+      "issue": "Forced structure: a four-item list of abstract terms with no description of what each component does. The author must name the components or describe them."
+    },
+    {
+      "location": "paragraph 2, sentence 1",
+      "issue": "Metrics 53%, 26% and 41% have no baseline or source (compared to what, measured how). The author must supply both."
+    },
+    {
+      "location": "paragraph 2, sentence 2",
+      "issue": "Vague claim: 'Persists context across crashes' names no storage mechanism, scope or recovery measure. The author must supply the fact or the test that shows it."
+    },
+    {
+      "location": "paragraph 2, sentence 3",
+      "issue": "Open-ended range '20-30+' has no stated ceiling or tested maximum. The author must supply the figure that was tested or supported."
+    }
+  ]
+}

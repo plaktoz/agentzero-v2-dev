@@ -1,0 +1,15 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "The review agent takes one pull request at a time. The worker opens a fresh worktree for that pull request and runs the checks there. The assistant posts the findings as one comment. The bot marks the pull request as reviewed once the comment is posted. In this system the agent, the worker, the assistant and the bot are one process.",
+  "changes": [],
+  "kept": [
+    "The final sentence states that the agent, worker, assistant and bot are one process. It is a fact, and it explains the four names, so it was not changed.",
+    "The sentence order and the one-idea-per-sentence structure."
+  ],
+  "flags": [
+    {
+      "location": "sentences 1-5",
+      "issue": "Four terms (agent, worker, assistant, bot) name one process. Each appears twice, so no term is used most and rule 9 cannot pick one. Replacing them all with one term would make the last sentence read 'the agent, the agent, the agent and the agent are one process'. The author must choose one term, or keep the four names if they mean four roles inside the process, and then rewrite the last sentence to match."
+    }
+  ]
+}

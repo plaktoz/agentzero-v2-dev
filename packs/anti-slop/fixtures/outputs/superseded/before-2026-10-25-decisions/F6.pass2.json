@@ -1,0 +1,12 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "def load_records(data):\n    result = process(data)\n    if result is None:\n        return []\n    return result\n",
+  "changes": [],
+  "kept": [],
+  "flags": [
+    {
+      "location": "lines 3-4 (if result is None: return [])",
+      "issue": "Possible unneeded_fallback (code rule 4) or hidden failure (code rule 3): a None result from process() is turned into an empty list. Removing the check would change behaviour (callers would receive None), so it is left unchanged. The author must confirm whether process() returns None on failure and whether callers expect a list."
+    }
+  ]
+}

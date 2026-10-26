@@ -1,0 +1,55 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "This framework lets teams integrate AI capabilities. It connects to Anthropic, OpenAI and Google models, and setup takes about 15 minutes.",
+  "changes": [
+    {
+      "category": "vague_claim",
+      "before": "comprehensive ",
+      "after": "",
+      "reason": "Adjective with no detail or source behind it."
+    },
+    {
+      "category": "filler",
+      "before": "serves as",
+      "after": "is",
+      "reason": "Long form for a simple verb."
+    },
+    {
+      "category": "vague_claim",
+      "before": "robust ",
+      "after": "",
+      "reason": "Quality claim with no source or detail."
+    },
+    {
+      "category": "filler",
+      "before": "empowers teams to",
+      "after": "lets teams",
+      "reason": "Long form for a simple verb phrase; the meaning is unchanged."
+    },
+    {
+      "category": "vague_claim",
+      "before": "seamlessly ",
+      "after": "",
+      "reason": "Adverb with no fact behind it."
+    },
+    {
+      "category": "vague_claim",
+      "before": "cutting-edge ",
+      "after": "",
+      "reason": "Superlative claim with no source or detail."
+    },
+    {
+      "category": "synonym_overuse",
+      "before": "This solution is a framework that lets",
+      "after": "This framework lets",
+      "reason": "The sentence names one thing as both solution and framework; keep one term."
+    }
+  ],
+  "kept": [],
+  "flags": [
+    {
+      "location": "sentence 1",
+      "issue": "\"AI capabilities\" names no specific capability. The author must name what the framework lets teams integrate."
+    }
+  ]
+}

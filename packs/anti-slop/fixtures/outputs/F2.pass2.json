@@ -1,0 +1,14 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "This framework lets teams integrate AI capabilities. It connects to Anthropic, OpenAI and Google models, and setup takes about 15 minutes.",
+  "changes": [],
+  "kept": [
+    "The provider names (Anthropic, OpenAI, Google) and the setup time of about 15 minutes are concrete facts and were left as written."
+  ],
+  "flags": [
+    {
+      "location": "sentence 1",
+      "issue": "\"lets teams integrate AI capabilities\" could describe any AI framework. Removing it would drop the only statement of what the framework does. The author must say which capabilities it provides, for example chat completion, tool calling or embeddings, or what a team can do with it."
+    }
+  ]
+}

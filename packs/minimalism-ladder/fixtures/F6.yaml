@@ -1,0 +1,22 @@
+id: F6
+# Rung 1. A feature not asked for is dropped and recorded in notes.
+input:
+  task: |
+    Add an endpoint GET /orders/:id that returns one order.
+    Plan (from the planning step):
+      1. Add the route in src/routes/orders.ts.
+      2. Add the handler that reads the order from the store.
+      3. Also add caching of order lookups in Redis.
+  level: full
+  project_notes: "Express on Node 20. No Redis client is in package.json. The task asks only for the endpoint."
+  code_context:
+    - |
+      // src/routes/orders.ts (excerpt, already read)
+      import { Router } from "express";
+      export const orders = Router();
+      orders.get("/", listOrders);
+expect:
+  - "Record has rung 1, rung_name not_needed, decision skip."
+  - "The Redis caching is dropped. It is not written and no Redis dependency is added."
+  - "The GET /orders/:id endpoint (requested) is still written."
+  - "notes records that the caching was dropped because it was not asked for."

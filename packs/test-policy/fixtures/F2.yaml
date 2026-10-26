@@ -1,0 +1,28 @@
+id: F2
+title: "README edit"
+input:
+  mode: selective
+  existing_tests: []
+  coverage:
+    line_percent: null
+    changed_lines_percent: null
+  diff: |
+    diff --git a/README.md b/README.md
+    index ba64124..023f6a4 100644
+    --- a/README.md
+    +++ b/README.md
+    @@ -1,7 +1,7 @@
+     # Shop
+
+    -A small shop library.
+    +A small shop library for prices and orders.
+
+     ## Usage
+
+    -Install it with pip.
+    +Install it with pip, then import `shop`.
+expect:
+  - "prefilter == trivial"
+  - "change_class == trivial"
+  - "gate == ok"
+  - "units is empty"

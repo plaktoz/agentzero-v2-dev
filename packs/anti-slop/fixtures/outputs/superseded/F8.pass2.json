@@ -1,0 +1,27 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "The review agent takes one pull request at a time. The agent opens a fresh worktree for that pull request and runs the checks there. The agent then posts the findings as one comment, because the agent reads the output of the checks. The agent marks the pull request as reviewed once the findings are posted.",
+  "changes": [
+    {
+      "category": "synonym_overuse",
+      "before": "because the assistant reads the output of the checks",
+      "after": "because the agent reads the output of the checks",
+      "reason": "Same actor as 'the agent' named in sentences 1 and 2. Keep the author's most-used term.",
+      "behaviour_change": false
+    },
+    {
+      "category": "synonym_overuse",
+      "before": "The bot marks the pull request",
+      "after": "The agent marks the pull request",
+      "reason": "Same actor as 'the agent' named in sentences 1 and 2. Keep the author's most-used term.",
+      "behaviour_change": false
+    }
+  ],
+  "kept": [],
+  "flags": [
+    {
+      "location": "sentence 3",
+      "issue": "The 'because' clause does not explain why the findings are posted as one comment. The author must confirm the intended reason. Also confirm that 'assistant' and 'bot' were the same actor as 'agent'; if either is a different actor, revert that change."
+    }
+  ]
+}

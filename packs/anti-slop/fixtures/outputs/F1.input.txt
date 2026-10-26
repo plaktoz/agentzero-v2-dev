@@ -1,0 +1,1 @@
+In today's rapidly evolving AI landscape, multi-agent systems are becoming increasingly pivotal for teams that need to delve into complex problem-solving scenarios. Our robust framework is a tapestry of coordination ideas, and it underscores one fact: the system coordinates 20 to 30 agents, each in its own git worktree.

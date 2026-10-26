@@ -1,0 +1,37 @@
+# Forbidden phrases and words for the anti-slop lint (scripts/lint.py).
+# Floor, not definition: PACK.md defines the patterns. This list grows as data.
+# Format: one list per key. Full-line comments only. Matching is case-insensitive.
+# Phrases match across line breaks and treat a curly apostrophe as a straight one.
+# Words match whole words only.
+phrases:
+  - in today's rapidly evolving
+  - leverage the power of
+  - seamlessly integrate
+  - robust framework
+  - comprehensive solution
+  - delve into
+  - serves as
+  - cutting-edge
+  - empower teams to
+  - empowers teams to
+  - designed to address the fundamental challenges
+  - cohesive platform
+  - at scale
+  - faces several challenges
+  - increasing maintenance burden
+  - broader challenge of coordinating
+words:
+  - delve
+  - delves
+  - delving
+  - pivotal
+  - tapestry
+  - underscore
+  - underscores
+  - landscape
+  - robust
+  - seamlessly
+  - leverage
+  - leverages
+  - leveraging
+  - multifaceted

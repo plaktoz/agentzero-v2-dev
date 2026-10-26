@@ -1,0 +1,11 @@
+id: F4
+# Read-first precondition. Agent has read nothing; no rung 1 to 4 record may have empty evidence.
+input:
+  task: "Add a session-expiry check to the login flow in auth/."
+  level: full
+  project_notes: "Repository is a Python service. Nothing has been read yet in this run."
+  code_context: []
+expect:
+  - "Agent states that it must read the auth/ files and their call sites before it can answer rung 2."
+  - "Agent does not emit a record that claims rung 1 to 4 with empty evidence. Such a record is invalid."
+  - "If a record is emitted at all, it has rung 6 or the reads are shown as pending, and no reuse is claimed."

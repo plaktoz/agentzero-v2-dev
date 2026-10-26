@@ -76,7 +76,7 @@ parse(report_files, exit_code, stdout) -> TestResult
 
 ### 4.2 CLI output (AXI)
 
-Follows [CLI Conventions (AXI)](./README.md#cli-conventions-axi). `--json` is unchanged and is what [merge-queue](../merge-queue/README.md) calls. This section covers only what is specific here.
+Follows [CLI Conventions (AXI)](../README.md#cli-conventions-axi). `--json` is unchanged and is what [merge-queue](../merge-queue/README.md) calls. This section covers only what is specific here.
 
 **Why it fits.** An agent runs tests after every change and reads the result. A full report from a large suite is mostly passing names the agent does not need.
 
@@ -237,14 +237,14 @@ Extracted from `TECHNICAL-DESIGN-SPEC-PART3.md` §6.3 (Rust `TestRunner`) and `U
 
 ## 12. Reference Implementation (Source Code)
 
-> Non-normative. Example code illustrating one way to implement this spec. May use consumer-specific names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md).
+> Non-normative. Example code illustrating one way to implement this spec. May use consumer-specific names and paths. The sections above are authoritative; where they differ (see section 10), the sections above win. It is excluded from the independence rules in [libs/README.md](./README.md). The code is in Rust, which is not in the stack. It is legacy and will be ported to Python.
 
-### 12.1 TestRunner (Rust)
+### 12.1 TestRunner (Rust, legacy: language not in stack, port to Python)
 
 Source: `TECHNICAL-DESIGN-SPEC-PART3.md` §6.3.2
 
 ```rust
-// Rust implementation for performance
+// Rust implementation for performance (legacy: language not in stack, port to Python)
 use std::process::Command;
 use std::path::PathBuf;
 

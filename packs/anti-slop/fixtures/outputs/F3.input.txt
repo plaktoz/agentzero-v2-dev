@@ -1,0 +1,3 @@
+This PRD defines a unified multi-agent development system designed to address the fundamental challenges of AI-assisted software development at scale. The system combines distributed coordination, structured workflows, radical minimalism, and engineering fundamentals into a cohesive platform.
+
+Reduces code by 53%, cost by 26%, time by 41%. Persists context across crashes. Coordinates 20-30+ agents.

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "signals.json",
+  "title": "Router signals",
+  "description": "Signals read from the request and scan notes. Each set signal has evidence. The score is not part of this object; PACK.md computes it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["files_affected", "new_capability", "scope_ambiguous", "user_facing_ui", "sensitive_domain", "bug_with_location", "greenfield", "evidence"],
+  "properties": {
+    "files_affected": {
+      "enum": ["one", "few", "many", "unknown"]
+    },
+    "new_capability": { "type": "boolean" },
+    "scope_ambiguous": { "type": "boolean" },
+    "user_facing_ui": { "type": "boolean" },
+    "sensitive_domain": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "enum": ["security", "auth", "payments", "data_migration"] }
+    },
+    "bug_with_location": { "type": "boolean" },
+    "greenfield": { "type": "boolean" },
+    "evidence": {
+      "type": "object",
+      "propertyNames": {
+        "enum": ["files_affected", "new_capability", "scope_ambiguous", "user_facing_ui", "sensitive_domain", "bug_with_location", "greenfield"]
+      },
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    }
+  }
+}

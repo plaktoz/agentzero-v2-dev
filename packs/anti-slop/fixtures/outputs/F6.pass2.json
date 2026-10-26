@@ -1,0 +1,12 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "def load_records(data):\n    result = process(data)\n    if result is None:\n        return []\n    return result\n",
+  "changes": [],
+  "kept": [],
+  "flags": [
+    {
+      "location": "load_records, lines 3-4",
+      "issue": "The `if result is None: return []` branch may be an unneeded fallback (code rule 4). It is not a swallowed exception, since `process` returning None is not an error here. Removing it would make the function return None instead of [], which changes behaviour for callers. The author or the tests must confirm whether callers depend on a list and whether `process` should return [] itself."
+    }
+  ]
+}

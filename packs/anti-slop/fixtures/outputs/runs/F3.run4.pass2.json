@@ -1,0 +1,12 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "This PRD defines a unified multi-agent development system for AI-assisted software development. The system combines distributed coordination, structured workflows, radical minimalism, and engineering fundamentals.\n\nReduces code by 53%, cost by 26%, time by 41%. Persists context across crashes. Coordinates 20-30+ agents.\n",
+  "changes": [],
+  "kept": [],
+  "flags": [
+    {
+      "location": "paragraph 2",
+      "issue": "Benchmark figures (53% code, 26% cost, 41% time) have no source, baseline or sample. The author must supply one."
+    }
+  ]
+}

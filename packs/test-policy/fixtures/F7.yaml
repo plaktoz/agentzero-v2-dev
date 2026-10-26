@@ -1,0 +1,36 @@
+id: F7
+title: "A getter and a setter added"
+input:
+  mode: selective
+  existing_tests: []
+  coverage:
+    line_percent: null
+    changed_lines_percent: null
+  diff: |
+    diff --git a/account.py b/account.py
+    index f7bf1ac..70c876e 100644
+    --- a/account.py
+    +++ b/account.py
+    @@ -1,3 +1,9 @@
+     class Account:
+         def __init__(self, name):
+             self._name = name
+    +
+    +    def get_name(self):
+    +        return self._name
+    +
+    +    def set_name(self, name):
+    +        self._name = name
+expect:
+  - "prefilter == needs_model"
+  - "change_class == normal"
+  - "no unit is risky and no unit has tests_required true"
+  - "gate == ok"
+variants:
+  - name: "strict mode requires tests for the new feature units"
+    input:
+      mode: strict
+    expect:
+      - "at least one unit (the getter, the setter, or both) has tests_required true"
+      - "every unit with tests_required true lists at least one case"
+      - "gate == missing_tests"

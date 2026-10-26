@@ -150,9 +150,9 @@ Track code size, cost, time, test coverage, and production reliability.
 **Minimum:** At least one supported provider configured
 
 **Supported Providers:**
-- **Anthropic Claude:** API key with Claude 3.5 Sonnet access
-- **OpenAI:** API key with GPT-4 access  
-- **Google Gemini:** API key with Gemini 1.5 Pro access
+- **Anthropic Claude:** API key with access to the configured Claude model
+- **OpenAI:** API key with access to the configured OpenAI model
+- **Google Gemini:** API key with Gemini access, reached through the OpenAI Codex CLI harness with a custom endpoint, model and API key (see Configuration Requirements under Multi-Agent Platform Support)
 - **Local LLM:** Ollama with llama3 or similar (development only)
 
 **Rationale:**
@@ -877,7 +877,7 @@ Migration complete!
 
 ### Overview
 
-**Requirement:** The system must support multiple coding agent platforms (Claude Code, OpenAI Codex, Gemini CLI, GitHub Copilot, etc.) working together within the same project.
+**Requirement:** The system must support multiple coding agent platforms (Claude Code, OpenAI Codex, GitHub Copilot, etc.). OpenAI Codex also runs Google Gemini models through a custom endpoint, model and API key; there is no separate Gemini CLI platform. The platforms work together within the same project.
 
 **Rationale:**
 - Different coding agents have different strengths (e.g., Claude Code for architecture, Copilot for autocomplete)
@@ -889,8 +889,7 @@ Migration complete!
 
 **Tier 1 (Full Integration):**
 - **Claude Code:** Full integration with context persistence, hooks, and workflows
-- **OpenAI Codex:** Coding agent CLI run in a hook worktree
-- **Gemini CLI:** Coding agent CLI run in a hook worktree
+- **OpenAI Codex:** Coding agent CLI run in a hook worktree. Runs OpenAI models, and Gemini models through a custom endpoint, model and API key
 - **GitHub Copilot:** Code completion and suggestion integration
 
 **Tier 2 (Basic Integration):**
@@ -915,7 +914,7 @@ agent_protocol:
   version: "1.0"
   
   agent_identity:
-    platform: string          # "claude-code", "openai-codex", "gemini-cli", "copilot"
+    platform: string          # "claude-code", "openai-codex", "copilot"
     agent_id: string          # Unique agent identifier
     capabilities: array       # ["code-generation", "review", "refactor"]
     
@@ -1002,22 +1001,6 @@ class OpenAICodexAdapter(CodingAgentAdapter):
     context_format = "markdown"
 ```
 
-**Gemini CLI Adapter:**
-```python
-class GeminiCliAdapter(CodingAgentAdapter):
-    """Adapter for the Gemini CLI"""
-
-    capabilities = [
-        "code-generation",
-        "code-review",
-        "refactoring",
-        "documentation"
-    ]
-
-    supports_hooks = True
-    context_format = "markdown"
-```
-
 **GitHub Copilot Adapter:**
 ```python
 class CopilotAdapter(CodingAgentAdapter):
@@ -1047,8 +1030,8 @@ agent_selection:
   by_task_type:
     architecture_design:
       primary: "claude-code"
-      fallback: "gemini-cli"
-      reason: "Long context, design thinking"
+      fallback: "openai-codex"
+      reason: "Long context, design thinking. Fallback runs Gemini through Codex"
       
     code_generation:
       primary: "claude-code"
@@ -1062,8 +1045,8 @@ agent_selection:
       
     security_review:
       primary: "claude-code"
-      fallback: "gemini-cli"
-      reason: "Default; override per project"
+      fallback: "openai-codex"
+      reason: "Default; override per project. Fallback runs Gemini through Codex"
       
     refactoring:
       primary: "claude-code"
@@ -1156,21 +1139,25 @@ multi_agent_config:
     claude_code:
       enabled: boolean
       api_key: env:CLAUDE_API_KEY
-      model: "claude-3-5-sonnet-20241022"
+      # Model comes from config, not from this spec. It depends on the custom endpoint in use.
+      model: "<from config>"
       roles: ["architect", "reviewer", "developer"]
       
     openai_codex:
       enabled: boolean
-      api_key: env:OPENAI_API_KEY
-      model: "<from config>"
+      # Runs OpenAI models by default. The same harness runs Gemini models through a
+      # custom endpoint, model and key. Each provider has its own key and model.
+      providers:
+        openai:
+          api_key: env:OPENAI_API_KEY
+          model: "<from config>"
+        gemini:
+          endpoint: "<from config>"     # custom endpoint for Gemini
+          api_key: env:GEMINI_API_KEY
+          model: "<from config>"
       roles: ["developer"]
 
-    gemini_cli:
-      enabled: boolean
-      api_key: env:GEMINI_API_KEY
-      model: "<from config>"
-      roles: ["developer"]
-        
+
     copilot:
       enabled: boolean
       api_key: env:GITHUB_TOKEN
@@ -3346,7 +3333,7 @@ problem-solving scenarios with unprecedented efficiency.
 This multi-agent system coordinates 20-30+ AI agents to complete 
 software development tasks. Reduces cost by 40%, time by 35%, and 
 code size by 53% compared to single-agent approaches. Works with 
-Anthropic Claude, OpenAI GPT-4, and Google Gemini.
+Anthropic Claude, OpenAI, and Google Gemini (through the OpenAI Codex CLI harness).
 ```
 
 ### 11.5 Documentation Anti-Slop Rules

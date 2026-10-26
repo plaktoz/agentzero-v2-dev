@@ -1,5 +1,7 @@
 # UMAS — Project DNA
 
+> **Stack note (2026-10-25):** The language choices in this document are superseded. The stack is Python (TypeScript only where no Python option exists). Rust and Go references describe the source design. See umas/TECHNICAL-DESIGN-SPEC.md Appendix A.4.
+
 > **Version:** 1.0 · **Date:** October 2026  
 > **Status:** Authoritative · Applies to every module, library, pack, and line of code in this project.  
 > **Single rule:** If a decision you are about to make contradicts anything in this document, stop. Re-read the relevant section. If the contradiction cannot be resolved, open an issue before writing code.
@@ -143,7 +145,7 @@ A Tier 2 content pack is Markdown, YAML, and JSON Schema. It can be loaded as a 
 
 ### A4 · Providers are configuration
 
-Replacing an LLM provider is an edit to the `llm-gateway` alias table and the project config file. No application code changes. The harness (Claude Code, Codex, Gemini CLI, Copilot) and the provider (Anthropic, OpenAI, Google, Ollama) are separate concerns at separate layers — replaced independently.
+Replacing an LLM provider is an edit to the `llm-gateway` alias table and the project config file. No application code changes. The harness (Claude Code, Codex, Copilot) and the provider (Anthropic, OpenAI, Google, Ollama) are separate concerns at separate layers — replaced independently.
 
 ### A5 · Services bind to localhost
 
@@ -173,7 +175,7 @@ Sessions remain `machine_paused` or `auth_expired` indefinitely — no watchdog 
 
 ### A10 · Skills are harness-neutral and platform-neutral
 
-A skill is a `SKILL.md` file. It runs unchanged on `claude-code`, `openai-codex`, and `antigravity` on both Windows and Unix. No exceptions.
+A skill is a `SKILL.md` file. It runs unchanged on `claude-code` and `openai-codex` on both Windows and Unix. No exceptions.
 
 **What this means in practice:**
 - A skill file MUST NOT contain shell syntax, absolute paths, Windows path separators (`\`), or harness-specific directives (Claude Code `/slash commands`, OpenAI function syntax).
@@ -183,7 +185,7 @@ A skill is a `SKILL.md` file. It runs unchanged on `claude-code`, `openai-codex`
 
 **What this rules out:**
 - A "Windows version" and a "Unix version" of the same skill. One file, all harnesses, both platforms.
-- A skill that works on `claude-code` but must be rewritten for `antigravity`. The format contract in `agent-platform §5.8` is the only contract.
+- A skill that works on `claude-code` but must be rewritten for `openai-codex`. The format contract in `agent-platform §5.8` is the only contract.
 - Embedding actual shell commands in a skill's `## Prompt` section. If a setup step requires a shell command, it belongs in the project's `Makefile` or `justfile`, referenced by path from the skill.
 
 ---
@@ -198,7 +200,7 @@ Every module, every commit message, every log line, every error record uses thes
 | **task** | One atomic piece of work assigned to one agent. Has an ID, a hook path, a dependency list, and a status. |
 | **hook** | A named Git worktree slot. The unit of work assignment. `hook_path` is relative to `.umas/worktrees/`. |
 | **agent** | An ephemeral LLM session. Has a session ID, a task ID, and a status. Operates inside exactly one worktree. |
-| **harness** | The CLI tool that hosts an agent session. Four are built in: `claude-code` (Anthropic), `openai-codex` (OpenAI), `antigravity` (Google Gemini CLI), `copilot` (GitHub, IDE-only). Not the same as the LLM provider — each is registered and replaced independently. |
+| **harness** | The CLI tool that hosts an agent session. Three are built in: `claude-code` (Anthropic), `openai-codex` (OpenAI; also runs Google Gemini models), `copilot` (GitHub, IDE-only). Not the same as the LLM provider — each is registered and replaced independently. |
 | **skill** | A `SKILL.md` file placed in a hook worktree alongside `TASK.md`. Loaded by any hook-supporting harness as supplementary context for the session. Written in the universal skill format (§5.8 of `agent-platform`): plain Markdown, no shell syntax, forward slashes only, `{{placeholders}}` for environment values. One skill file runs on all harnesses unchanged. |
 | **provider** | The LLM API that generates tokens (Anthropic, OpenAI, Google, Ollama). Not the same as the harness. |
 | **worktree** | A Git worktree under `.umas/worktrees/<hook-path>/`. One agent, one worktree, one branch at a time. |
@@ -216,7 +218,7 @@ Every module, every commit message, every log line, every error record uses thes
 | **merge queue** | The permanent worktree and processor that tests PR batches and bisects on failure before merging to `main`. |
 | **coordinator** | The Python agent that owns the Coordinator state machine. Never writes application code. |
 | **scheduler** | The component that maintains the ready queue, enforces the concurrency cap, and dispatches agents. Uses `task-queue`. |
-| **watchdog** | The three-tier supervision chain: Daemon (Rust) → Triage Agent → System Patrol → Project Monitors. |
+| **watchdog** | The three-tier supervision chain: Daemon (Python) → Triage Agent → System Patrol → Project Monitors. |
 | **project monitor** | One Python process per active project. Polls every 60 seconds. Detects stuck, crashed, and over-budget agents. |
 | **machine_paused** | Session status set when the host machine shuts down. The session is resumable; it is never treated as crashed. Recovery is automatic on next `umas start-all` if the OIDC token is still valid. |
 | **auth_expired** | Session status set when `machine_paused` is detected on boot and the OIDC token has expired. Requires `umas auth login` before the session can resume. Has no timeout. |
@@ -287,7 +289,7 @@ Work is sequenced. Starting Phase 2 work while Phase 1 is incomplete is not perm
 | **1 · Foundation (MVP)** | 8–12 weeks | Git worktree manager, task database, Coordinator, Worker agents, minimalism enforcement, basic merge queue, CLI | `event-log`, `budget-meter`, `hook-store`, `task-queue`, `test-adapters`, `merge-queue`, `error-classifier`, `kc-axi`, `metrics-store` (JSONL) |
 | **2 · Specialization** | 6–8 weeks | Specialized agents, grilling, decision artifacts, TDD enforcement, code review | `decision-artifacts`, `agent-session`, `agent-platform` |
 | **3 · Monitoring** | 4–6 weeks | Three-tier watchdog, project monitors, telemetry, minimal HTML dashboard | `watchdog`, `metrics-store` (SQL backend activated) |
-| **4 · Scale** | 6–8 weeks | Scheduler, multi-platform support, session history, advanced merge queue, React dashboard (option) | `llm-gateway` (evaluated, adopted or wrapped) |
+| **4 · Scale** | 6–8 weeks | Scheduler, multi-platform support, session history, advanced merge queue, dashboard push updates (optional) | `llm-gateway` (evaluated, adopted or wrapped) |
 | **5 · Federation (optional)** | 8–10 weeks | Cross-workspace coordination | Deferred; design with federation in mind from Phase 1 |
 
 **Starting conditions for Phase 1:**
@@ -302,15 +304,15 @@ Work is sequenced. Starting Phase 2 work while Phase 1 is incomplete is not perm
 
 | Layer | Language | Key dependencies | Notes |
 |-------|----------|-----------------|-------|
-| Daemon + CLI | Rust 1.70+ | tokio 1.32+, clap 4.4+, serde 1.0+, sqlx 0.7+, anyhow 1.0+, tracing 0.1+, uuid 1.4+ | Single binary distribution |
+| Daemon + CLI | Python 3.10+ | asyncio (stdlib), typer, pydantic 2.4+, sqlalchemy 2.0+ (sqlite3 for the MVP), structlog, uuid (stdlib) | Distributed as a Python package (uv or pip). Run the daemon under launchd or systemd so the OS restarts it |
 | Agent runtime | Python 3.10+ | anthropic 0.7+, openai 1.3+, google-generativeai 0.3+, pydantic 2.4+, aiofiles 23.2+, gitpython 3.1+, sqlalchemy 2.0+, alembic 1.12+ | Pydantic v2 is the standard output validator |
 | Alternative (single runtime) | TypeScript / Node 18+ | commander, prisma, zod | Viable if team prefers one runtime; lib specs are language-neutral |
 | Database — MVP | SQLite 3.35+ | WAL mode, foreign keys, JSON support | `~/.umas/database.db` |
 | Database — Production | PostgreSQL 14+ | Connection pool min 5 / max 50 | Migrate from SQLite without data loss |
 | Metrics storage | JSONL (Phase 1–2) → PostgreSQL `metrics` table (Phase 3+) | TimescaleDB is NOT a hard dependency | One `create_hypertable` statement if/when needed; no app code change |
-| Observability | OpenTelemetry 1.20+ | Prometheus (metrics), Jaeger (traces), Loki (logs), structlog (Python), tracing (Rust) | All fields: timestamp, level, service, agent_id, session_id, task_id, trace_id |
+| Observability | OpenTelemetry 1.20+ | Prometheus (metrics), Jaeger (traces), Loki (logs), structlog (Python) | All fields: timestamp, level, service, agent_id, session_id, task_id, trace_id |
 | Dashboard — Phase 1–3 | Minimal read-only HTML + polling | No build step, no React | ADR-0001 |
-| Dashboard — Phase 4 option | React 18+ / TypeScript | Zustand, shadcn/ui, Vite, FastAPI or Express, WebSocket | Not before Phase 4 |
+| Dashboard backend | FastAPI (Python) | Same REST API and OpenAPI definition as the CLI | React is superseded and not planned; push updates (SSE or WebSocket) only if a later decision needs them |
 | Identity | Keycloak (OIDC) | `kc-axi` lib for agent-friendly admin CLI | JWT Bearer tokens; roles: Admin, Developer, Viewer |
 
 ---

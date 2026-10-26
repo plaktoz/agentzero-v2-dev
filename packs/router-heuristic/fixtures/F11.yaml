@@ -1,0 +1,11 @@
+id: F11
+title: "Same request twice gives the same decision"
+input:
+  request: "Fix the off-by-one in `pager.py` line 42"
+  scan: null
+  override: null
+  runs: 2
+expect:
+  - "the two decision records are identical, field by field"
+  - "signals, evidence, score, band, route, reasons and overridden match"
+  - "the same signals give the same route on every run (spec acceptance criterion 2)"

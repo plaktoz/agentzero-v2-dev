@@ -1,0 +1,10 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "I think the monorepo layout is the right call for this team, and I would choose it again. It keeps every pack in one place, so a reviewer sees the whole change at once.",
+  "changes": [],
+  "kept": [
+    "First-person opinion: \"I think the monorepo layout is the right call for this team, and I would choose it again.\"",
+    "Concrete reason given for the choice: it keeps every pack in one place so a reviewer sees the whole change at once."
+  ],
+  "flags": []
+}

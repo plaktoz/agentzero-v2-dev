@@ -1,0 +1,10 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "## Getting Started\n\nRun `pip install -e .` from the repository root, then start the service with `toolkit serve`. To check it works, run `pytest tests/` and look for a passing summary line.\n",
+  "changes": [],
+  "kept": [
+    "The \"Getting Started\" heading: it is document structure, and the section opens with the useful point (commands) straight away.",
+    "The two commands and the verification step: they are concrete commands, not broad claims."
+  ],
+  "flags": []
+}

@@ -7,7 +7,7 @@
 
 ## 1. Purpose
 
-Two jobs, one binary:
+Two jobs, one command-line tool:
 
 1. **Run** a local Keycloak server in a Docker or Podman container, repeatably, on Linux or Windows.
 2. **Administer** it (realms, clients, users) through a command-line interface a coding agent can call without wasting tokens, hanging on a prompt, or leaking a secret.
@@ -23,7 +23,7 @@ The output style follows the AXI principles named in the source issue: token-lea
 - An agent-friendly output format and fixed exit codes
 - Refusing writes unless confirmed, and never printing a secret
 - An optional audit file of writes
-- One static binary for Linux and Windows
+- One Python package for Linux and Windows, with an optional frozen single-file build per OS
 
 **Non-goals**
 - Authorisation. Keycloak answers "who is this". What that person may do is the consuming application's business.
@@ -81,7 +81,7 @@ List commands take `--full`, `--limit N` (default 3), and `--json` (raw JSON, sa
 
 All commands except `up`, `down` and `status` use only the Keycloak REST API, so they also work against a Keycloak that was not started by this tool, such as a remote one.
 
-Embedded use: the same operations exist as a Go package with `on_event(callback)` for the audit records.
+Embedded use: the same operations exist as a Python package with `on_event(callback)` for the audit records.
 
 ### 4.1 Output format
 
@@ -141,7 +141,7 @@ Data persists only if `volume` is set. The default is a **named volume**, not a 
 
 | Concern | Linux | Windows |
 |---------|-------|---------|
-| Binary | Static, `amd64` and `arm64` | Static `.exe`, `amd64` and `arm64` |
+| Install | Python package (`pip`, `uv` or `pipx`); optional frozen single-file build, `amd64` and `arm64` | Python package (`pip`, `uv` or `pipx`); optional frozen `.exe`, `amd64` and `arm64` |
 | Container engine | Docker or Podman runs containers directly | Docker Desktop or Podman runs Linux containers inside a virtual machine (WSL2 or equivalent). The image is the same Linux image |
 | Port on `127.0.0.1` | Direct | Forwarded by the engine (general knowledge; confirm for each engine) |
 | Shell | None required | None required (no `bash`, `jq`, `grep` or `tr`) |
@@ -221,7 +221,7 @@ The tool keeps its own typed errors. A consumer that wants one error vocabulary 
 | Audit of identity changes | `audit_path` pointing at a file the consumer ingests into [event-log](../event-log/README.md), or the `on_event` callback |
 | Pinned image | UMAS records the Keycloak image tag in one place and passes it as `image` |
 
-See [modularisation-assessment.md](../modularisation-assessment.md) sections 5.6 to 5.9 for the RBAC decisions this serves.
+See [TECHNICAL-DESIGN-SPEC.md Appendix A.5.6 to A.5.9](../../umas/TECHNICAL-DESIGN-SPEC.md#a56-data-model) for the RBAC decisions this serves.
 
 ## 10. Source Material and Deviations
 
@@ -229,7 +229,7 @@ Extracted from GitHub issue 18, "keycloak with axi.md", which proposes a Podman 
 
 | Deviation | Why |
 |-----------|-----|
-| Go binary instead of a Bash script | The script needs `bash`, `grep`, `tr`, `head` and `echo`, so it does not run natively on Windows |
+| Python package instead of a Bash script | The script needs `bash`, `grep`, `tr`, `head` and `echo`, so it does not run natively on Windows |
 | REST API instead of `exec` into the container for `kcadm.sh` | Removes the container-runtime dependency from every admin command, works against a remote Keycloak, and avoids path and quoting problems on Windows |
 | Docker and Podman both supported, never guessed | The issue picks Podman in its examples and asks which is wanted. The two keep separate container stores, so guessing would act on the wrong one |
 | Admin credentials from the environment or a file | The issue types `admin`/`admin` into the command and the script, which end up in git and in agent transcripts |

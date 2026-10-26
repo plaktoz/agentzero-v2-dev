@@ -1,0 +1,77 @@
+id: F9
+title: "Large diff of glue code: a thin HTTP client and field-copy adapters"
+input:
+  mode: selective
+  existing_tests: []
+  coverage:
+    line_percent: null
+    changed_lines_percent: null
+  diff: |
+    diff --git a/shop/adapters.py b/shop/adapters.py
+    new file mode 100644
+    index 0000000..7b4c1ec
+    --- /dev/null
+    +++ b/shop/adapters.py
+    @@ -0,0 +1,22 @@
+    +def to_product_dto(row):
+    +    return {"id": row["id"], "name": row["name"], "sku": row["sku"]}
+    +
+    +
+    +def to_order_dto(row):
+    +    return {"id": row["id"], "customer_id": row["customer_id"], "lines": row["lines"]}
+    +
+    +
+    +def to_customer_dto(row):
+    +    return {"id": row["id"], "name": row["name"], "email": row["email"]}
+    +
+    +
+    +def from_product_dto(dto):
+    +    return {"id": dto["id"], "name": dto["name"], "sku": dto["sku"]}
+    +
+    +
+    +def from_order_dto(dto):
+    +    return {"id": dto["id"], "customer_id": dto["customer_id"], "lines": dto["lines"]}
+    +
+    +
+    +def from_customer_dto(dto):
+    +    return {"id": dto["id"], "name": dto["name"], "email": dto["email"]}
+    diff --git a/shop/client.py b/shop/client.py
+    new file mode 100644
+    index 0000000..ef248b2
+    --- /dev/null
+    +++ b/shop/client.py
+    @@ -0,0 +1,28 @@
+    +class ShopClient:
+    +    def __init__(self, http, base_url):
+    +        self.http = http
+    +        self.base_url = base_url
+    +
+    +    def get_product(self, product_id):
+    +        return self.http.get(self.base_url + "/products/" + str(product_id))
+    +
+    +    def list_products(self):
+    +        return self.http.get(self.base_url + "/products")
+    +
+    +    def get_order(self, order_id):
+    +        return self.http.get(self.base_url + "/orders/" + str(order_id))
+    +
+    +    def list_orders(self):
+    +        return self.http.get(self.base_url + "/orders")
+    +
+    +    def create_order(self, payload):
+    +        return self.http.post(self.base_url + "/orders", payload)
+    +
+    +    def delete_order(self, order_id):
+    +        return self.http.delete(self.base_url + "/orders/" + str(order_id))
+    +
+    +    def get_customer(self, customer_id):
+    +        return self.http.get(self.base_url + "/customers/" + str(customer_id))
+    +
+    +    def create_customer(self, payload):
+    +        return self.http.post(self.base_url + "/customers", payload)
+expect:
+  - "prefilter == needs_model"
+  - "every unit with tests_required true lists at least one concrete case"
+  - "no unit has tests_required true without cases (a risky label with no case is not allowed)"
+  - "the delegating methods and field-copy functions are plain data movement: kind none, risky false"
+  - "gate == ok"

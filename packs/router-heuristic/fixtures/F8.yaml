@@ -1,0 +1,14 @@
+id: F8
+title: "Feature in an existing app is not greenfield"
+input:
+  request: "Add a settings page"
+  scan:
+    files_estimate: 3
+    touches_ui: true
+    notes: "Existing app: profile and orders pages already exist."
+  override: null
+expect:
+  - "greenfield is false, because the scan notes show an existing app"
+  - "new_capability is true, +3; user_facing_ui is true, +2; files_affected is few, +1"
+  - "score is 6, band medium, route medium"
+  - "route is not greenfield"

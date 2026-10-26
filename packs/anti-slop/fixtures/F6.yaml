@@ -1,0 +1,14 @@
+id: F6
+input: |
+  def load_records(data):
+      try:
+          result = process(data)
+          if result is None:
+              return []
+          return result
+      except Exception:
+          return []
+expect:
+  - "The try and the except are removed, so an exception from process() reaches the caller"
+  - "That change is listed with category swallowed_error and behaviour_change: true"
+  - "The None check is kept, because removing it changes the return value for a reason other than rule 3; it is listed in flags for the author"

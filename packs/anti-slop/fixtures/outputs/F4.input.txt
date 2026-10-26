@@ -1,0 +1,5 @@
+## Getting Started
+
+Welcome to the project! We're thrilled you're here, and this section will help you embark on your journey with our powerful toolkit.
+
+Let's dive in. Run `pip install -e .` from the repository root, then start the service with `toolkit serve`. To check it works, run `pytest tests/` and look for a passing summary line.

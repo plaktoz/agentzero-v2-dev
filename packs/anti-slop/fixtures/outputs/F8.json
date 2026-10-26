@@ -1,0 +1,15 @@
+{
+  "pack_version": "0.1.0",
+  "revised": "The review agent takes one pull request at a time. The worker opens a fresh worktree for that pull request and runs the checks there. The assistant posts the findings as one comment. The bot marks the pull request as reviewed once the comment is posted. In this system the agent, the worker, the assistant and the bot are one process.",
+  "changes": [],
+  "kept": [
+    "The four names (agent, worker, assistant, bot) are each used once, and the last sentence states they are one process. Replacing them with a single term would make that sentence meaningless and drop a fact, so they are left as written.",
+    "Short, direct sentences are left as they are."
+  ],
+  "flags": [
+    {
+      "location": "sentences 1-4 and sentence 5",
+      "issue": "Four terms name one process. The final sentence declares the aliasing, so this was not changed. If the author wants one term, they should pick it, rewrite sentences 2-4 with it, and drop or reword sentence 5."
+    }
+  ]
+}

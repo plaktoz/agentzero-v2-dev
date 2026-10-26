@@ -1,0 +1,41 @@
+id: F10
+title: "Mixed diff: docs edit plus an authorisation check"
+input:
+  mode: selective
+  existing_tests: []
+  coverage:
+    line_percent: null
+    changed_lines_percent: null
+  diff: |
+    diff --git a/docs/api.md b/docs/api.md
+    index ffa9e22..3fbb3f9 100644
+    --- a/docs/api.md
+    +++ b/docs/api.md
+    @@ -2,4 +2,4 @@
+
+     ## Delete a document
+
+    -Call `DELETE /documents/{id}`.
+    +Call `DELETE /documents/{id}`. Only the owner or an admin may delete.
+    diff --git a/documents.py b/documents.py
+    index 59a7a57..ff2468b 100644
+    --- a/documents.py
+    +++ b/documents.py
+    @@ -1,2 +1,10 @@
+     def get_document(store, doc_id):
+         return store[doc_id]
+    +
+    +
+    +def can_delete(user, document):
+    +    if user is None:
+    +        return False
+    +    if user.role == "admin":
+    +        return True
+    +    return document.owner_id == user.id
+expect:
+  - "prefilter == needs_model"
+  - "change_class == normal"
+  - "the docs change is trivial and appears in no unit"
+  - "a unit at documents.py has kind security, risky true, tests_required true, present false"
+  - "cases include an anonymous user, an admin, the owner, and a non-owner non-admin"
+  - "gate == missing_tests"

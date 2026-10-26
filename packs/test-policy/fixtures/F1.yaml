@@ -1,0 +1,40 @@
+id: F1
+title: "Rename a local variable across two files"
+input:
+  mode: selective
+  existing_tests: []
+  coverage:
+    line_percent: null
+    changed_lines_percent: null
+  diff: |
+    diff --git a/report.py b/report.py
+    index 6d7aa8e..16a6c4c 100644
+    --- a/report.py
+    +++ b/report.py
+    @@ -2,5 +2,5 @@ from stock import count_items
+
+
+     def show(items):
+    -    qty = count_items(items)
+    -    print(qty)
+    +    total_qty = count_items(items)
+    +    print(total_qty)
+    diff --git a/stock.py b/stock.py
+    index 174e19e..ba51a73 100644
+    --- a/stock.py
+    +++ b/stock.py
+    @@ -1,5 +1,5 @@
+     def count_items(items):
+    -    qty = 0
+    +    total_qty = 0
+         for item in items:
+    -        qty += item.count
+    -    return qty
+    +        total_qty += item.count
+    +    return total_qty
+expect:
+  - "prefilter == trivial"
+  - "change_class == trivial"
+  - "gate == ok"
+  - "units is empty"
+  - "no classifier call is needed"

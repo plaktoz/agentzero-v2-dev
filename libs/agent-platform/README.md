@@ -8,7 +8,7 @@
 
 ## 1. Purpose
 
-Abstract the differences between coding agent harnesses — the tools that actually run an agent session (Claude Code, OpenAI Codex, Gemini CLI, GitHub Copilot, custom agents) — behind one interface. The consuming application assigns work to a harness, reads back its signal when the work is done, and transfers context across harness boundaries without knowing which harness is on either end.
+Abstract the differences between coding agent harnesses — the tools that actually run an agent session (Claude Code, OpenAI Codex, GitHub Copilot, custom agents) — behind one interface. The consuming application assigns work to a harness, reads back its signal when the work is done, and transfers context across harness boundaries without knowing which harness is on either end.
 
 ## 2. Scope and Non-Goals
 
@@ -23,7 +23,7 @@ Abstract the differences between coding agent harnesses — the tools that actua
 **Non-goals**
 - Calling LLM providers. That is [llm-gateway](../llm-gateway/README.md). A harness often ships with a default provider, but UMAS registers the harness here and the provider there, so either can be replaced alone.
 - Spawning OS processes or managing agent lifecycle. The harness decides how it runs; this library only defines what it reads and writes.
-- Routing or selection logic (which platform to use for which task). That belongs to [packs/router-heuristic](../../packs/router-heuristic/README.md) and the consuming application.
+- Routing or selection logic (which platform to use for which task). That belongs to [packs/router-heuristic](../../packs/router-heuristic/router-heuristic-spec.md) and the consuming application.
 - Authentication or secrets management. Credentials are passed in by the caller; never stored by this library.
 - Metrics or alerting. Usage figures are returned in the completion signal; the caller forwards them to [budget-meter](../budget-meter/README.md).
 
@@ -96,7 +96,7 @@ CompletionSignal:
 
 `read_signal(config) -> CompletionSignal | None`
 
-Returns the most recent unread signal for any assignment, or `None` if the harness has not yet signalled. The caller is responsible for polling or event-driven wakeup; the library does not block.
+Returns the most recent unread `file` signal for any assignment, or `None` if the harness has not yet signalled. For `commit-message` platforms the launcher uses `find_signals` with a cursor instead (section 5.3). The caller is responsible for polling or event-driven wakeup; the library does not block.
 
 ### 3.5 Context pack
 
@@ -142,7 +142,7 @@ Also `agent-platform <op> --json`.
 
 ### 5.1 Built-in adapters
 
-Four adapters are shipped with the library. They may be overridden by the caller.
+Three adapters are shipped with the library (ADR-0002 removed the Gemini CLI one). They may be overridden by the caller.
 
 **`claude-code`**
 ```
@@ -162,18 +162,7 @@ completion_signal: commit-message   # same [done] / [blocked] convention as clau
 assign:            writes TASK.md into the hook worktree
 ```
 
-**`antigravity`** *(Google Gemini CLI harness — formerly listed as `gemini-cli`)*
-```
-capabilities:      [code-generation, code-review, refactoring, documentation]
-context_format:    markdown
-hook_support:      true
-completion_signal: commit-message   # same [done] / [blocked] convention as claude-code and codex
-assign:            writes TASK.md into the hook worktree; SKILL.md written alongside if configured
-skill_file:        SKILL.md         # universal skill contract; see §5.8
-provider:          google-gemini    # configured in llm-gateway; harness and provider are independent
-```
-
-The `antigravity` harness is Google's CLI tool for running Gemini agents. The adapter identifier is `antigravity`; the LLM provider it calls is registered separately in `llm-gateway` as `google-gemini`. The capability list is a starting value — adjust after testing.
+The Gemini CLI harness (`antigravity`, formerly `gemini-cli`) is removed. Gemini models run through `openai-codex` (ADR-0002). The provider is set per assignment: `openai` or `google-gemini`, registered in `llm-gateway`.
 
 **`copilot`**
 ```
@@ -190,9 +179,11 @@ assign:            writes .github/copilot-task.md for IDE pickup
 
 ### 5.3 Completion signal detection
 
-`read_signal` is intentionally non-blocking and non-polling. The caller drives the polling loop (or wires in a file-watch / event-log `follow`). For `commit-message` signals the library scans the hook worktree's git log for a commit matching the signal pattern. For `file` signals it checks for the signal file. For `polling` it reads a status endpoint (caller supplies the URL). For `none` it reads file modification times and returns a synthetic signal when artefacts were updated.
+`read_signal` is intentionally non-blocking and non-polling. The caller drives the polling loop (or wires in a file-watch / event-log `follow`). For `commit-message` signals the signal is a commit in the hook worktree's git log that matches `signal_pattern`; the launcher finds it through hook-store, as described below. For `file` signals it checks for the signal file. For `polling` it reads a status endpoint (caller supplies the URL). For `none` it reads file modification times and returns a synthetic signal when artefacts were updated.
 
-A signal is consumed exactly once: after `read_signal` returns a non-None result, it marks it read (writes a `.signal.ack` alongside the signal file, or records the last-seen commit SHA). Subsequent calls return `None` until a new signal arrives.
+For `file` signals, a signal is consumed exactly once: after `read_signal` returns a non-None result, it marks it read (writes a `.signal.ack` alongside the signal file). Subsequent calls return `None` until a new signal arrives.
+
+For `commit-message` signals, `read_signal` does not consume and does not record a commit SHA. The caller (the launcher) calls [hook-store](../hook-store/README.md) `find_signals(name, pattern, after=cursor)` and stores the returned `cursor` in the hook's `STATE.md` with `write_state`. The launcher advances the cursor only after it has handled the signal, so a crash before handling returns the same signal again.
 
 ### 5.4 Cross-platform handoff
 
@@ -227,11 +218,11 @@ Nothing outside an adapter names a specific harness. A work assignment, completi
 
 ### 5.8 Universal skill format
 
-A **skill** is a plain Markdown file (`SKILL.md`) that any harness listed in §5.1 can load without modification. The format is defined here so a skill written once runs on Claude Code, OpenAI Codex, Antigravity (Gemini), and any future hook-supporting harness without a platform-specific branch.
+A **skill** is a plain Markdown file (`SKILL.md`) that any harness listed in §5.1 can load without modification. The format is defined here so a skill written once runs on Claude Code, OpenAI Codex (with OpenAI or Gemini models), and any future hook-supporting harness without a platform-specific branch.
 
 #### Why one format works across harnesses
 
-All three hook-supporting harnesses (`claude-code`, `openai-codex`, `antigravity`) share three properties:
+Both hook-supporting harnesses (`claude-code`, `openai-codex`) share three properties:
 - They accept work via a `TASK.md` file in the hook worktree (section §5.2).
 - They read supplementary context files from the hook worktree on startup.
 - They signal completion via a commit message pattern (section §5.3).
@@ -245,7 +236,7 @@ A `SKILL.md` file in the hook worktree (or in `.umas/skills/`) is supplementary 
 skill_version: "1.0.0"        # semver; harnesses reject skills below their min_version
 name: "<stable-identifier>"   # snake_case, no spaces, e.g. "minimalism-enforcer"
 description: "<one sentence>" # shown in skill lists and logs; max 140 chars
-applies_to: [all | claude-code | openai-codex | antigravity | copilot]
+applies_to: [all | claude-code | openai-codex | copilot]
 platforms: [windows, unix]    # both = runs on either; subset = load only on those
 ---
 
@@ -297,7 +288,7 @@ skills:
     applies_to: all
   - name: test-policy
     file: .umas/skills/test-policy.SKILL.md
-    applies_to: [claude-code, openai-codex, antigravity]
+    applies_to: [claude-code, openai-codex]
 ```
 
 Multiple skills may be active simultaneously; the consuming application concatenates them into a single `SKILL.md` before writing to the worktree, separated by a `---` divider and each prefixed with its `name`.
@@ -315,18 +306,12 @@ platforms:
     signal_pattern: "\\[(done|blocked|escalated)\\]"   # regex on commit messages
     skill_file: "SKILL.md"      # written alongside TASK.md; universal format (§5.8)
 
-  openai-codex:
+  openai-codex:                     # runs OpenAI and Gemini models (ADR-0002)
     enabled: true
     hook_base: ".hooks"
     signal_pattern: "\\[(done|blocked|escalated)\\]"
     skill_file: "SKILL.md"
-
-  antigravity:                      # Google Gemini CLI harness
-    enabled: true
-    hook_base: ".hooks"
-    signal_pattern: "\\[(done|blocked|escalated)\\]"
-    skill_file: "SKILL.md"
-    # provider: google-gemini — registered separately in llm-gateway config
+    # provider is set per assignment: openai | google-gemini (registered in llm-gateway)
 
   copilot:
     enabled: false
@@ -360,16 +345,16 @@ This library keeps its own typed errors and does not import any error library. A
 
 ## 8. Acceptance Criteria
 
-1. `assign` for `claude-code` writes `TASK.md` into the given hook worktree; `read_signal` detects a subsequent commit matching `[done]` and returns a signal; a second call to `read_signal` returns `None`.
+1. `assign` for `claude-code` writes `TASK.md` into the given hook worktree; a subsequent commit matching `[done]` is found by hook-store `find_signals(name, pattern, after=cursor)`, and a second call with the returned `cursor` finds nothing. For a `file` signal, `read_signal` returns the signal once and then `None`.
 2. A cross-platform handoff from `claude-code` to `openai-codex`: `pack_context` produces a pack whose checksum is valid; `unpack_context` produces a `WorkAssignment`; `assign` writes `TASK.md` into the target hook. A handoff to a custom adapter that declares `context_format = json` writes `TASK.json` instead.
 3. A pack with a mutated `task_summary` field fails `ChecksumMismatch` in `unpack_context`.
 4. Registering a custom adapter with `name = "claude-code"` overrides the built-in; subsequent `assign` calls use the custom `assign` callback.
 5. `validate` returns an error when a configured platform's `hook_base` directory does not exist.
 6. An artefact path of `../../etc/passwd` in a context pack is rejected with `PathTraversal`.
-7. The same `WorkAssignment` is accepted by `claude-code`, `openai-codex`, and `antigravity` with no change other than the platform name. Replacing one with another touches configuration only.
+7. The same `WorkAssignment` is accepted by `claude-code` and `openai-codex` with no change other than the platform name. Replacing one with another touches configuration only.
 8. A `SKILL.md` written with LF line endings and forward-slash paths is delivered unchanged by `assign` on both a Linux and a Windows host. The file content is not interpreted or modified by the adapter.
 9. A `SKILL.md` that contains a backslash path or a Windows absolute path (`C:\...`) is rejected at load time with a validation error listing the violating line.
-10. A cross-harness handoff from `claude-code` to `antigravity` includes `SKILL.md` in `artefact_paths` and writes it into the target worktree via `unpack_context`.
+10. A cross-harness handoff from `claude-code` to `openai-codex` includes `SKILL.md` in `artefact_paths` and writes it into the target worktree via `unpack_context`.
 
 ## 9. Known Consumers
 
@@ -379,7 +364,7 @@ This library keeps its own typed errors and does not import any error library. A
 | UMAS concept | Mapping |
 |---|---|
 | Module 7: Multi-Agent Platform Support | This library is the implementation of that module's adapter layer |
-| `ClaudeCodeAdapter`, `OpenAICodexAdapter`, `GeminiCliAdapter`, `CopilotAdapter`, `AntigravityAdapter` from the PRD | The five built-in adapters in §5.1 |
+| `ClaudeCodeAdapter`, `OpenAICodexAdapter`, `CopilotAdapter` from the PRD | The built-in adapters in §5.1. `GeminiCliAdapter` and `AntigravityAdapter` are dropped (ADR-0002) |
 | Agent selection strategy (PRD §Agent Selection Strategy) | Not this library. UMAS applies `packs/router-heuristic` to pick a platform, then calls `assign` here |
 | Cross-platform handoff flow from PRD §Cross-Platform Context Transfer | `pack_context` → `unpack_context` → `assign`, as described in §5.4 |
 | Platform-specific errors (`PLATFORM_UNAVAILABLE`, `HANDOFF_TIMEOUT`, etc.) | UMAS maps `CapabilityMissing` → route to another platform; `AssignmentWriteFailed` → P1 escalation; `ChecksumMismatch` → P1 escalation with the pack retained for inspection. Each can be expressed as an [error-classifier](../error-classifier/README.md) record (section 7 suggests the recoverability) |
@@ -391,7 +376,7 @@ Extracted from `unified-multi-agent-system-prd.md` §Multi-Agent Platform Suppor
 | Deviation | Why |
 |-----------|-----|
 | Library covers harness adapters only, not LLM providers | The PRD conflates the two. LLM calls belong in `llm-gateway`; work assignment and completion signals belong here. Mixing them would make both components harder to test and replace independently |
-| `assign` writes files; it does not call APIs or spawn processes | The PRD's `spawn_agent(task, config) -> Agent` assumes the adapter controls the agent's lifecycle. In practice Claude Code, Codex, Gemini CLI and Copilot are independent tools; UMAS can only present work to them, not start them |
+| `assign` writes files; it does not call APIs or spawn processes | The PRD's `spawn_agent(task, config) -> Agent` assumes the adapter controls the agent's lifecycle. In practice Claude Code, Codex and Copilot are independent tools; UMAS can only present work to them, not start them |
 | `read_signal` is non-blocking | The PRD implies the adapter manages the agent's completion event. A blocking read would couple UMAS's scheduling loop to the harness's timing |
 | Context pack has a checksum | The PRD's `context_transfer` block mentions an integrity check but does not specify it; `SHA-256` of the canonical JSON is unambiguous |
 | `completion_signal: none` for Copilot | The PRD marks `supports_hooks = False` for Copilot but provides no alternative signal mechanism. File mtime polling is the pragmatic fallback |
@@ -399,7 +384,7 @@ Extracted from `unified-multi-agent-system-prd.md` §Multi-Agent Platform Suppor
 
 ## 11. Open Questions
 
-1. **Harness and provider pairing:** Each harness ships with a default provider (Claude Code with Anthropic, Codex with OpenAI, Gemini CLI with Google). UMAS registers the harness here and, only where UMAS itself calls that provider (for example the Coordinator's planning step), registers the provider in `llm-gateway` with its own credentials. Is that the agreed rule, or should a harness that can use several providers be configured through the gateway?
+1. **Harness and provider pairing:** Each harness ships with a default provider (Claude Code with Anthropic, Codex with OpenAI). The Codex harness also runs Google Gemini models (ADR-0002), so its provider is chosen per assignment. Open: the capability list for `openai-codex` was written for OpenAI models and must be checked for Gemini. UMAS registers the harness here and, only where UMAS itself calls that provider (for example the Coordinator's planning step), registers the provider in `llm-gateway` with its own credentials. Is that the agreed rule, or should a harness that can use several providers be configured through the gateway?
 
 2. **Completion signal reliability for `commit-message`:** A harness that crashes after committing but before the UMAS poller runs will produce a valid signal. A harness that commits without the signal pattern in the message will be silently ignored. Should there be a timeout after which `read_signal` returns a synthetic `abandoned` signal?
 
@@ -415,7 +400,7 @@ Extracted from `unified-multi-agent-system-prd.md` §Multi-Agent Platform Suppor
 
 ### 12.1 Adapter base class and platform implementations (Python)
 
-Source: `unified-multi-agent-system-prd.md` §Platform-Specific Adapters. `OpenAICodexAdapter` and `GeminiCliAdapter` replace the original `IBMBobAdapter`, which was removed from the solution.
+Source: `unified-multi-agent-system-prd.md` §Platform-Specific Adapters. `OpenAICodexAdapter` also runs Gemini models (ADR-0002). `GeminiCliAdapter` is not built. `OpenAICodexAdapter` replaces the original `IBMBobAdapter`, which was removed from the solution.
 
 ```python
 class CodingAgentAdapter:
@@ -447,12 +432,6 @@ class ClaudeCodeAdapter(CodingAgentAdapter):
 
 
 class OpenAICodexAdapter(CodingAgentAdapter):
-    capabilities = ["code-generation", "code-review", "refactoring", "documentation"]
-    supports_hooks = True
-    context_format = "markdown"
-
-
-class GeminiCliAdapter(CodingAgentAdapter):
     capabilities = ["code-generation", "code-review", "refactoring", "documentation"]
     supports_hooks = True
     context_format = "markdown"

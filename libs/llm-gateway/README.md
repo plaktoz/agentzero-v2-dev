@@ -2,7 +2,7 @@
 
 > Standalone library spec · Draft v0.1 · Part of [libs/README.md](./README.md)
 > **Independence:** no dependency on UMAS. Depends only on provider SDKs or HTTP.
-> **Build posture: adopt first.** This capability exists in mature packages. This spec is mainly the **requirements and evaluation checklist**; build a wrapper only for the gaps.
+> **Build posture: wrap the provider SDKs.** A thin gateway over the Anthropic, OpenAI and Google Gemini SDKs and a custom endpoint, with no LiteLLM dependency ([ADR-0003](../../docs/decisions/ADR-0003-llm-gateway-wraps-provider-sdks.md)). This spec is the **requirements and acceptance checklist** for that wrapper (section 6).
 
 ---
 
@@ -45,7 +45,11 @@ aliases:
   default:  { primary: {provider: anthropic, model: "<id from config>"},
               fallback: {provider: openai, model: "<id from config>"} }
   planner:  { primary: ..., fallback: null }
+  deep:     { primary: {provider: anthropic, model: "<id from config>"},
+              fallback: {provider: openai, model: "<id from config>"} }
 ```
+
+`deep` is the alias the UMAS specs use for the Architect role (agent-execution, `architect.model`). It is a name, not a vendor: the model behind it is set in this table.
 
 Replacing a provider is an edit to this table, not a code change. **Model IDs are never hard-coded in the library or in the spec.** The current docs pin specific model IDs (for example `claude-3-5-sonnet-20241022`); this is a configuration value that will change.
 
@@ -104,12 +108,12 @@ A token bucket per provider and per alias, with `requests_per_minute` and `token
 
 API keys come from environment variables or a secrets provider, never from files committed to a repo, never logged. Request/response bodies are not logged by default; the usage callback carries counts only. TLS is required for all non-localhost endpoints.
 
-## 6. Adopt-or-Build Evaluation
+## 6. Acceptance checklist for the wrapper
 
-Evaluate candidates (for example LiteLLM, the provider SDKs with a thin wrapper, or an equivalent library; **verify current features, not this spec's assumptions**) against these pass/fail criteria:
+The wrapper is checked against these pass/fail criteria. The owner's decision to wrap the provider SDKs is recorded in [ADR-0003](../../docs/decisions/ADR-0003-llm-gateway-wraps-provider-sdks.md).
 
-| # | Criterion | Required |
-|---|-----------|----------|
+| # | Criterion | Must pass |
+|---|-----------|-----------|
 | 1 | Supports Anthropic, OpenAI, Google Gemini, and a custom HTTP endpoint (for example a local model server) | yes |
 | 2 | Unified tool-calling and streaming | yes |
 | 3 | Per-class retry schedule as in 3.3 (configurable) | yes |
@@ -121,7 +125,7 @@ Evaluate candidates (for example LiteLLM, the provider SDKs with a thin wrapper,
 | 9 | Works without a proxy server process | strongly preferred |
 | 10 | Active maintenance, permissive licence | yes |
 
-If a candidate passes all "yes" rows, adopt it and write only configuration plus a thin adapter for the "no blind loops" rule and the usage callback. If not, build the minimum that fills the failed rows.
+The wrapper must pass every "yes" row. The nice-to-have rows are optional.
 
 ## 7. Failure Modes
 
@@ -162,7 +166,7 @@ Extracted from `TECHNICAL-DESIGN-SPEC.md` §1.3 (providers), `UMAS-TECH-DESIGN-S
 
 | Deviation | Why |
 |-----------|-----|
-| Spec is requirements plus an evaluation, not a design | The source describes providers as configuration only (no gateway design), and this is a commodity capability |
+| Spec is requirements plus an acceptance checklist, not a design | The source describes providers as configuration only (no gateway design), and this is a commodity capability |
 | No hard-coded model IDs | Source pins `claude-3-5-sonnet-20241022` and older models |
 | Mid-stream restart disallowed | Source does not address streaming; silently switching provider mid-output would corrupt it |
 | Explicit "context_overflow" class | Absent in the source; it is a common failure that retry cannot fix |
@@ -170,5 +174,6 @@ Extracted from `TECHNICAL-DESIGN-SPEC.md` §1.3 (providers), `UMAS-TECH-DESIGN-S
 ## 11. Open Questions
 
 1. Are Anthropic, OpenAI and Gemini each reached through their native APIs, or through a compatible endpoint? Native keeps provider features such as prompt caching. A compatible endpoint is simpler to replace.
+   **Partly answered for Gemini (owner, 2026-10-25):** Gemini models run through the Codex CLI harness with a custom endpoint, model and API key (ADR-0002). That path is set in the harness config and bypasses this gateway, as in question 2. If UMAS's own calls need Gemini, the `google-gemini` alias here takes the same endpoint, model and key (`GEMINI_API_KEY`). Whether that endpoint is native or OpenAI-compatible is still to be recorded.
 2. Answered: coding Workers run as external CLI harnesses and bypass this gateway, so it serves only UMAS's own calls (Coordinator, Router, Triage, Patrol, Monitors). Worker usage figures come from the CLIs' reported usage and are best-effort.
 3. Multi-model panels: is a synthesis helper worth including, or does it stay application logic?
