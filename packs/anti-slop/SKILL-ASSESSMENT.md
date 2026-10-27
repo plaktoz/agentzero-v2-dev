@@ -2,6 +2,8 @@
 
 > Date 2026-10-25 · Pack version 0.1.0 · Brief: `docs/brief-pack-skills-2026-10-25.md` · Owner decisions: `docs/tasks-skills-claude-mods-2026-10-25.md`
 
+> **Status: KIV (parked, owner, 2026-10-27).** The pack is built but not accepted. Open: F1 criterion 2 wording (`fixtures/RESULTS.md` still records a fail), the F3 unit test (`outputs/F3.revised.md` holds run 2's text), the F5 rewrite in Python (D4), the independent judge (change 6 below). Nothing here was closed by parking.
+
 ## 1. Verdict
 
 **`skill`.** Enhance the built form. The review is one bounded procedure over one finished text, it needs no orchestrator, and it runs from the folder's files. Overlap with installed skills is partial.

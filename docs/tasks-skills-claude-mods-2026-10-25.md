@@ -42,6 +42,7 @@ Tasks 1 to 3 are independent and run as parallel subagents. Tasks 4 to 6 depend 
   - The script has no cross-platform findings.
 
 ### 3. anti-slop
+- **KIV (parked, owner, 2026-10-27).** No further work on anti-slop for now. This is a park, not an acceptance: the status stays `[-]`, the open items below are unchanged, and the pack is not copied to claude-mods (task 4) while parked. To resume, start from the "Status stays `[-]`" bullet.
 - [-] Built `packs/anti-slop/` (`PACK.md`, `phrases.yaml`, `schema/review-output.json`, `fixtures/F1–F10.yaml`, `config.yaml`, `scripts/lint.py`, `scripts/test_lint.py`, `fixtures/RESULTS.md`, `fixtures/PROVENANCE.md`). **Not done: acceptance not met, four decisions open.** Re-run by me (2026-10-25): `python3 -I -m unittest discover -s scripts` gives 29 tests, 2 failures, matching the subagent's report. `grep` of the pack (excluding `README.md`, the design record, and fixture text) finds no UMAS, vendor or harness wording in `PACK.md`.
   - Fixture results: pass F1, F2, F4, F7, F9, F10; fail F3, F5, F6, F8. Idempotence holds on all ten. All 20 records validate against the schema.
   - Failing tests: criterion 2 (F1 revised text drops the name "AI") and criterion 4 (F3 revised text keeps "at scale", which is in `phrases.yaml`).
@@ -60,7 +61,7 @@ Tasks 1 to 3 are independent and run as parallel subagents. Tasks 4 to 6 depend 
   - The `docs/ANTI-SLOP-EXAMPLES.md` pairs are used as fixture seed. The licence of that text is recorded.
 
 ### 4. Copy to claude-mods
-- [ ] After tasks 1 to 3 pass: copy each pack to `~/Developer/claude-mods/skills/<name>/` (`PACK.md` as `SKILL.md`, plus the side files the skill refers to). Run `scripts/install-skills.sh` in a dry way or read it to confirm the folders are picked up.
+- [ ] After tasks 1 to 3 pass (anti-slop is KIV since 2026-10-27 and is left out until resumed): copy each pack to `~/Developer/claude-mods/skills/<name>/` (`PACK.md` as `SKILL.md`, plus the side files the skill refers to). Run `scripts/install-skills.sh` in a dry way or read it to confirm the folders are picked up.
 - **Acceptance:** each folder has `SKILL.md` with `name` and `description`, and every file path in the body exists. No UMAS wording (`grep -ri umas` is empty).
 
 ### 5. Docs in sync
@@ -76,3 +77,4 @@ Tasks 1 to 3 are independent and run as parallel subagents. Tasks 4 to 6 depend 
 - 2026-10-25: decisions recorded. Next: start tasks 1 to 3 as parallel subagents.
 - 2026-10-25: task 1 (minimalism-ladder) built, tests OK, fixtures run with caveats (see task 1). Tasks 2 and 3 still running in the background.
 - 2026-10-25: F3 re-review done under C4 = B (runs 3 to 5 meet criteria 4 and 5; one sample, model judge). anti-slop stays `[-]`: criterion 2 wording, F5 Python rewrite, D6 and SKILL-ASSESSMENT criterion-2 wording are open. F3 unit test still fails (`outputs/F3.revised.md` is run 2's text).
+- 2026-10-27: owner parked anti-slop (KIV). Status stays `[-]`; no open item was closed. Recorded in `decisions-pending-2026-10-25.md` (D5, D6), `tasks-module-split-and-skills-2026-10-25.md` (P1), `assessments/skills-for-claude-mods.md`, `packs/README.md` and `packs/anti-slop/SKILL-ASSESSMENT.md`.
