@@ -1,6 +1,6 @@
 ---
 name: minimalism-ladder
-description: Minimalism ladder for any change that adds code, files or dependencies. Reads the relevant code, walks six rungs in order (not needed, already in the codebase, standard library or platform, installed dependency, one line, minimum code), stops at the first rung that holds, and emits a record of where it stopped and the evidence. Use when a task asks for code, a file or a dependency to be added, before the first line is written.
+description: Minimalism ladder: reads the relevant code, climbs six rungs from not needed to minimum code, stops at the first rung that holds, and records the rung with its evidence. Use when a task asks for code, a file or a dependency to be added, before the first line is written.
 ---
 
 # Minimalism ladder
