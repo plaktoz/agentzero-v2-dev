@@ -15,7 +15,7 @@
 | [minimalism-ladder](./minimalism-ladder/minimalism-ladder-spec.md) | A six-rung check an agent runs after reading the code and before writing any | Cuts needless code in any coding agent |
 | [anti-slop](./anti-slop/anti-slop-spec.md) | **KIV (parked 2026-10-27).** Built but not accepted; see [docs/tasks-skills-claude-mods-2026-10-25.md](../docs/tasks-skills-claude-mods-2026-10-25.md), task 3. Writing and code rules plus a two-pass review that removes generic AI patterns without touching facts | A review skill for docs and code in any repo |
 | [communication-modes](./communication-modes/communication-modes-spec.md) | **KIV (parked 2026-10-27).** Two registers (compact for agents, plain for humans) with intensity levels. The routing table is removed by owner decision; the spec text still lists it until revised. See [docs/tasks-communication-modes.md](../docs/tasks-communication-modes.md) | Token savings in agent-to-agent text, clarity in human-facing text |
-| [two-axis-review](./two-axis-review/two-axis-review-spec.md) | Independent Standards and Spec review passes, one finding format, severity-based gating | A PR review skill for any team |
+| [two-axis-review](./two-axis-review/two-axis-review-spec.md) | **KIV (parked 2026-10-28).** Replaced by the installed `code-review` skill. Independent Standards and Spec review passes, one finding format, severity-based gating | A PR review skill for any team |
 | [specialist-agents](./specialist-agents/specialist-agents-spec.md) | Prompts and output contracts for Analyst, Product Manager, UX Designer, Architect, Developer | A lightweight planning-to-code pipeline |
 | [router-heuristic](./router-heuristic/router-heuristic-spec.md) | A scoring rubric that sends a request to a direct worker, an architect plus worker, or a full panel | Right-sizing process to task size |
 | [grilling](./grilling/grilling-spec.md) | A bounded questioning protocol that produces an alignment summary before work starts | Requirement clarification for any agent |
@@ -118,7 +118,7 @@ request --> grilling --> alignment summary --+
 ## Suggested Build Order
 
 1. **minimalism-ladder** and **anti-slop**: highest value, smallest, and the others reference them.
-2. **two-axis-review**: needs fixtures from the first two to test the Standards axis.
+2. **two-axis-review**: KIV (parked 2026-10-28); `code-review` replaces it. Needs fixtures from the first two to test the Standards axis.
 3. **test-policy** and **communication-modes**.
 4. **router-heuristic** and **grilling**: both are only useful once there is something to route to.
 5. **specialist-agents**: largest; build the Developer prompt first because it is the one that is always used.
