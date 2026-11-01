@@ -23,7 +23,7 @@
 | [agent-platform](./agent-platform/README.md) | Adapter registry for coding agent harnesses (Claude Code, OpenAI Codex, which also runs Gemini models, Copilot, custom) with work assignment, completion signalling, and cross-platform context transfer | Assigning work to any agent harness and tracking completion without knowing which tool is running |
 | [agent-session](./agent-session/README.md) | Shared lifecycle skeleton for LLM agent sessions: spawn → execute → checkpoint → handoff → done, with STATE.md, token threshold monitoring, and handoff-packet construction | Any multi-agent system where agents must hand off work and successors must resume from a durable state |
 | [task-queue](./task-queue/README.md) | Dependency graph and ready queue with leased claims, a concurrency cap, retry, and parent/child groups, stored in an event log plus snapshot | A local work queue for any set of dependent jobs, with no broker or database |
-| [kc-axi](./kc-axi/README.md) | Run a local Keycloak in Docker or Podman and administer realms, clients and users through an agent-friendly CLI (lean output, fixed exit codes, no secrets printed), on Linux and Windows | Identity-provider set-up and admin for any project or any coding agent |
+| [kc-axi](./kc-axi/README.md) (moved to its own repo, 2026-11-01) | Run a local Keycloak in Docker or Podman and manage one realm as desired state (`plan`, `apply`) from a config file and a users file, with client secrets kept in a local secrets directory with numbered generations, through an agent-friendly CLI (compact output, exit codes 0, 1 and 2 with typed codes, no secrets printed). Linux and macOS first; Windows is out of scope for now | Identity-provider set-up and admin for any project or any coding agent |
 | [metrics-store](./metrics-store/README.md) | Record scalar measurements (tokens, durations, costs, error rates) from multiple processes; queryable by time window and tag; two backends: JSONL ledger (Phase 1–2) and a relational table (Phase 3+) | Budget reporting, cost tracking, or quality trending for any multi-component system with a file-based or SQL backend |
 
 ---
@@ -87,7 +87,7 @@ The language is decided: Python, per [TECHNICAL-DESIGN-SPEC.md Appendix A.4](../
 | Library | Natural fit | Reason |
 |---------|-------------|--------|
 | hook-store, merge-queue | Python | I/O-bound git subprocess work |
-| kc-axi | Python, installed as a package (`pip`, `uv` or `pipx`); an optional frozen single-file build per OS for users without Python | Must run natively on Linux and Windows with no shell, `jq` or `grep`; the source script was Bash |
+| kc-axi | Python, installed as a package (`pip`, `uv` or `pipx`). Package name `kc-axi`; minimum Python version 3.11 (decided 2026-10-27, kc-axi spec section 11 item 26) | Must run with no shell, `jq` or `grep`, so that it can also run on Windows later; the source script was Bash |
 | task-queue | Python | File locking, an append-only log, and graph walks. A queue shared by many processes |
 | event-log, budget-meter | Python | File I/O and arithmetic |
 | test-adapters | Python | Subprocess and report parsing |
@@ -157,7 +157,7 @@ The default view is produced from the same data as `--json`, by an encoder at th
 
 ### Open points for the AXI review
 
-1. Is TOON the default encoding, or plain key-value as in [kc-axi](./kc-axi/README.md) today? [kc-axi](./kc-axi/README.md) also still deviates (stderr errors, exit codes 3 to 7, default limit 3) and is to be revised against these rules.
+1. Is TOON the default encoding? [kc-axi](./kc-axi/README.md) v0.4 uses its own compact list form (uniform arrays with a `shown of total` header) and does not claim TOON. It follows the exit codes 0, 1 and 2, puts errors on stdout and has a default limit of 20. It records one deviation: no `--full` flag (kc-axi section 10).
 2. Exit code 1 for `test-adapters run` when tests fail, versus AXI's reading of 1 as "the tool errored". Kept as 1 here because [merge-queue](./merge-queue/README.md) depends on it.
 3. Whether `reserve` should exit non-zero on `Deferred` for shell callers. Kept at 0 here.
 4. Which agent platforms get the session-start hook (AXI names Claude Code, Codex and OpenCode), and whether to also ship a skill file per lib.
