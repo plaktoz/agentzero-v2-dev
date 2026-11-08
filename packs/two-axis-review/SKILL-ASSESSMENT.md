@@ -2,6 +2,8 @@
 
 Date: 2026-10-25. Pack version 0.1.0. Assessed against `two-axis-review-spec.md` (design record), `~/.claude/skills/code-review/SKILL.md` and `agents/openai.yaml` (installed), and the reading rules in `~/.claude/skills/writing-great-skills/` (SKILL.md and GLOSSARY.md).
 
+> **Status: KIV (parked, owner, 2026-10-28).** Replacement: the installed `code-review` skill (`~/.claude/skills/code-review/SKILL.md`), as it is now. The additions in section 9 are proposed, not applied to `code-review`. No `PACK.md` was built, and nothing here was closed by parking.
+
 ## 1. Verdict
 
 **`duplicate`.** The installed `code-review` skill already runs the Standards and Spec axes as parallel, independent reviews with the same brief structure. The pack adds a finding schema, a severity scale, a gate, a production checklist and a few checks that `code-review` lacks. Those additions belong in `code-review`, not in a second review skill. Two parts of the pack conflict with `code-review`'s design and must not be offered (section 4).

@@ -8,7 +8,7 @@
 | D2 | Recommendation: `default` and `deep` | Renamed `claude-default` and `claude-deep` to `default` and `deep` in the main spec and in the orchestration, agent-execution and budget-and-models specs (14 places) | **`deep` is not defined in `libs/llm-gateway/README.md` section 3.2** (only `default` and `planner`). Add `deep` to the alias table, or choose another name. Not edited: it is a library change |
 | D3 | Recommendation: Markdown only | Nothing to change | None |
 | D4 | Recommendation: rewrite F5 in Python with a declared third-party CSV parser | Nothing yet | Rewrite F5 in `packs/minimalism-ladder/fixtures/`; re-check F1, F5, F6, F7, F8 for TypeScript (grep found it in F1, F5, F8) |
-| D5 | Owner answer: (c), relax criterion 2 | Done: `packs/anti-slop/scripts/lint.py` excuses a name only when it is removed with a fact-free `generic_opening` or `filler` span and appears nowhere else. Tests added in `scripts/test_lint.py` (`FactFreeRemovalTests`). `anti-slop-spec.md` 8.2 criterion 2 updated. Criterion 2 passes on F1 to F4 and F8. Test run: 32 run, 1 failure (criterion 4, F3 "at scale") | Re-review F3 with the reviewer, then re-run the tests. Update `docs/tasks-skills-claude-mods-2026-10-25.md` and `SKILL-ASSESSMENT.md` (still record the old strict-criterion failure). Anti-slop stays `[-]` until F3 passes |
+| D5 | Owner answer: (c), relax criterion 2 | Done: `packs/anti-slop/scripts/lint.py` excuses a name only when it is removed with a fact-free `generic_opening` or `filler` span and appears nowhere else. Tests added in `scripts/test_lint.py` (`FactFreeRemovalTests`). `anti-slop-spec.md` 8.2 criterion 2 updated. Criterion 2 passes on F1 to F4 and F8. Test run: 32 run, 1 failure (criterion 4, F3 "at scale") | Re-review F3 with the reviewer, then re-run the tests. Update `docs/tasks-skills-claude-mods-2026-10-25.md` and `SKILL-ASSESSMENT.md` (still record the old strict-criterion failure). Anti-slop stays `[-]` until F3 passes. **KIV (parked, owner, 2026-10-27): these follow-ups wait until anti-slop is resumed** |
 | D6 | Recommendations for all eight packs (table above) | Nothing yet | Per pack, in the order listed in the table |
 | D7 | Recommendation: write the owner answer into A.5.9 Q7 and A.5.4.1 | A.5.9 Q7 now reads "Decided (owner, 2026-10-25): the Project Owner of that project, or the Admin if the project has none." A.5.4.1 says "decided (A.5.9, question 7)". Intro item 1 says both are decided | Monitoring and verification Open lists still say "awaits confirmation": revision pass |
 | D8 | A: refuse with `audit_unavailable` | Decision recorded here | access-control revision: refusal rule, error code, Figure 1 audit branch |
@@ -65,6 +65,8 @@ The `ste-docs` skill writes an `.html` beside each `.md`. Every lib and pack spe
 
 ## D5. anti-slop: fixtures F1, F3, F8 fail (pack stays `[-]`)
 
+**KIV (parked, owner, 2026-10-27).** Anti-slop is set aside. Nothing below was resolved by this; the section is kept as the record for when work resumes.
+
 `python3 -I -m unittest discover -s scripts`: 29 tests, 2 failures.
 - **F1, criterion 2.** The reviewer removes a sentence that had no fact, and the name "AI" disappears with it. You decided on 2026-10-25 to keep the criterion as written, so F1 fails.
 - **F3, criterion 4.** The saved reviewer output predates your rule-3 change and still keeps "at scale". Re-reviewing F3 should pass it. This needs no decision, only a re-run.
@@ -79,9 +81,9 @@ The `ste-docs` skill writes an `.html` beside each `.md`. Every lib and pack spe
 |---|---|---|
 | minimalism-ladder | skill | Install as a skill (after D4). |
 | test-policy | skill | Install the whole folder with `PACK.md` renamed `SKILL.md`, so the pre-filter script and schema resolve. Keep strict-mode wording "exists before the change or is added with it". |
-| anti-slop | skill | Blocked on D5. |
+| anti-slop | skill | Blocked on D5. **KIV (parked, owner, 2026-10-27).** |
 | router-heuristic | skill (earlier `needs engine` withdrawn) | Install as a skill. Do not build a scorer script yet. Decide whether a pure data migration routes `large` (spec open question 2; F7 routes `medium` today). |
-| two-axis-review | duplicate of `code-review` | Fold the per-axis additions into `code-review`; drop the cross-axis merge and overall gate (they conflict). Mark the pack "folded into code-review". |
+| two-axis-review | duplicate of `code-review` | **KIV (parked, owner, 2026-10-28): `code-review` is the replacement.** Fold the per-axis additions into `code-review` (not yet done); drop the cross-axis merge and overall gate (they conflict). Mark the pack "folded into code-review". |
 | grilling | duplicate | Offer the summary and the cap as additions to the installed `grilling`. Keep the "precise request" skip for an automatic variant only. |
 | communication-modes | behaviour | Home is `behaviors/communication-modes/` in claude-mods. Six blockers must be settled first (audience vs doc type, handoff routing, intensity levels, anti_slop dependency, protected content list, `routing.yaml`). |
 | specialist-agents | agents | Build `agents/<role>.md` per role. Four decisions in its assessment (sequence and skip rules stay as Coordinator data; ladder and test rules passed as text; add `needs`/`skipped` to output schemas, which changes spec 4.2; Developer does not commit, which conflicts with `implement`). |

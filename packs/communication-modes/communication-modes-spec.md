@@ -3,6 +3,8 @@
 > Standalone content-pack spec · Draft v0.1 · Part of [packs/README.md](../README.md)
 > **Independence:** no dependency on UMAS. Two output registers, an intensity scale, and a routing table by document type.
 > `pack_version: 0.1.0`
+>
+> **Status: KIV (parked 2026-10-27).** The requirement for a reader gate is closed: routing by document type or audience is removed from this pack. Sections 4.1, 5.5, 6 and 9 and the routing fixtures F5 to F7 below still describe the old gate and are superseded by the decision. The revision is not done. Do not build from this text until it is. Decision, accepted risks and tasks: [docs/tasks-communication-modes.md](../../docs/tasks-communication-modes.md).
 
 ---
 

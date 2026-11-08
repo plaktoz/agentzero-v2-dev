@@ -1,6 +1,7 @@
 # ─── UMAS workspace ──────────────────────────────────────────────────────────
 .umas/worktrees/
 .umas/token-cache
+.agents/skills/
 *.db
 *.db-shm
 *.db-wal

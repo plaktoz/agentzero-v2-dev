@@ -2,6 +2,8 @@
 
 Assessed 2026-10-25 under `docs/brief-pack-skills-2026-10-25.md`. Spec read: `communication-modes-spec.md` (Draft v0.1, `pack_version: 0.1.0`). No `PACK.md` is built, because the verdict is not `skill`.
 
+> **Status: KIV (parked 2026-10-27).** The owner removed the reader gate (routing by document type or audience). Blockers 1, 2 and 4 in section 5 no longer apply, because they come from the routing table. Blockers 3 and 5 to 8 stay open until the spec is revised. This assessment is superseded when task T4 in [docs/tasks-communication-modes.md](../../docs/tasks-communication-modes.md) is done. The verdict and the decisions in section 9 (b), (c) and (d) were written for the gate and should not be acted on.
+
 ## 1. Verdict
 
 **behaviour.** The two registers (5.1, 5.2), the intensity levels (5.3), the protected-content rule (5.4) and the routing table (5.5) govern text an agent writes while it works. They apply to every status, log and handoff with no one invoking them. That is a standing rule. The one invocable task the spec implies, rewriting existing text into a register, is narrow (section 2).

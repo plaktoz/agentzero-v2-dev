@@ -114,6 +114,7 @@ Changes are to `PACK.md` only. The rules, the prompt, the shortcut format, the l
 3. **Added "Steps".** Six steps, each with a completion criterion. Each step points to an existing section and does not repeat it.
 4. **Output sentence.** Changed "report the rung and evidence in your answer" to "state in your answer the rung, its `rung_name` and each `evidence` entry, then emit this JSON object". The old text did not say that the answer and the JSON must agree.
 5. **Example record.** Changed the example `evidence` path from `src/forms/booking.tsx` to `path/to/module.ext`. The old path is not in the pack and is a project path.
+6. **Front matter `description` (second pass, 2026-10-27).** Opened with "Minimalism ladder:" in place of "Minimalism ladder for any change that adds code, files or dependencies.", which the trigger sentence now covers. Shortened the rung list to "from not needed to minimum code" and the output to "records the rung with its evidence", so the description says what the skill does. Kept the trigger sentence "Use when a task asks for code, a file or a dependency to be added, before the first line is written." The description had no vendor, UMAS, slash-command or percentage wording before or after.
 
 ## 8. Checks run
 
