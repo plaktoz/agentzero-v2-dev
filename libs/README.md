@@ -1,6 +1,6 @@
 # Standalone Libraries
 
-> Fourteen independent, reusable libraries. Each can be built, versioned, tested, and consumed by any project. None requires the others as imports — composition is the consuming application's job.
+> Thirteen independent, reusable libraries: twelve specified in this folder and [test-adapters](https://github.com/plaktoz/test-adapters) in its own repository. The table also lists kc-axi, a Keycloak set-up tool that moved to its own repository; UMAS does not use it at run time, so it is not counted. Each can be built, versioned, tested, and consumed by any project. None requires the others as imports — composition is the consuming application's job.
 >
 > **Status:** Draft v0.1 · **Date:** October 19, 2026
 > **Used by:** [UMAS](../umas/TECHNICAL-DESIGN-SUMMARY.md) and any project that needs these capabilities independently.
@@ -157,7 +157,7 @@ The default view is produced from the same data as `--json`, by an encoder at th
 
 1. Is TOON the default encoding? [kc-axi](./kc-axi/README.md) v0.4 uses its own compact list form (uniform arrays with a `shown of total` header) and does not claim TOON. It follows the exit codes 0, 1 and 2, puts errors on stdout and has a default limit of 20. It records one deviation: no `--full` flag (kc-axi section 10).
 2. Removed.
-3. Removed (ADR-0005): the question of whether `reserve` should exit non-zero on `Deferred`. There is no `reserve` command.
+3. Removed.
 4. Which agent platforms get the session-start hook (AXI names Claude Code, Codex and OpenCode), and whether to also ship a skill file per lib.
 5. A shared Python package for the encoder and the flag rules, or each lib carrying its own copy. A shared package would be a dependency between libraries (rule 2), so the likely answer is a copy per lib, or a separate tiny library.
 6. Whether the medium-fit libs adopt the same rules.

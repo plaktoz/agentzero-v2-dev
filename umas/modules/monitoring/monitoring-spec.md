@@ -29,9 +29,9 @@ Tier 3 — System Patrol (Python, always running)
 |-----------|-----------|--------|
 | No `STATE.md` commit | > 10 min | Agent may be stuck → nudge |
 | No heartbeat | > 5 min | Agent likely crashed → graceful handoff |
-| Context-window usage without handoff request | > 95% | Emergency handoff from last checkpoint |
+| Context-window usage without handoff request, in-process sessions only | >= 95% of `context_limit` | Append a `monitor_escalation` event, which the Coordinator reads and answers with the emergency handoff from the last checkpoint |
 
-Recovery order: Nudge → Graceful handoff → Emergency handoff
+Recovery order: Nudge → Graceful handoff → Emergency handoff. The Monitor does not send the emergency handoff. It appends a `monitor_escalation` event, and the Coordinator sends it. The event does not change bundle state (Open 26). CLI Workers have no `context_tokens` (agent-execution Open 6), so the 95 % rule does not apply to them. For a CLI Worker the Monitor relies on the time and checkpoint limits.
 
 > Standalone spec: [libs/watchdog.md](../../../libs/watchdog/README.md)
 
@@ -39,7 +39,7 @@ Recovery order: Nudge → Graceful handoff → Emergency handoff
 
 ## Detailed design
 
-Tags: **[S]** means from source. The tag cites the snapshot section or the lib README section. **[P]** means proposed: this spec's reading, not a decision. Items in section 9 are **Open**. The Mermaid block is checked by reading only. No Mermaid renderer ran.
+Tags: **[S]** means from source. The tag cites the snapshot section or the lib README section. **[P]** means proposed: this spec's reading, not a decision. Items in section 9 are **Open** unless marked decided. The Mermaid block is checked by reading only. No Mermaid renderer ran.
 
 Lib action names (`nudge`, `terminate`, `restart`, `escalate`) keep the lib's wording in code font.
 
@@ -59,7 +59,7 @@ Happy path, one monitoring cycle:
 3. Triage checks System Patrol. [S §5.5]
 4. System Patrol polls every Project Monitor and the Merge Queue Processor. [S §5.5]
 5. Each Project Monitor polls its project every 60 seconds. [S §5.5]
-6. For each worker, the Project Monitor reads the last `STATE.md` commit, the heartbeat and context-window usage. [S §5.5; heartbeat source is Open 1]
+6. For each worker, the Project Monitor reads the last `STATE.md` commit and the heartbeat. For an in-process session it also reads `context_tokens` and `context_limit` from the session row. CLI Workers have neither (agent-execution Open 6). [S §5.5; heartbeat source is Open 1]
 7. The Project Monitor applies the three heuristics. Each heuristic maps to one recovery action. [S §5.5]
 8. A worker that passes all three checks needs no action.
 9. System Patrol dispatches maintenance workers for each issue. [S §5.5; Open 9]
@@ -91,8 +91,8 @@ flowchart TD
     Q1 -- "yes" --> A1["Nudge worker"]
     S5 --> Q2{"No heartbeat for more than 5 minutes?"}
     Q2 -- "yes" --> A2["Graceful handoff from last checkpoint"]
-    S5 --> Q3{"Context usage above 95 percent without handoff request?"}
-    Q3 -- "yes" --> A3["Emergency handoff from last checkpoint"]
+    S5 --> Q3{"In-process session at or above 95 percent of context_limit, without handoff request?"}
+    Q3 -- "yes" --> A3["Escalate to Coordinator, which sends emergency handoff from last checkpoint"]
     S2 -- "no" --> U1["Unresponsive ladder: stop process, restart"]
     U1 --> U2{"Restarts exceed max_restarts within window?"}
     U2 -- "no" --> S1
@@ -108,8 +108,9 @@ flowchart TD
 | Heartbeat file [S watchdog §3.2] | out (worker or Triage writes), in (Daemon reads) | File, written by atomic rename | `v: int`, `name: str`, `pid: int`, `ts: str`, `seq: int`, `status: ok\|busy\|degraded`, `note: str` | [watchdog](../../../libs/watchdog/README.md) (format); this module (path). Direction is Open 3. |
 | `[checkpoint]` commit [S agent-session §5.2] | in | Git commit | `[checkpoint] <agent_id> step <N>: <summary> [tokens: N]`. Prefix is configurable. | [agent-execution](../agent-execution/agent-execution-spec.md). Prefix is Open 2. |
 | `STATE.md` commit [S §5.1] | in | Git commit | `[umas] <agent-id> <step-summary> [tokens: N]` | [context-persistence](../context-persistence/context-persistence-spec.md) |
-| Session row [S §4 Agent Sessions] | out (Project Monitor), in (`umas watch`) | API over the relational store | `status`, `last_heartbeat`, `paused_at` | [interfaces](../interfaces/interfaces-spec.md) (API). Writer is Open 8. |
+| Session row [S §4 Agent Sessions] | out (Project Monitor), in (`umas watch`) | API over the relational store | `status`, `last_heartbeat`, `paused_at`, `context_tokens`, `context_limit`. `context_tokens` is absent for CLI Workers. | [interfaces](../interfaces/interfaces-spec.md) (API). Writer is Open 8. |
 | `escalate` event [S §5.2, §5.3] | out | Event in `events.jsonl` [S event-log §9] | `append(type="escalate", source, data={severity, reason})`. `severity` is `P0` to `P3`. | [event-log](../../../libs/event-log/README.md). Read by [orchestration](../orchestration/orchestration-spec.md). |
+| `monitor_escalation` event (Open 26) | out | Event in `events.jsonl` | `append(type="monitor_escalation", source, data={session_id, task_id, context_used, context_limit})`. Written only for the 95 % rule. | [event-log](../../../libs/event-log/README.md). Read by the Coordinator. Not read by the bundle state table. |
 | Node events [S watchdog §4] | out | Callback (`on_event`) | `node_state_changed`, `ladder_action`, `restarted`, `crash_loop`, `escalate`, `boot_stale` | [watchdog](../../../libs/watchdog/README.md) |
 | Nudge and stop signals [S watchdog §3.5] | out | File `<name>.nudge` or `<name>.stop`, or signal | No payload | This module [P] |
 | Pause signal [S agent-session §5.6] | out | File `<hook-path>/.pause` | `v: 1`, `reason: "machine_shutdown"`, `ts: str`, `grace_seconds: 30` | This module writes it. [agent-execution](../agent-execution/agent-execution-spec.md) reads it. |
@@ -118,7 +119,6 @@ flowchart TD
 | Model call for Triage [S A.4.8] | out | Function call | `complete(request) -> Response` [S llm-gateway §4] | [llm-gateway](../../../libs/llm-gateway/README.md) |
 | Error record [S error-classifier §3.3] | out | Record wrapping an `escalate` event | `code`, `severity`, `recoverability`, `message`, `context` | [error-classifier](../../../libs/error-classifier/README.md) |
 | `umas status`, `umas health-check`, `umas watch`, `umas agents reconcile` [S §7] | in (request), out (result) | CLI | Not defined in the snapshot | [interfaces](../interfaces/interfaces-spec.md) |
-| Budget threshold event | Removed (ADR-0005) | | | |
 | Dashboard read [S ADR-0001; §7] | out (page reads REST) | REST `GET /api/v1/agents`, `GET /api/v1/metrics/*` | No monitor or node endpoint exists. See Open 14. | [interfaces](../interfaces/interfaces-spec.md) |
 
 ### 4. Parameters
@@ -135,7 +135,7 @@ flowchart TD
 | Project Monitor poll | duration | 60 seconds [S §5.5] | Snapshot, fixed | Interval between checks of each worker |
 | Stalled threshold | duration | 10 minutes without a `STATE.md` commit [S §5.5] | Snapshot, fixed | Starts nudge |
 | Unresponsive threshold | duration | 5 minutes without a heartbeat [S §5.5] | Snapshot, fixed | Starts graceful handoff |
-| Emergency threshold | percent | 95 percent [S §5.5]. Comparison is Open 18. | Agent-session config `emergency_threshold: 0.95`, a fraction of `context_limit` [S agent-session §6]. | Starts emergency handoff |
+| Emergency threshold | percent | 95 percent [S §5.5]. Comparison is `>=` (Open 18, decided). | Agent-session config `emergency_threshold: 0.95`, a fraction of `context_limit` [S agent-session §6]. | Starts emergency handoff |
 | Checkpoint prefix | string | `[checkpoint]` [S agent-session §6]. Snapshot uses `[umas:checkpoint]` (§5.3, §6.17). | Agent-session config `commit_prefixes.checkpoint` | Which commits count as checkpoints. Open 2. |
 | Pause signal file | string | `.pause` [S agent-session §6] | Agent-session config `pause_signal_file` | Name of the pause file under the hook path |
 | Shutdown grace | duration | 30 seconds [S agent-session §6; §6.17] | Agent-session config `shutdown_grace_seconds` | Time workers have to finish a step |
@@ -180,7 +180,7 @@ The Daemon and the Watchdog daemon run as service accounts. Service accounts use
 | [context-persistence](../context-persistence/context-persistence-spec.md) | Reads `STATE.md` commits and `PAUSE.md` files. Emits the `boot_recovery` summary event [S §6.17, step 5]. | Git commits, files, event | Async |
 | [agent-execution](../agent-execution/agent-execution-spec.md) | Writes `.pause`, nudge and stop files. Reads the worker heartbeat and checkpoint commits. Workers poll `.pause` at each step boundary [S agent-session §5.6]. | Files, git commits | Async |
 | [verification](../verification/verification-spec.md) | Reads merge queue state. The Patrol polls the Merge Queue Processor [S §5.5]. | CLI `merge-queue status --json` [S merge-queue §4] | Sync read |
-| [models-and-usage](../models-and-usage/models-and-usage-spec.md) (was budget-and-models) | Removed (ADR-0005) | | |
+| [models-and-usage](../models-and-usage/models-and-usage-spec.md) | Reads `context_limit` from the session row (its value comes from `context_windows.<alias>`). Reads `handoff_request` events to see whether a handoff is already under way. | Session row; `events.jsonl` | Async |
 | [interfaces](../interfaces/interfaces-spec.md) | Serves `umas status`, `umas health-check`, `umas watch` and `umas agents reconcile` [S §7, §6.15]. The dashboard reads the REST API [S ADR-0001]. | CLI and REST | Sync for reads |
 | [access-control](../access-control/access-control-spec.md) | Each Monitor action passes the API permission check [S A.5.7]. The check for watchdog actions is [P]. | API middleware | Sync |
 | [exception-flows](../exception-flows/exception-flows-spec.md) | Detects the conditions in §6.2, §6.7, §6.13, §6.15, §6.16 and §6.17. Section 6 defines each response [S §6]. | Events and callbacks | Async |
@@ -213,13 +213,12 @@ No pack is used. [P] The snapshot names no pack for this module.
 | Crash loop | Library stops restarting. Emits `crash_loop` and `escalate`. | [S watchdog §5.2, §7] |
 | Start command fails at once | Counts toward the crash-loop window. | [S watchdog §7] |
 | Clock jump | One false `unresponsive`. The `seq` counter detects it. | [S watchdog §7] |
-| Token budget exhausted | Removed (ADR-0005) | |
 | Heartbeat file unreadable or partial | Treated as no change. | [S watchdog §7] |
 | Session in `machine_paused` or `auth_expired` | Not a failure. Never promoted to `crashed`. | [S agent-session §3.2] |
 
 ### 9. Open
 
-Each item is **Open**. Each recommendation is [P]. The owner decides each item.
+Each item is **Open** unless marked decided. Each recommendation is [P]. The owner decides each open item.
 
 1. **Open.** Worker heartbeat source. The snapshot uses "heartbeat" for two signals: the `[checkpoint]` commit [S agent-session §5.2] and the heartbeat file [S watchdog §3.2]. Decide which drives "no heartbeat for more than 5 minutes". Recommendation [P]: checkpoint commits for workers, heartbeat file for Triage and the Daemon.
 2. **Open.** Checkpoint commit prefix. Snapshot uses `[umas:checkpoint]` [S §5.3, §6.17] and `[umas] <agent-id>` [S §5.1]. Agent-session uses `[checkpoint]` [S agent-session §5.2]. Decide one prefix. Recommendation [P]: agent-session default, set in config, and update the snapshot.
@@ -238,7 +237,7 @@ Each item is **Open**. Each recommendation is [P]. The owner decides each item.
 15. **Open.** Owner of the disk check. §6.16 gives thresholds but no owner [S §6.16]. Decide the owner. Recommendation [P]: the Daemon checks free space on each tick.
 16. **Open.** Heartbeat and state folder. The lib example uses `.run/` [S watchdog §6]. UMAS uses `~/.umas/` [S §6.17]. Decide the folder. Recommendation [P]: `.umas/run/`.
 17. **Open.** Severity for a worker that exhausts its ladder. A.5.5 gives P0 only to the Watchdog daemon [S A.5.5]. Decide the severity for workers. Recommendation [P]: P1.
-18. **Open.** Threshold comparison. Snapshot says "> 95%" [S §5.5]. Agent-session hands off when `context_tokens >= emergency_threshold * context_limit`. Decide "above" or "at or above". Recommendation [P]: at or above 95 percent.
+18. **Decided (owner, 2026-11-09).** Threshold comparison is at or above. The snapshot's "> 95%" [S §5.5] becomes `>=`, the comparison agent-session uses for `context_tokens >= emergency_threshold * context_limit`. The rule covers in-process sessions only (M2).
 19. **Open.** Windows support. Process groups and signals differ [S watchdog §11, item 1]. Decide whether Windows is in scope for the first release. A.4.6 names a Windows service [S A.4.6]. Recommendation [P]: decide with the Phase 3 scope.
 20. **Open.** Human-visible status file. CLI `status` must work when the watchdog is down [S watchdog §11, item 3]. Decide the path and format. Recommendation [P]: the Daemon writes `~/.umas/status.json` on each tick.
 21. **Open.** JSON-RPC surface. The snapshot names it [S §2; A.7, item 5] but does not specify it. Decide it with interfaces. Recommendation [P]: specify the methods that monitoring uses in the interfaces spec.
@@ -246,6 +245,7 @@ Each item is **Open**. Each recommendation is [P]. The owner decides each item.
 23. **Open.** Dashboard phase. §12 places the minimal HTML dashboard in Phase 3 [S §12]. A.7 item 5 says the Phase 2 placement is undecided [S A.7, item 5]. Decide the phase. Recommendation [P]: Phase 3, as §12 shows.
 24. **Open.** Escalation metric names. `metrics-store` counts `error.p0_count` and `error.p1_count` from `error-classifier` [S metrics-store §4; A.7, item 6]. Decide whether this module's escalations feed those names. Recommendation [P]: check against A.7 item 6 before build.
 25. **Open.** AXI decisions for watchdog. See the AXI support section, items 1, 2, 4 and 6.
+26. **Decided (owner, 2026-11-09, Option A).** The Monitor's escalation is a separate `monitor_escalation` event with `data={session_id, task_id, context_used, context_limit}`. The Coordinator reads it and sends the emergency handoff. It does not change bundle state, so orchestration's state table (`MONITORING` → `ESCALATED` on `escalate` only) is unchanged. Still open, outside this decision: (a) the alert path when the Coordinator or the handoff fails; (b) the naming of `escalate` and `session_escalated` (Open 24 and exception-flows Open 4).
 
 ## AXI support
 

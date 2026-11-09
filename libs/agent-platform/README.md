@@ -25,7 +25,7 @@ Abstract the differences between coding agent harnesses — the tools that actua
 - Spawning OS processes or managing agent lifecycle. The harness decides how it runs; this library only defines what it reads and writes.
 - Routing or selection logic (which platform to use for which task). That belongs to [packs/router-heuristic](../../packs/router-heuristic/router-heuristic-spec.md) and the consuming application.
 - Authentication or secrets management. Credentials are passed in by the caller; never stored by this library.
-- Metrics or alerting. Usage figures are returned in the completion signal; the caller forwards model and token totals to [token-ledger](../token-ledger/README.md).
+- Metrics or alerting. Usage figures are returned in the completion signal; the launcher forwards the model and the token total to [token-ledger](../token-ledger/README.md).
 
 ## 3. Concepts and Data Model
 
@@ -93,6 +93,10 @@ CompletionSignal:
   reason:         string?         # for non-done outcomes
   completed_at:   string
 ```
+
+`token_usage` uses the same meanings as [llm-gateway](../llm-gateway/README.md) section 3.1: `input` is uncached input, `output` is output, `cached` is cached input read. The **total** for the ledger is `input + output`; `cached` is excluded. `null` when the harness reports no usage, and then nothing is recorded.
+
+`model` is not in the signal. The launcher supplies the model name it resolved from its alias table for this run, and records it with the total.
 
 `read_signal(config) -> CompletionSignal | None`
 

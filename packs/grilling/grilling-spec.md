@@ -139,7 +139,7 @@ The consumer shows the summary and records the person's confirmation. Work start
 
 ### 5.6 Style
 
-Questions are plain language, concrete, and answerable in a sentence or by choosing between listed options. No leading questions that assume a solution. Apply [anti-slop](../anti-slop/anti-slop-spec.md) wording rules.
+Questions are plain language, concrete, and answerable in a sentence or by choosing between listed options. No leading questions that assume a solution. Apply [anti-slop](https://github.com/plaktoz/agent-garage) wording rules.
 
 ## 6. Configuration
 

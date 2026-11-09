@@ -1,4 +1,4 @@
-# ADR-0005: Track token usage only; no budgets, no pause
+# ADR-0005: Track token usage only; no budgets, no usage pause
 
 > **Status:** Decided (owner, 2026-11-09) · **Closes:** D14, D17, D18, D19, D22, D22a and C2 in [decisions-pending-2026-10-25.md](../decisions-pending-2026-10-25.md)
 
@@ -11,10 +11,10 @@ UMAS records how many tokens each model call used, which model, and when. It doe
 **Recorded per call** (one JSON line in the token ledger):
 
 ```json
-{ "v": 1, "ts": "2026-11-09T07:00:00Z", "model": "default", "tokens": 4120 }
+{ "v": 1, "ts": "2026-11-09T07:00:00Z", "model": "opus", "tokens": 4120 }
 ```
 
-- `ts` is RFC 3339 UTC. `model` is the llm-gateway alias, or the model name a harness reports. `tokens` is the total the provider reports for the call (input plus output, as one number).
+- `ts` is RFC 3339 UTC. `model` is the LLM model name, for example `opus`, `sol` or `luna`. It is never the llm-gateway alias. See the amendment of 2026-11-09. `tokens` is the total the provider reports for the call (input plus output, as one number).
 - Nothing else is recorded: no actor, project, task, cost, or input/output split.
 - A harness that reports no usage produces no line. The ledger never estimates.
 
@@ -33,6 +33,7 @@ UMAS records how many tokens each model call used, which model, and when. It doe
 
 - Context-window handoff in `agent-session` (`context_limit`, `handoff_threshold`, `emergency_threshold`). It protects a session from overflowing its model's window. It is not a spend limit and does not pause work.
 - Provider rate limiting and failover in `llm-gateway`.
+- The machine-shutdown pause (`.pause`, `PAUSE.md`, the `machine_paused` status). It is not about usage and is not removed.
 - The concurrency cap in `task-queue`, and stall supervision in `watchdog`.
 - `umas metrics tokens`, answered from `metrics-store` rows `token.used`, grouped by `model`.
 
@@ -80,3 +81,12 @@ Keep each document's section numbers stable where a section is removed: put a on
 | Keep budgets but never pause | Owner asked to remove the requirements, and a budget with no action is a number nobody reads |
 | Keep a cost field | Owner listed the three fields to track |
 | Keep the library name | `budget-meter` would describe something it no longer does |
+
+## Amendment (2026-11-09)
+
+Made after caller assessment round 1 ([report](../assessments/caller-assessment-token-usage-2026-11-09.md)). The amendment overrides the text above where they differ.
+
+- **`model` is the LLM model name**, for example `opus`, `sol` or `luna`. It is never the llm-gateway alias (`default`, `deep`). On failover it is the model that answered the call. For a harness run it is the model the launcher resolved from the alias table.
+- **Title.** "Track token usage only; no budgets, no usage pause". Only the usage pause is removed. The machine-shutdown pause is kept (see "Kept").
+- **No tombstones.** Budget references in other documents are deleted, not marked "Removed (ADR-0005)". This ADR is the only record of what was removed.
+- **One handoff event.** `handoff_request` is the handoff event, with payload `{ session_id, task_id, reason, context_used, context_limit, packet }`. `compression_level` is removed.

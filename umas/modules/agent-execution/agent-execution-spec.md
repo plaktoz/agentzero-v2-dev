@@ -2,7 +2,7 @@
 
 > Part of the UMAS technical design. Main spec: [TECHNICAL-DESIGN-SPEC.md](../../TECHNICAL-DESIGN-SPEC.md) · Module map: [module map](../../TECHNICAL-DESIGN-SPEC.md#5-component-design)
 > **Owns:** the Worker signalling protocol and the Specialized Agent roles. The Worker launch path is proposed here (Open 1).
-> **Uses:** [agent-platform](../../../libs/agent-platform/README.md), [agent-session](../../../libs/agent-session/README.md), [minimalism-ladder](../../../packs/minimalism-ladder/minimalism-ladder-spec.md), [specialist-agents](../../../packs/specialist-agents/specialist-agents-spec.md)
+> **Uses:** [agent-platform](../../../libs/agent-platform/README.md), [agent-session](../../../libs/agent-session/README.md), [minimalism-ladder](https://github.com/plaktoz/agent-garage), [specialist-agents](../../../packs/specialist-agents/specialist-agents-spec.md)
 > **Depends on modules:** [orchestration](../orchestration/orchestration-spec.md), [context-persistence](../context-persistence/context-persistence-spec.md), [monitoring](../monitoring/monitoring-spec.md)
 
 ---
@@ -35,7 +35,7 @@
 5. Can it be one readable line?
 6. Otherwise: minimum code that works
 
-> Standalone spec: [packs/minimalism-ladder.md](../../../packs/minimalism-ladder/minimalism-ladder-spec.md)
+> Standalone skill: [agent-garage](https://github.com/plaktoz/agent-garage) (`skills/minimalism-ladder`). The source pack was removed; see git history at 44c1ef6.
 
 **Shortcut comments:** Agents may leave `// SHORTCUT: <what> — <when to fix>` to mark a deliberate deferral. Must be tracked in the project's debt ledger. All other comments require justifying "why" code exists.
 
@@ -75,7 +75,7 @@ This part is new. It is written from the sources named in each claim. It does no
 
 Each claim carries one tag:
 
-- `[S: …]` names the source. Keys: `main` is the main spec, `ap` is [agent-platform](../../../libs/agent-platform/README.md), `as` is [agent-session](../../../libs/agent-session/README.md), `lg` is [llm-gateway](../../../libs/llm-gateway/README.md), `ms` is the [minimalism-ladder](../../../packs/minimalism-ladder/minimalism-ladder-spec.md) pack, `sa` is the [specialist-agents](../../../packs/specialist-agents/specialist-agents-spec.md) pack.
+- `[S: …]` names the source. Keys: `main` is the main spec, `ap` is [agent-platform](../../../libs/agent-platform/README.md), `as` is [agent-session](../../../libs/agent-session/README.md), `lg` is [llm-gateway](../../../libs/llm-gateway/README.md), `ms` is the [minimalism-ladder](https://github.com/plaktoz/agent-garage) pack, `sa` is the [specialist-agents](../../../packs/specialist-agents/specialist-agents-spec.md) pack.
 - `[P]` marks a proposed claim. Proposed claims that need an owner decision appear in section 9.
 
 ### 1. Purpose and boundary
@@ -165,13 +165,13 @@ Figure 1. Coding Worker flow: happy path, blocked path and crash path. The diagr
 | Checkpoint commit | out (Worker to hook branch) | git commit message `[umas:checkpoint] <summary>` | `summary` text | this module | main 5.3 |
 | Done commit | out (Worker to hook branch) | git commit message `[umas:done] <task-id>` | `task-id` | this module | main 5.3 |
 | Escalate event | out (Worker to events log) | append to `events.jsonl` | Snapshot fields: `event` = `escalate`, `severity` (P1 in the snapshot), `reason`. Envelope fields from event-log: `v`, `id`, `ts`, `type`, `source`, `scope`, `data`. The two do not match (Open 4). | this module (payload); event-log (envelope) | main 5.3; el 3 |
-| Handoff request | out (Worker to events log) | append to `events.jsonl` | Snapshot names `handoff_request`. Fields in the reference code: `reason`, `token_usage`, `context_limit`, `task_id`. Name and fields do not match agent-session (Open 4). | this module | main 5.3; as 12.1 (reference) |
+| Handoff request | out (Worker to events log) | append to `events.jsonl`, type `handoff_request` | `{ session_id, task_id, reason, context_used, context_limit, packet }`. `reason` is `context_graceful` or `context_emergency`. Context fields are in tokens. A CLI Worker has no `context_tokens` (Open 6). | this module (payload per [models-and-usage](../models-and-usage/models-and-usage-spec.md)) | main 5.3; owner decision D-3 (2026-11-09) |
 | Context pack | out and in | function calls `pack_context` and `unpack_context` | ContextPack: `schema_version`, `source_platform`, `target_platform`, `assignment_id`, `task_summary`, `decisions[]`, `artefact_paths[]`, `hook_path?`, `packed_at`, `checksum` | agent-platform | ap 3.5, 5.4 |
 | Hook worktree | in (from orchestration) | function call `create(name, base_branch, owner, task?)` | HookInfo | hook-store (called by orchestration) | hs 4 |
 | Spawn request | in | CLI `umas agents spawn --task <id>`; REST `POST /api/v1/agents` | `--task <id>`. The REST body is not specified. | interfaces | main 7 |
 | Pause signal | in (to agents) | file `<hook-path>/.pause` | `{ "v": 1, "reason": "machine_shutdown", "ts": "<RFC 3339>", "grace_seconds": 30 }` | agent-session (format); daemon (writes) | as 5.6 |
 | Pause record | out | file `PAUSE.md` in the worktree root | STATE fields plus `paused_reason`, `paused_at` | agent-session | as 5.6 |
-| Token usage | out (launcher to token-ledger) | function call `record(model, tokens, ts?)`. Source: the harness's reported total tokens and model (CompletionSignal `token_usage?`). Format per CLI not specified (Open 6). | `{ts, model, tokens}`. If the harness reports none, nothing is recorded and nothing is estimated. `[P]` | token-ledger | ADR-0005; token-ledger 4 |
+| Token usage | out (launcher to token-ledger) | function call `record(model, tokens, ts?)` | `model`: the LLM model name the launcher resolved from the alias table for the Worker's alias (`agents.worker.model`), for example `opus`. Never the alias itself. `tokens`: the harness `input + output` from CompletionSignal `token_usage?`, cached tokens excluded. Which CLIs report usage is Open 6. If the harness reports none, nothing is recorded and nothing is estimated. A crash between a run and `record` can lose that run's line (section 8). | token-ledger | ADR-0005; token-ledger 4; owner decisions B2, D-1 (2026-11-09) |
 | Ladder record | out | structured output of the Developer role | `rung`, `rung_name`, `evidence` (required for rungs 1 to 4), `notes` | minimalism-ladder pack | ms 4.2, 5 |
 | Specialist output | out | structured output of each role | Fields per role in `sa` 4.2, plus `role`, `pack_version`, `based_on` | specialist-agents pack | sa 4.2 |
 
@@ -188,7 +188,7 @@ Figure 1. Coding Worker flow: happy path, blocked path and crash path. The diagr
 | `pause_signal_file` | path | `.pause` | agent-session config | Pause file, relative to the hook path, polled at each step boundary. `[S: as 6]` |
 | `shutdown_grace_seconds` | seconds | 30 seconds | agent-session config | Time an agent has to finish its step after a pause signal. `[S: as 6; main 6.17]` |
 | `handoff_packet_size` | tokens | 15,000 tokens | agent-session config | Maximum size of the handoff packet and of the compressed context a Worker is spawned with. `[S: as 6; main 5.3]` |
-| `handoff_threshold` | fraction | 0.90 | consuming app config | Session token share that triggers a graceful handoff. Set for in-process sessions. Worker use is Open 6. `[S: main 5.6; as 3.3]` |
+| `handoff_threshold` | fraction | 0.90 | consuming app config | Session token share that triggers a graceful handoff. Set for in-process sessions only. The rule does not apply to CLI Workers, which have no `context_tokens` (Open 6). `[S: main 5.6; as 3.3]` |
 | `emergency_threshold` | fraction | 0.95 | consuming app config | Session token share that triggers an emergency handoff. Same scope as above. `[S: main 5.6; as 3.3]` |
 | `agents.worker.model` | llm-gateway alias | `default` (example value; the default is "same configured model") | `umas.config.yaml` | Model for Workers. The meaning for CLI Workers is open (Open 9). `[S: main 5.7]` |
 | `agents.specialized.architect.model` | llm-gateway alias | `deep` (example value) | `umas.config.yaml` | Model for the Architect. `[S: main 5.7]` |
@@ -229,7 +229,7 @@ Rules that apply to every row:
 |--------|------------------------|---------------------------|---------|---------------|
 | [Orchestration](../orchestration/orchestration-spec.md) | Completion, escalation and handoff signals | Task ID, hook path, compressed context, platform choice | Function call for dispatch `[P]`; commits and `events.jsonl` for signals | Dispatch: sync `[P]`. Signals: async. |
 | [Context persistence](../context-persistence/context-persistence-spec.md) | State commits, `STATE.md` (Open 2) | `PAUSE.md` and `HANDOFF.md` on resume | Git commits and files | Async |
-| [Models and usage](../models-and-usage/models-and-usage-spec.md) | Harness-reported total tokens and model, recorded in token-ledger by the launcher `[P]` | The alias for each role; context-window thresholds | Config; CLI report (format not specified) | Async |
+| [Models and usage](../models-and-usage/models-and-usage-spec.md) | One `{ts, model, tokens}` line per harness run, recorded in token-ledger by the launcher (section 3) | The alias for each role; context-window thresholds | Config; CompletionSignal `token_usage` | Async |
 | [Verification](../verification/verification-spec.md) | Done branch for the Merge Queue Processor | Test-regression re-spawn with failing test names and PR diff | Git branch; function call `[S: main 6.11]` | Async |
 | [Monitoring](../monitoring/monitoring-spec.md) | Checkpoint commits and heartbeat | Nudge and handoff actions from the Project Monitor | Git log; heartbeat file; process supervision by watchdog | Async, Project Monitor polls every 60 seconds `[S: main 5.5]` |
 | [Interfaces](../interfaces/interfaces-spec.md) | `umas agents` command results | Spawn, status, pause and resume requests | CLI and REST `[S: main 7]` | Sync |
@@ -248,7 +248,7 @@ Rules that apply to every row:
 - [llm-gateway](../../../libs/llm-gateway/README.md): `complete` for non-editing Specialists, if they run as one prompt and one answer. `[P: Open 7]` `[S: lg 4, 11 Q2]`
 - [decision-artifacts](../../../libs/decision-artifacts/README.md): writes PRFAQ and ADR outputs. `[S: sa 2, 9]`
 - [error-classifier](../../../libs/error-classifier/README.md): optional error records for `CapabilityMissing`, `AssignmentWriteFailed` and `ChecksumMismatch`. `[S: ap 7]`
-- [minimalism-ladder pack](../../../packs/minimalism-ladder/minimalism-ladder-spec.md): ladder record and pack config. `[S: ms 4.2]`
+- [minimalism-ladder pack](https://github.com/plaktoz/agent-garage): ladder record and pack config. `[S: ms 4.2]`
 - [specialist-agents pack](../../../packs/specialist-agents/specialist-agents-spec.md): five role prompts, output schemas, sequence and skip rules. `[S: sa 4 to 6]`
 - [ADR-0004](../../../docs/decisions/ADR-0004-structured-output-with-pydantic.md): Pydantic v2 validates Specialist output. `[S: ADR-0004]`
 
@@ -263,10 +263,10 @@ Rules that apply to every row:
 | `SignalCorrupt` | ap 7 | `read_signal` returns `None`. A warning is emitted. The file is not consumed. | Launcher `[P]` |
 | Worker blocked | main 5.3 | Escalate event is appended. The Coordinator handles it. | Coordinator (orchestration) |
 | Worker crash or no done commit | main 6.8; as 3.2 | Worktree is marked stale by age and by dirty state. | Exception flows, section 6.8 |
+| Launcher dies after a harness run and before `record` | Owner decision (M9, 2026-11-09) | The run's usage line can be lost. Accepted: no recovery store is added. The launcher records once, after the harness reports completion, so a retry does not record twice. | This module (accepted loss) |
 | No checkpoint for more than 10 minutes | main 5.5 | Project Monitor nudges the agent, then starts a graceful handoff. | Monitoring |
 | Project deleted while agents run | main 6.2 | Active sessions are marked `crashed`. | Exception flows, section 6.2 |
 | Machine shutdown | main 6.17 | Clean pause through `.pause` if the harness honours it. Otherwise recovery uses `STATE.md`. | Exception flows, section 6.17. CLI Workers: Open 5. |
-| Token budget exhausted | main 6.6 | Removed (ADR-0005). No budget gate; Workers are not paused for usage. | Exception flows, section 6.6 |
 | LLM provider failure | main 6.7; lg 7 | Applies to coordination agents through `llm-gateway`. Failures inside a CLI Worker are not visible to UMAS (Open 6). | Exception flows, section 6.7 |
 | Agent causes test regression | main 6.11 | Worker is re-spawned with failing test names and the PR diff. | Exception flows, section 6.11; verification |
 | Specialist output fails validation | sa 7; ADR-0004 | Consumer retries once with the schema error. A second failure escalates. Output is not repaired silently. | Orchestration |
@@ -278,9 +278,9 @@ Each item needs an owner decision. The recommendation is not a decision.
 1. **Launcher owner and spec.** Gap 3 in main A.7 says nothing specifies the component that starts, supervises and stops harness CLIs. The start command line is not specified either. Recommendation: this module owns the launcher as Python UMAS glue, supervised by watchdog. `[S: main A.7 gap 3; A.4.6]`
 2. **State files for CLI Workers.** agent-session runs in-process. A CLI Worker must write `STATE.md` through files. Who writes it, and how is the format checked? Recommendation: `SKILL.md` tells the harness to write `STATE.md` and to commit with `[umas:checkpoint]`. The launcher checks the file after each checkpoint commit. `[S: main A.4.8; as 3.6]`
 3. **Commit signal pattern.** The library default `\[(done|blocked|escalated)\]` does not match `[umas:done]`. The main spec uses `[umas:done]` and `[umas:checkpoint]`. The state commit in main 5.1 uses `[umas] <agent-id>`. Recommendation: set `signal_pattern` to `\[umas:(done|blocked|escalated)\]` in the consuming app config, with no library change. Pick one prefix for state commits. The owner is context-persistence. `[S: ap 5.1, 6; main 5.1, 5.3; as 9]`
-4. **Event names and envelope.** Main 5.3 uses `{"event":"escalate",...}` and `handoff_request`. event-log uses the envelope `v`, `id`, `ts`, `type`, `source`, `scope`, `data`. agent-session uses `session_escalated` and `handoff_initiated` (as 5.8). Recommendation: use the event-log envelope with the agent-session type names. `[S: main 5.3; el 3; as 5.8]`
+4. **Event names and envelope.** Handoff part decided (owner, 2026-11-09): the event is `handoff_request` with payload `{ session_id, task_id, reason, context_used, context_limit, packet }`. The former name is dropped. Escalation part still open. Main 5.3 uses `{"event":"escalate",...}`. agent-session uses `session_escalated` (as 5.8). event-log uses the envelope `v`, `id`, `ts`, `type`, `source`, `scope`, `data`. Recommendation for escalation: the event-log envelope with the agent-session name `session_escalated`. `[S: main 5.3; el 3; as 5.8; D-3]`
 5. **Pause for CLI Workers.** Agents poll `.pause` at each step boundary (as 5.6). A CLI harness does not run that code. Main 6.17 says agent-platform must honour `.pause`. ap 5.3 says the library does not poll. Recommendation: the launcher polls `.pause` and stops the process after the next checkpoint commit. Test this with each CLI before Phase 2. `[S: as 5.6; main 6.17; ap 5.3]`
-6. **Handoff and usage reports for CLI Workers.** Worker context use is visible only as far as each CLI reports it. The 90% and 95% thresholds need a context token count. Also, the CLI usage report format is not checked. Recommendation: the thresholds stay for coordination agents. For CLI Workers, a handoff starts from the Project Monitor rule (no checkpoint for 10 minutes: nudge, then graceful handoff). The launcher records the reported total tokens and model in token-ledger when a CLI gives them. Owner: models-and-usage. `[S: main A.4.8; main 5.6; ADR-0005]`
+6. **Handoff and usage reports for CLI Workers.** A CLI Worker has no `context_tokens`, so the 90 % and 95 % rules do not apply to it. Its handoff comes from the Project Monitor's time and checkpoint rules (no checkpoint for 10 minutes: nudge, then graceful handoff). Open: the `reason` and `context_used` of that handoff, because `context_graceful` and `context_emergency` are context-count reasons. Recommendation [P]: keep the two reasons, set `context_used` and `context_limit` to null for a CLI handoff, and let the Monitor's time rule set `context_graceful`. Usage: CompletionSignal `token_usage` (`input`, `output`, `cached`) is the usage report for a CLI that gives one. Which CLIs give one is not checked. Owner: models-and-usage. `[S: main A.4.8; main 5.6; ADR-0005; B3, D-3]`
 7. **Runtime of Specialized Agents.** A.4.8 places file-editing specialists in CLI harnesses. It does not place Analyst, Product Manager, UX Designer or Architect, which write documents only. Recommendation: run them through `llm-gateway` as one prompt and one answer, the coordination rule. `[S: main A.4.8; lg 11 Q2]`
 8. **Capability list for `openai-codex` with Gemini.** The list was written for OpenAI models. ap 11 Q1 and ADR-0002 require a check when Gemini runs through the harness. Recommendation: test each provider (`openai`, `google-gemini`) before Phase 2. Also name the owner of the provider choice per assignment. Recommendation: the Router or models-and-usage. `[S: ap 11 Q1; ADR-0002]`
 9. **Meaning of `agents.worker.model`.** The key names an `llm-gateway` alias. Workers bypass `llm-gateway`. Recommendation: for Workers, the alias maps to the harness provider and model, set per assignment. Owner: models-and-usage. `[S: main 5.7; lg 11 Q2; ADR-0002]`

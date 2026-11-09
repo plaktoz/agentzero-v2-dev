@@ -33,7 +33,7 @@ IDLE → GRILLING → PLANNING → DISPATCHING → MONITORING → DONE
 | `PLANNING` | `DISPATCHING` | Work bundle created and validated |
 | `DISPATCHING` | `MONITORING` | All ready tasks dispatched |
 | `MONITORING` | `DONE` | All tasks reach `completed` |
-| `MONITORING` | `ESCALATED` | Any agent appends `escalate` event to `events.jsonl` |
+| `MONITORING` | `ESCALATED` | Any agent appends `escalate` event to `events.jsonl`. A `monitor_escalation` event does not cause this change (monitoring Open 26) |
 | `ESCALATED` | `DISPATCHING` | Human resolves escalation |
 | `ESCALATED` | `DONE` | Human cancels the work bundle |
 | Any | `IDLE` | Bundle cancelled or all tasks failed |
@@ -45,7 +45,6 @@ Multiple concurrent bundles each have their own independent state machine. `ESCA
 ```yaml
 coordinator_config:
   model: default                  # llm-gateway alias, not a model ID
-  context_limit: 200000
   complexity_thresholds:
     simple:  {max_files: 3, max_lines: 100, no_architecture_change: true}
     medium:  {max_files: 10, max_lines: 500, limited_architecture_change: true}
@@ -63,6 +62,8 @@ coordinator_config:
   # See packs/playbook-runner/playbook-runner-spec.md for the full schema.
   playbook: null
 ```
+
+`context_limit` is not in this block. The Coordinator reads it from `context_windows.<alias>` in `umas.config.yaml`, for the alias in `model`. It has no default. A missing value is a `ConfigError` at start-up ([models-and-usage](../models-and-usage/models-and-usage-spec.md)).
 
 **Playbook routing:** When `playbook` is non-null the Coordinator loads the named playbook from the registry and drives a phase loop instead of the implicit sequence. Each phase step calls an existing pack, agent role, or lib op — the underlying execution is identical. Human gates pause the work bundle; the human resumes via `umas work-bundle approve <id>`. Escape hatches write a `[checkpoint]` commit and a `RESUME.md` then escalate. Without a playbook the implicit default workflow is unchanged.
 
@@ -142,14 +143,12 @@ It does not own these responsibilities:
 5. If a playbook is set, the Coordinator loads it and drives the phase loop. Each step calls a pack, an agent role or a lib operation. A `human_approval` gate pauses the bundle until `umas work-bundle approve <id>` ([playbook-runner](../../../packs/playbook-runner/playbook-runner-spec.md) 5.1).
 6. The Coordinator creates the `work_bundle` record and its tasks. It runs cycle detection and a dangling-reference check (**from source**, [6.10](../exception-flows/exception-flows-spec.md#610-dependency-deadlock-in-work-bundle)). A bad bundle is rejected before submission. Who splits the request into tasks is Open 3. State: `PLANNING` to `DISPATCHING`.
 7. The Scheduler adds the tasks to `task-queue` with `add_batch`. It creates one hook per task. It sets `tags` and `payload` (**proposed**, tags and payload per [task-queue](../../../libs/task-queue/README.md) 9; hook creation is named there as glue).
-8. A `ready` event from `task-queue` triggers a `claim`. `claim` checks the dependency state and the `max_claimed` cap only. At the cap, the task keeps its place in the queue and is claimed when a slot frees. (The budget admission step was removed, ADR-0005.)
-9. The launcher starts the harness for the claimed task and watches for the completion signal (**proposed**, Open 1; the gap is A.4.8 and A.7 item 3).
-10. The Worker commits `[umas:done] <task-id>` (**from source**, 5.3). The Scheduler runs `on_task_complete`: mark complete, unblock dependents, check the parent, dispatch ready tasks. The launcher then records the harness's reported total tokens and model in [token-ledger](../../../libs/token-ledger/README.md) as `{ts, model, tokens}` (**proposed**). If the harness reports no usage, nothing is recorded and nothing is estimated. The bundle stays in `MONITORING` until all tasks complete.
+8. A `ready` event from `task-queue` triggers a `claim`. `claim` checks the dependency state and the `max_claimed` cap only. At the cap, the task keeps its place in the queue and is claimed when a slot frees.9. The launcher starts the harness for the claimed task and watches for the completion signal (**proposed**, Open 1; the gap is A.4.8 and A.7 item 3).
+10. The Worker commits `[umas:done] <task-id>` (**from source**, 5.3). The Scheduler runs `on_task_complete`: mark complete, unblock dependents, check the parent, dispatch ready tasks. The launcher then records one `{ts, model, tokens}` line in [token-ledger](../../../libs/token-ledger/README.md). `model` is the LLM model name the launcher resolved from the alias table (for example `opus`), never the alias. `tokens` is the harness `input + output`, cached tokens excluded. If the harness reports no usage, nothing is recorded and nothing is estimated. A crash between the run and `record` can lose that line (agent-execution section 8). The bundle stays in `MONITORING` until all tasks complete.
 11. When all tasks are `completed`, the state is `DONE`. With a playbook, the top-level `exit_predicate` must also be true (playbook-runner 5.1, rule 7).
 
 **Failure paths:**
 
-- **Budget exhausted** ([6.6](../exception-flows/exception-flows-spec.md#66-removed-adr-0005)). Removed (ADR-0005). Dispatch depends on dependency readiness and `max_claimed` only.
 - **Worker blocked** (5.2 state table). An `escalate` event moves that bundle to `ESCALATED`. Other bundles continue. A person resolves it (`DISPATCHING`) or cancels (`DONE`).
 - **Worker crash** (**from source**, task-queue 5.2). The lease expires and the task returns to `ready`. The attempt still counts. At `max_attempts` the task becomes `failed`. Dependents follow `on_dep_failed` (default `hold`). `watchdog` restarts the process in parallel.
 
@@ -210,7 +209,8 @@ Carrier types: CLI command, REST endpoint, file, event, callback, function call.
 | `ready`, `claimed`, `completed`, `failed`, `lease_expired` | in | event (callback `on_event`) | Task state changes (task-queue 4) | task-queue |
 | Completion signal | in | commit message | `[umas:done] <task-id>` (5.3). Prefix conflict: Open 7 | agent-execution |
 | `escalate` event | in | event, line in `events.jsonl` | `{"event":"escalate","severity":"P1","reason":"..."}` (5.3) | agent-execution, [event-log](../../../libs/event-log/README.md) |
-| `handoff_request` event | in | event, line in `events.jsonl` | Read by the Scheduler (5.3) | agent-execution |
+| `monitor_escalation` event | in | event, line in `events.jsonl` | `{session_id, task_id, context_used, context_limit}`. Written by the Project Monitor at the 95 % rule (monitoring Open 26). The Coordinator sends the emergency handoff. Does not change bundle state | [monitoring](../monitoring/monitoring-spec.md), [event-log](../../../libs/event-log/README.md) |
+| `handoff_request` event | in | event, line in `events.jsonl` | `{ session_id, task_id, reason, context_used, context_limit, packet }`. `reason` is `context_graceful` or `context_emergency`. Read by the Scheduler (5.3) | agent-execution |
 | Phase result | out | event, line in `events.jsonl` | `{ts, playbook, phase, status: passed\|gate_waiting\|escaped\|failed, step_results[]}` (playbook-runner 4.5) | playbook-runner |
 | Model call | out | function call | `complete(request)` with `alias: default`. Used for signal extraction and grilling (A.4.8, [llm-gateway](../../../libs/llm-gateway/README.md) 4) | llm-gateway |
 
@@ -221,7 +221,7 @@ Carrier types: CLI command, REST endpoint, file, event, callback, function call.
 | Name | Type | Default | Where set | What it changes |
 |---|---|---|---|---|
 | `coordinator_config.model` | string (alias) | `default` | config, key `agents.coordinator.model` ([5.7](../models-and-usage/models-and-usage-spec.md#57-model-policy)) | The `llm-gateway` alias for Coordinator calls |
-| `coordinator_config.context_limit` | int (tokens) | 200000 | config | Size of the Coordinator context window in tokens. The base for the handoff thresholds (`handoff_threshold` 0.90, `emergency_threshold` 0.95). Renamed from `token_limit` (ADR-0005) |
+| `context_windows.<alias>` for `coordinator_config.model` | int (tokens) | no default | `umas.config.yaml` ([models-and-usage](../models-and-usage/models-and-usage-spec.md)) | Size of the Coordinator context window in tokens. The base for the handoff thresholds (`handoff_threshold` 0.90, `emergency_threshold` 0.95). A missing value is a `ConfigError` at start-up |
 | `coordinator_config.complexity_thresholds` | map | simple: 3 files, 100 lines; medium: 10 files, 500 lines; complex: unlimited | config | Mapped to `files_affected` before routing (router-heuristic 6) |
 | `coordinator_config.grilling.enabled` | bool | `true` | config | Turns grilling on or off |
 | `coordinator_config.grilling.human_initiated_only` | bool | `true` | config | Skips grilling for agent origin |
@@ -267,7 +267,7 @@ Rules from A.5.5 that bind this module: only the Coordinator creates and assigns
 | [agent-execution](../agent-execution/agent-execution-spec.md) | Sends: task assignment, hook path, context reference. Receives: `[umas:done]` commit, `escalate` and `handoff_request` events | Function call to `agent-platform`; commit; `events.jsonl` | Send is synchronous. Receive is asynchronous |
 | [context-persistence](../context-persistence/context-persistence-spec.md) | Sends: hook creation per task. Receives: `events.jsonl` lines, `STATE.md` | `hook-store create`, file read | Synchronous for create. Asynchronous for events |
 | [models-and-usage](../models-and-usage/models-and-usage-spec.md) | Uses model aliases from 5.7. Usage recording runs through the `llm-gateway` callback and the launcher (to `token-ledger`) | `llm-gateway` call | Synchronous |
-| [monitoring](../monitoring/monitoring-spec.md) | Sends: the launcher registers a `watchdog` node per Worker (proposed). Receives: stalled and dead nodes, forced handoff | `watchdog` config, heartbeat files, events | Asynchronous |
+| [monitoring](../monitoring/monitoring-spec.md) | Sends: the launcher registers a `watchdog` node per Worker (proposed). Receives: stalled and dead nodes, and the Monitor's escalation at the emergency threshold (monitoring Open 26). Sends the emergency handoff | `watchdog` config, heartbeat files, events | Asynchronous |
 | [verification](../verification/verification-spec.md) | Sends: nothing in the snapshot. Receives: PR failure and re-spawn requests ([6.9](../exception-flows/exception-flows-spec.md#69-merge-queue-bisect-finds-no-clean-subset), [6.11](../exception-flows/exception-flows-spec.md#611-agent-causes-test-regression)). Owner of the re-spawn is not stated (Open 12) | Event or function call, not set | Asynchronous |
 | [interfaces](../interfaces/interfaces-spec.md) | Receives: request and bundle commands, REST calls. Sends: bundle and task records | CLI, REST | Synchronous |
 | [access-control](../access-control/access-control-spec.md) | Receives: allow or deny on each command (**proposed**: check in the API middleware, A.5.7) | Middleware | Synchronous |
@@ -278,7 +278,7 @@ Rules from A.5.5 that bind this module: only the Coordinator creates and assigns
 | Item | What it provides here |
 |---|---|
 | [task-queue](../../../libs/task-queue/README.md) | Dependency graph, ready queue, leased claims, concurrency cap, retry, parent completion |
-| [token-ledger](../../../libs/token-ledger/README.md) | One `{ts, model, tokens}` entry per LLM call or harness usage report (the launcher records the harness total, proposed). Records only; never gates dispatch |
+| [token-ledger](../../../libs/token-ledger/README.md) | One `{ts, model, tokens}` line per LLM call (gateway callback) or per harness run (launcher). Records only; never gates dispatch |
 | [watchdog](../../../libs/watchdog/README.md) | Supervision of Worker processes started by the launcher (proposed) |
 | [hook-store](../../../libs/hook-store/README.md) | One worktree per task; `find_signals` to detect completion commits |
 | [event-log](../../../libs/event-log/README.md) | `events.jsonl`: escalate, handoff and phase-result lines |
@@ -296,7 +296,6 @@ Rules from A.5.5 that bind this module: only the Coordinator creates and assigns
 |---|---|---|
 | Cycle or dangling dependency in a new bundle | Coordinator rejects the bundle. `task-queue` returns `cycle` or `unknown_dependency` | [6.10 Dependency Deadlock in Work Bundle](../exception-flows/exception-flows-spec.md#610-dependency-deadlock-in-work-bundle) |
 | Blocking task already `completed` | Scheduler moves the blocked task to the ready queue on the next `on_task_complete`. No escalation | 6.10 |
-| Token budget exhausted | Removed (ADR-0005). No budget gate; dispatch depends on readiness and `max_claimed` only | [6.6 Removed (ADR-0005)](../exception-flows/exception-flows-spec.md#66-removed-adr-0005) |
 | Provider failure on a Coordinator or Router call | `llm-gateway` retries and fails over. With no fallback: P1 and `umas agents resume <session-id>` | [6.7 LLM Provider Failure Mid-Task](../exception-flows/exception-flows-spec.md#67-llm-provider-failure-mid-task) |
 | Worker crash with a claimed task | Lease expiry returns the task. Attempts are counted. Stale worktrees follow their age rules | [6.8 Stale Worktrees After Agent Crash](../exception-flows/exception-flows-spec.md#68-stale-worktrees-after-agent-crash) |
 | Machine shutdown with bundles running | `umas start-all` resumes dispatch after recovery | [6.17 Machine Shutdown and Boot Recovery](../exception-flows/exception-flows-spec.md#617-machine-shutdown-and-boot-recovery) |
@@ -317,7 +316,7 @@ Each item is **Open**. None is resolved here.
 5. **Open: where `coordinator_config` lives, and which key sets the playbook.** 5.2 shows `coordinator_config.playbook`. playbook-runner shows `workflows.playbook` in `umas.config.yaml` and `default_playbook` in its pack config. Recommendation: one key, `workflows.playbook`, read by the Coordinator. Remove the other two.
 6. **Open: `session_resumable_statuses` omits two resumable states.** Section 4 lists `machine_paused` and `auth_expired` as resumable. The Coordinator default lists only `provider_failed`. Recommendation: add both, with no timeout, as section 4 says.
 7. **Open: completion signal prefix.** The spec uses `[umas:done]`. `agent-session` uses `[done]` (section 14 item 8). The Scheduler detects completion by this pattern. Recommendation: make the pattern a config value used with `hook-store find_signals`, and decide the prefix in agent-execution.
-8. **Open: retry safety of the launcher.** `task-queue` `add` is not idempotent for a supplied `id` (it proposes `id_conflict`). `token-ledger record` is not idempotent. A retried launcher can add a task twice or record usage twice. Recommendation: adopt the `id_conflict` point, and record usage once, only after the harness reports completion.
+8. **Open: retry safety of the launcher.** `task-queue` `add` is not idempotent for a supplied `id` (it proposes `id_conflict`). `token-ledger record` is not idempotent, so a retried launcher can add a task twice or record usage twice. Recommendation [P]: adopt the `id_conflict` point, and record usage once, only after the harness reports completion. Decided (owner, 2026-11-09): a crash between the run and `record` can lose that run's line. No recovery store is added (agent-execution section 8).
 9. **Open: at-least-once execution.** A task can run twice after a lease expiry (task-queue 5.2, open question 1). Recommendation: the launcher checks that the hook has no live lease (`hook-store open` fails `LeaseHeld`) before it starts a harness.
 10. **Open: permission names and the Scheduler principal.** A.5.4 has no row for approve a playbook gate, cancel a bundle, retry a bundle or resolve a P1 escalation. The Scheduler and launcher have no row in A.5.5. Recommendation: add the rows `work:submit`, `work:read`, `work:cancel`, `work:retry`, `gate:approve`; run the Scheduler and launcher under the Coordinator principal, with the spawn scope of A.5.5.
 11. **Open: missing commands and endpoints.** `umas work-bundle approve <id>` is in 5.2 and not in section 7. There is no cancel command and no approve or cancel endpoint. `POST /api/v1/work-bundles` has no body definition (A.7 item 5). Recommendation: add `approve` and `cancel` to the list, and define the body in the shared OpenAPI file.

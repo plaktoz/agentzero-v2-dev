@@ -7,7 +7,7 @@
 
 ## 1. Purpose
 
-Provide the shared lifecycle skeleton for any agent that runs an LLM-assisted session inside a worktree: spawn → execute → checkpoint → handoff → done. The library tracks state transitions, emits the standard signals that orchestrators read, enforces the context-window threshold policy, and builds the handoff packet when transitioning to a successor agent. The thresholds (`handoff_threshold`, `emergency_threshold`) are fractions of the model's context window. They protect the session from overflowing that window. They never pause work and never limit spend. All six agent types in UMAS (WorkerAgent, Analyst, ProductManager, Architect, UXDesigner, Developer) share this skeleton.
+Provide the shared lifecycle skeleton for any agent that runs an LLM-assisted session inside a worktree: spawn → execute → checkpoint → handoff → done. The library tracks state transitions, emits the standard signals that orchestrators read, enforces the context-window threshold policy, and builds the handoff packet when transitioning to a successor agent. The thresholds (`handoff_threshold`, `emergency_threshold`) are fractions of the model's context window. They protect the session from overflowing that window. All six agent types in UMAS (WorkerAgent, Analyst, ProductManager, Architect, UXDesigner, Developer) share this skeleton.
 
 ## 2. Scope and Non-Goals
 
@@ -19,7 +19,8 @@ Provide the shared lifecycle skeleton for any agent that runs an LLM-assisted se
 - Handoff packet construction: compress full context to a size-limited packet when the context threshold is reached
 - Context packing: fit prioritised sections into a token limit (`pack`, section 5.9)
 - Escalation events appended to the event log when the agent is blocked
-- Context-window monitoring (soft handoff at 90%, hard handoff at 95% of `context_limit`)
+- Context-window monitoring (soft handoff at or above 90%, hard handoff at or above 95% of `context_limit`)
+- Writing `context_tokens` and `context_limit` to `STATE.md` and the session's status row on every step, so the caller's monitor can read them
 - Recovery: reconstruct session state from `STATE.md` and the event log on restart or handoff
 
 **Non-goals**
@@ -27,7 +28,6 @@ Provide the shared lifecycle skeleton for any agent that runs an LLM-assisted se
 - Prompt construction, tool execution, or code writing. Those are agent-specific and belong to the caller.
 - Orchestration: spawning other agents, managing work bundles, or routing requests.
 - Worktree creation or branch management. The caller creates the hook via [hook-store](../hook-store/README.md) and passes the path in.
-- Limiting, pricing or pausing work on token use. The thresholds guard the context window only (ADR-0005).
 - Recording token usage. [token-ledger](../token-ledger/README.md) does that. This library does not read the ledger. If the session needs a token count, it counts the context window itself with a caller-supplied counter.
 - Counting tokens for text. The caller supplies the counter function.
 
@@ -45,7 +45,8 @@ Session:
   config:          SessionConfig
   status:          SessionStatus
   token_used:      int             # cumulative tokens the caller reported for this session (informational; not a trigger)
-  context_tokens:  int             # tokens in the context window at the last step (the handoff trigger)
+  context_tokens:  int?            # tokens in the context window at the last step (the handoff trigger); absent for CLI Workers; see Step.context_tokens
+  context_limit:   int             # copied from SessionConfig; with context_tokens it is written to STATE.md and the status row on each step
   started_at:      string          # RFC 3339
   ended_at:        string?
 ```
@@ -63,7 +64,7 @@ machine_paused  host machine shut down or suspended; session paused at last chec
 auth_expired    OIDC token expired while machine was off; re-authentication required before resume
 ```
 
-`handoff`, `provider_failed`, `machine_paused`, and `auth_expired` are **resumable**: a successor session reads `STATE.md` (and `PAUSE.md` if present) and the event log to continue. Removed (ADR-0005): the `budget_paused` status. No status exists for token use. `crashed` and `done` are terminal within a session run; the task may be retried externally.
+`handoff`, `provider_failed`, `machine_paused`, and `auth_expired` are **resumable**: a successor session reads `STATE.md` (and `PAUSE.md` if present) and the event log to continue. `crashed` and `done` are terminal within a session run; the task may be retried externally.
 
 `machine_paused` and `auth_expired` carry **no timeout** — they wait indefinitely for the machine to boot or the human to re-authenticate. They are never promoted to `crashed` by the watchdog.
 
@@ -71,12 +72,11 @@ auth_expired    OIDC token expired while machine was off; re-authentication requ
 
 ```
 SessionConfig:
-  context_limit:       int       # model context window in tokens, from config (context_windows.<alias>)
-  handoff_threshold:   float     # fraction of context_limit that triggers soft handoff (default 0.90)
-  emergency_threshold: float     # fraction of context_limit that triggers hard handoff (default 0.95)
+  context_limit:       int       # model context window in tokens; required, no default. The caller reads it from `context_windows.<alias>` in the consumer's config. A missing or non-positive value is a `ConfigError` at `create()`
+  handoff_threshold:   float     # fraction of context_limit that triggers soft handoff, at or above (default 0.90)
+  emergency_threshold: float     # fraction of context_limit that triggers hard handoff, at or above (default 0.95)
   checkpoint_every:    int       # commit STATE.md after every N steps (default 1)
   handoff_packet_size: int       # max tokens in the handoff packet (default 15000)
-  compression_level:   string    # "lite" | "full" | "ultra" — not an input to pack(); the caller's own compression setting
   counter:             fn(text) -> int   # caller-supplied token counter, used by pack() (section 5.9)
   event_source:        string    # written as `source` field in every event-log append
 ```
@@ -91,10 +91,12 @@ Step:
   decisions:  Decision[]      # { summary, rationale } — choices made this step
   files:      string[]        # files read or written
   token_usage: int            # tokens consumed by this step's LLM call(s), informational
-  context_tokens: int         # tokens in the context window after this step's LLM call
+  context_tokens: int?        # the step's last LLM call: input_tokens + cached_input_tokens + cache_write_tokens + output_tokens (llm-gateway section 3.1). Not cumulative. Absent for CLI Workers
   done:       bool            # true if the task is complete after this step
   blocked:    Blocked?        # present if the agent cannot proceed
 ```
+
+CLI Workers (external harnesses) report no `context_tokens`. The 90 % / 95 % rule does not apply to them; they stop on the time and checkpoint limits of the caller.
 
 ```
 Blocked:
@@ -162,7 +164,7 @@ Written atomically to the worktree root after every step. Plain Markdown; both h
 | `done(session, step) -> CommitRef` | Write final `STATE.md`, commit the worktree with the done message, append a `session_ended` event with `status: done`. |
 | `escalate(session, blocked) -> ()` | Append a `session_escalated` event with the severity and reason. Does not stop execution; the caller decides whether to continue or abort. |
 | `pack(sections, limit, counter) -> Packed` | Fit sections into `limit` tokens. Section 5.9. |
-| `handoff(session) -> HandoffPacket` | Pack context via `pack()` (section 5.9), write `HANDOFF.md`, commit with handoff message, append a `handoff_initiated` event. Returns the packet. |
+| `handoff(session, reason) -> HandoffPacket` | Call `pack()` itself (section 5.9) on the sections the caller registered, write `HANDOFF.md`, commit with handoff message, append a `handoff_request` event (section 5.8). Returns the packet. `reason` is `context_graceful` or `context_emergency`. The caller does not call `pack()` for a handoff; it only registers sections. On failure see section 5.1. |
 | `pause(session, reason) -> CommitRef` | Write `PAUSE.md` and `STATE.md`, commit with pause message, set status `machine_paused`, append a `session_paused` event. Safe to call from a signal handler. Section 5.6. |
 | `recover(hook_path, event_log_dir, task_id) -> RecoveredSession` | Reconstruct session state from `STATE.md` and the event log. Reads `PAUSE.md` in preference to `STATE.md` if both exist. Section 5.5. |
 | `status(hook_path) -> SessionStatus` | Read current status from `STATE.md` without loading full history. |
@@ -182,8 +184,9 @@ loop:
   call execute_step_fn(context) → Step
 
   track token_used += step.token_usage          # informational
-  track context_tokens = step.context_tokens    # the handoff trigger
+  track context_tokens = step.context_tokens    # the handoff trigger; absent for CLI Workers
   append step to session history
+  write context_tokens and context_limit to STATE.md and the status row   # the caller's monitor reads them
 
   if step.blocked:
     escalate(blocked)
@@ -195,14 +198,21 @@ loop:
 
   checkpoint(session, step)  →  STATE.md update + checkpoint commit
 
+  if context_tokens is absent:
+    continue    # CLI Worker: no context rule; the caller's time and checkpoint limits apply
+
   if context_tokens >= emergency_threshold * context_limit:
-    handoff(session)  →  HANDOFF.md + handoff commit + handoff_initiated event
+    handoff(session, "context_emergency")  →  HANDOFF.md + handoff commit + handoff_request event
     break (status: handoff)
 
   if context_tokens >= handoff_threshold * context_limit:
-    handoff(session)  →  same as above
+    handoff(session, "context_graceful")  →  same as above
     break (status: handoff)
 ```
+
+`context_limit` is required in `SessionConfig`. `create()` fails with `ConfigError` if it is missing (section 3.3).
+
+**When `handoff()` fails.** `handoff()` calls `pack()`. If `pack()` raises `RequiredTooLarge`, `handoff()` re-raises it as `RequiredSectionTooLarge` (section 7). The session catches that error and does not stop. It builds the packet from the last `STATE.md` checkpoint instead, writes it to `HANDOFF.md` with `manifest.degraded: true`, takes status `handoff`, and emits the `handoff_request` event with that packet. The caller then raises a P2 escalation (`escalate()`). The session never ends without a handoff packet.
 
 A step that raises an unhandled exception sets status `crashed`, appends a `session_ended` event with `status: crashed`, and re-raises so the caller can log and escalate.
 
@@ -285,6 +295,8 @@ Recommended sections the caller should register:
 - `file_pointers` (truncatable): relevant file references
 - `step_history` (droppable): recent step summaries
 
+The caller only registers sections. `handoff()` calls `pack()` itself (section 5.9).
+
 If the caller never calls `register_context`, `handoff()` builds the packet from `STATE.md` as plain text (degraded mode, flagged in the packet manifest).
 
 ### 5.8 Event types emitted
@@ -296,7 +308,7 @@ All events are appended via [event-log](../event-log/README.md) `append()`. The 
 | `session_started` | `create()` | `task_id`, `hook_path`, `context_limit` |
 | `step_complete` | `checkpoint()` | `step_n`, `summary`, `token_used`, `decisions[]` |
 | `session_escalated` | `escalate()` | `severity`, `reason` |
-| `handoff_initiated` | `handoff()` | `context_used`, `context_limit`, `reason` (`context_graceful` or `context_emergency`) |
+| `handoff_request` | `handoff()` | `session_id`, `task_id`, `reason` (`context_graceful` or `context_emergency`), `context_used`, `context_limit`, `packet` (the HandoffPacket, section 3.5) |
 | `session_paused` | `pause()` | `reason`, `token_used`, `pause_file: "PAUSE.md"` |
 | `session_resumed` | boot recovery in consuming app | `resumed_from: "machine_paused"\|"auth_expired"`, `session_id` |
 | `session_ended` | `done()` or unhandled exception | `status`, `token_used`, `step_count` |
@@ -323,12 +335,12 @@ Pointers (path plus line range) are cheap and should be preferred over inline co
 
 ```yaml
 # Defaults; all overridable per session via SessionConfig
-context_limit: 200000       # set per model from config; the value here is an example
+context_limit: <from context_windows.<alias>>   # required, no default; missing is a ConfigError at create()
 handoff_threshold: 0.90
 emergency_threshold: 0.95
 checkpoint_every: 1          # commit STATE.md after every step
 handoff_packet_size: 15000   # tokens
-compression_level: lite      # lite | full | ultra
+counter: <fn(text) -> int>   # caller-supplied token counter, used by pack()
 event_source: ""             # set to agent_id by the caller
 
 commit_prefixes:
@@ -353,8 +365,9 @@ decisions_in_packet: 10      # how many recent decisions to include in handoff p
 |-------|-------|-----------|
 | `HookNotFound` | `hook_path` does not exist | Fail `create()`; the caller must create the hook via hook-store first |
 | `StepFnError` | `execute_step_fn` raises | Catch, append `session_ended(status=crashed)`, write crash `STATE.md`, re-raise |
-| `RequiredTooLarge` | `pack()`: required sections exceed `limit` | Fail with sizes per section. Never truncate required content |
-| `RequiredSectionTooLarge` | `handoff()`: `pack()` raised `RequiredTooLarge` for `handoff_packet_size` | Fail `handoff()` with the sizes; the caller must reduce required sections or increase the limit |
+| `ConfigError` | `create()`: `context_limit` missing or not positive | Fail `create()`. There is no default |
+| `RequiredTooLarge` | Raised by `pack()`: required sections exceed `limit` | Fail with sizes per section. Never truncate required content |
+| `RequiredSectionTooLarge` | Raised by `handoff()` when `pack()` raised `RequiredTooLarge` for `handoff_packet_size` | The session falls back to a packet built from the last `STATE.md` checkpoint, sets `manifest.degraded: true`, takes status `handoff`, and emits `handoff_request` with that packet. The caller raises P2. The sizes are in the error and the manifest (section 5.1) |
 | `CommitFailed` | Git commit in the worktree fails | Fail with `CommitFailed`; state is not lost (STATE.md was written before commit); retryable |
 | `EventLogWriteFailed` | Event-log append fails | Log a warning; do not stop execution. Session state is still in the worktree. |
 | `RecoveryIncomplete` | `STATE.md` absent and event log has no matching events | Return a minimal `RecoveredContext` from the task description alone; flag `recovery_degraded: true` |
@@ -367,18 +380,22 @@ This library keeps its own typed errors and does not import any error library. A
 |-------|--------------------------|
 | `CommitFailed`, `EventLogWriteFailed` | `transient` |
 | `StepFnError`, `RecoveryIncomplete` | `ambiguous` |
-| `HookNotFound`, `RequiredTooLarge`, `RequiredSectionTooLarge` | `permanent` |
+| `HookNotFound`, `ConfigError`, `RequiredTooLarge`, `RequiredSectionTooLarge` | `permanent` |
 
 ## 8. Acceptance Criteria
 
 1. A session that completes normally produces: (a) a done commit with the configured prefix, (b) a `session_ended` event with `status: done`, (c) a `STATE.md` with `Status: done`.
-2. A session whose context reaches `handoff_threshold` of `context_limit` produces: (a) a `HANDOFF.md` that fits within `handoff_packet_size` tokens, (b) a handoff commit, (c) a `handoff_initiated` event.
+2. A session whose context reaches `handoff_threshold` of `context_limit` produces: (a) a `HANDOFF.md` that fits within `handoff_packet_size` tokens, (b) a handoff commit, (c) a `handoff_request` event with payload `{ session_id, task_id, reason, context_used, context_limit, packet }` and `reason: context_graceful` (or `context_emergency` at `emergency_threshold`).
 3. `recover()` on a hook that has a handoff commit and `HANDOFF.md` returns a `RecoveredContext` with the correct `next_steps` and `decisions`.
 4. A step that raises an unhandled exception sets `STATE.md` to `Status: crashed` and appends `session_ended(status=crashed)` before re-raising.
 5. `checkpoint_every: 3` produces a checkpoint commit exactly on steps 3, 6, 9, … regardless of whether `done` or `handoff` fires in between.
 6. Two sessions with the same `task_id` but different `session_id`s append to the same event-log scope; `recover()` correctly identifies the most recent session.
 7. A session with no `register_context` calls produces a `HANDOFF.md` in degraded mode with `manifest.degraded: true`.
 8. `pack` with required sections that fit never drops them; the manifest lists everything truncated or dropped. `pack` with required sections over `limit` fails `RequiredTooLarge` and returns no packet.
+9. `create()` with no `context_limit` fails `ConfigError`.
+10. When required sections exceed `handoff_packet_size`, `handoff()` raises `RequiredSectionTooLarge`; the session writes a `HANDOFF.md` built from the last `STATE.md` checkpoint with `manifest.degraded: true`, takes status `handoff`, and emits `handoff_request` carrying that packet.
+11. A step with no `context_tokens` (CLI Worker) never triggers a handoff.
+12. After each step, `STATE.md` shows `context_tokens` and `context_limit`.
 
 ## 9. Known Consumers
 
@@ -390,16 +407,16 @@ This library keeps its own typed errors and does not import any error library. A
 | `WorkerAgent.execute()` | `agent_session.execute(session, execute_step_fn)` where `execute_step_fn` calls the LLM and applies the minimalism ladder |
 | `WorkerAgent._trigger_handoff()` | `agent_session.handoff(session)` |
 | All 5 specialised agents (Analyst, PM, Architect, UX, Developer) | Each calls `create()` → `execute()` using its own `execute_step_fn`; the session lifecycle is identical |
-| `AgentConfig` (TECHNICAL-DESIGN-SPEC-PART3.md) | `SessionConfig` with the same fields (`model`, `context_limit`, `handoff_threshold`, `compression_level`) |
+| `AgentConfig` (TECHNICAL-DESIGN-SPEC-PART3.md) | `SessionConfig` with the same fields (`model`, `context_limit`, `handoff_threshold`) |
 | Agent session record in `agent_sessions` table (UMAS-TECH-DESIGN-SPEC.md §2) | UMAS maintains this DB row; the library writes `STATUS` to `STATE.md` and the event log. UMAS reads those to update the row. |
 | `[umas:done]`, `[umas:checkpoint]`, `[umas:handoff]` commit prefixes | The `[done]`, `[checkpoint]`, `[handoff]` prefixes here. UMAS configures `commit_prefixes.done = "[umas:done]"` etc. at startup. |
-| Signalling protocol (UMAS-TECH-DESIGN-SPEC.md §3.3) | `done()` writes the done commit (Scheduler reads it). `escalate()` appends to event-log (Coordinator reads it). `handoff()` appends the handoff event (Scheduler reads it). |
+| Signalling protocol (UMAS-TECH-DESIGN-SPEC.md §3.3) | `done()` writes the done commit (Scheduler reads it). `escalate()` appends to event-log (Coordinator reads it). `handoff()` appends the `handoff_request` event (Scheduler reads it). |
 | `provider_failed` session status | UMAS sets `status: provider_failed` in the DB when `llm-gateway` raises `ProviderExhausted`. It is set outside this library; UMAS then calls `recover()` when resuming. |
 | Handoff packet, about 15k tokens | `handoff()` calls `pack()` (section 5.9): `required` = task, next steps; `truncatable` = decisions, file pointers; `droppable` = step history |
 
 ## 10. Source Material and Deviations
 
-Extracted from `TECHNICAL-DESIGN-SPEC-PART3.md` §5.2 (`WorkerAgent`), `UMAS-TECH-DESIGN-SPEC.md` §3.3 (Agent Execution System, signalling protocol, handoff), and §3.6 (handoff). The packing contract in section 5.9 comes from the former `budget-meter` spec section 5.5, moved here by ADR-0005.
+Extracted from `TECHNICAL-DESIGN-SPEC-PART3.md` §5.2 (`WorkerAgent`), `UMAS-TECH-DESIGN-SPEC.md` §3.3 (Agent Execution System, signalling protocol, handoff), and §3.6 (handoff). The packing contract in section 5.9 moved here by [ADR-0005](../../docs/decisions/ADR-0005-track-token-usage-only.md).
 
 | Deviation | Why |
 |-----------|-----|
@@ -409,8 +426,7 @@ Extracted from `TECHNICAL-DESIGN-SPEC-PART3.md` §5.2 (`WorkerAgent`), `UMAS-TEC
 | `HANDOFF.md` as a separate file | The source sends the handoff packet as a compressed context passed to the successor via an in-memory scheduler call. A file in the worktree makes the packet durable across crashes and readable without the scheduler |
 | `register_context` for packing | The source builds the handoff packet by compressing `session_history` — it does not give callers control over what to include. Caller-registered sections give agents control over what the successor sees |
 | `provider_failed` set externally | In the source, this status lives inside `CoordinatorAgent` and the Scheduler. It is not a session lifecycle state owned by the agent; UMAS sets it in the DB when the external condition triggers it |
-| `budget_paused` status removed | Owner decision 2026-11-09 ([ADR-0005](../../docs/decisions/ADR-0005-track-token-usage-only.md)): no budgets, no pause on token use. Context-window handoff stays |
-| `pack()` moved in from `budget-meter` | `agent-session` was its only caller. Contract unchanged |
+| `pack()` moved in | `agent-session` is its only caller. Moved here by [ADR-0005](../../docs/decisions/ADR-0005-track-token-usage-only.md); contract unchanged |
 
 ## 11. Open Questions
 
@@ -440,10 +456,11 @@ import asyncio
 class AgentConfig:
     agent_id: str
     model: str
-    context_limit: int
+    context_limit: int          # from context_windows.<alias>; no default
     max_output_tokens: int
-    compression_level: str
     handoff_threshold: float
+    counter: Callable[[str], int]
+    event_source: str
 
 class WorkerAgent:
     def __init__(
@@ -531,6 +548,8 @@ class WorkerAgent:
           - Scheduler spawns successor agent with compressed context (~15k tokens)
         """
         
+        packet = await self._build_handoff_packet()   # calls pack(); degraded packet on failure (section 5.1)
+
         await self._commit_state_for_handoff(
             message=f"[umas:checkpoint] handoff at {self.context_tokens} context tokens"
         )
@@ -540,10 +559,12 @@ class WorkerAgent:
             agent_id=self.config.agent_id,
             event_type="handoff_request",
             data={
-                "reason": "context_graceful",
+                "session_id": self.session_id,
+                "task_id": self.task.id,
+                "reason": "context_graceful",   # or "context_emergency"
                 "context_used": self.context_tokens,
                 "context_limit": self.config.context_limit,
-                "task_id": self.task.id,
+                "packet": packet,               # HandoffPacket built by pack()
             },
         )
         
@@ -557,9 +578,8 @@ Source: `TECHNICAL-DESIGN-SPEC-PART3.md` §5.2.3
 ```yaml
 worker_agent_config:
   default_model: default                  # llm-gateway alias, not a model ID
-  context_limit: 200000
+  context_limit: <from context_windows.<alias>>   # required, no default
   max_output_tokens: 8000
-  compression_level: lite
   handoff_threshold: 0.90
   
   tools:

@@ -23,7 +23,7 @@ One interface for calling LLMs across providers, with a defined retry policy, bo
 **Non-goals**
 - Agent loops, tool execution, prompt construction, or memory
 - Task-level resume after failover. The caller re-supplies the conversation or checkpoint; the gateway is stateless about tasks. (See 5.4.)
-- Limiting spend. The gateway never limits spend. It reports usage through a callback, and the consumer records it in [token-ledger](../token-ledger/README.md).
+- Acting on usage. The gateway reports usage through a callback, and the consumer records it, for example in [token-ledger](../token-ledger/README.md).
 - Caching, evaluation, or prompt management
 
 ## 3. Concepts and Data Model
@@ -38,6 +38,17 @@ Usage:    { input_tokens, output_tokens, cached_input_tokens?, cache_write_token
 
 `attempts[]` lists every provider call with its outcome, so failover is visible to the caller.
 
+`Usage` fields, normalised across providers:
+
+| Field | Meaning |
+|-------|---------|
+| `input_tokens` | Uncached input tokens only. A provider that reports a total including cache reads or writes has those subtracted |
+| `cached_input_tokens` | Input tokens read from the provider's prompt cache. Absent when the provider reports none |
+| `cache_write_tokens` | Input tokens written to the prompt cache. Absent when the provider reports none |
+| `output_tokens` | Output tokens as the provider reports them |
+
+`context_tokens` of a step = `input_tokens + cached_input_tokens + cache_write_tokens + output_tokens` of that step's **last** call (absent fields count as 0). It is the size of the context window after the call, not a running total. A usage total for recording is `input_tokens + output_tokens`; cached fields are not added.
+
 ### 3.2 Model alias table (configuration)
 
 ```yaml
@@ -48,6 +59,8 @@ aliases:
   deep:     { primary: {provider: anthropic, model: "<id from config>"},
               fallback: {provider: openai, model: "<id from config>"} }
 ```
+
+Each alias used by the consumer needs a context window size. It is not part of this table: the consumer defines it in its own config. In UMAS it is the key `context_windows.<alias>` in `umas.config.yaml`, with no default; a used alias with no value is a `ConfigError` at start-up. The gateway does not read it.
 
 `deep` is the alias the UMAS specs use for the Architect role (agent-execution, `architect.model`). It is a name, not a vendor: the model behind it is set in this table.
 
@@ -74,7 +87,7 @@ The gateway keeps this taxonomy as its own. A consumer that wants one error voca
 | `complete(request) -> Response` | Blocking call applying the policy. |
 | `stream(request) -> stream<Delta>` | Streaming. Mid-stream failure is reported as an error event; the gateway does **not** transparently restart a partly delivered stream on another provider (the output may differ). |
 | `health() -> [ProviderHealth]` | Last-seen status and circuit state per provider. |
-| `on_usage(callback)` | Called once per successful or failed attempt with `{alias, provider, model, usage, latency_ms, outcome}`. |
+| `on_usage(callback)` | Called once per successful or failed attempt with `{alias, provider, model, usage, latency_ms, outcome}`. `model` is the model name the provider answered with, not the alias. An exception raised by the callback is caught by the gateway and logged, and never changes the outcome of `complete` or `stream` (5.7). |
 
 ## 5. Behaviour
 
@@ -90,7 +103,7 @@ raise ProviderExhausted(attempts)
 
 ### 5.2 No blind retry loops
 
-After the fallback is exhausted the gateway raises `ProviderExhausted`. It does **not** keep retrying in the background. Repeated blind retries risk burning tokens on timeouts that are charged, so recovery is initiated by the caller or a human.
+After the fallback is exhausted the gateway raises `ProviderExhausted`. It does **not** keep retrying in the background. Repeated blind retries waste tokens on calls that time out after the provider has already processed them, so recovery is initiated by the caller or a human.
 
 ### 5.3 Circuit breaker
 
@@ -107,6 +120,10 @@ A token bucket per provider and per alias, with `requests_per_minute` and `token
 ### 5.6 Security
 
 API keys come from environment variables or a secrets provider, never from files committed to a repo, never logged. Request/response bodies are not logged by default; the usage callback carries counts only. TLS is required for all non-localhost endpoints.
+
+### 5.7 Usage callback errors
+
+The gateway calls `on_usage` after each attempt and catches any exception it raises. The exception is logged (type and message, no request body) and dropped. It never turns a success into an error, never triggers a retry or failover, and never stops the remaining callbacks. A failing callback therefore cannot cause a second provider call.
 
 ## 6. Acceptance checklist for the wrapper
 
@@ -145,6 +162,7 @@ The wrapper must pass every "yes" row. The nice-to-have rows are optional.
 4. Changing a model ID in configuration needs no code change or rebuild.
 5. No secret appears in logs, usage events, or error messages (tested with a canary key).
 6. With the primary breaker open, calls go to the fallback with no added latency.
+7. A callback that raises on every call leaves `complete` returning the same `Response` as with no callback, with one provider call per attempt and the exception logged.
 
 ## 9. Known Consumers
 
@@ -157,8 +175,9 @@ The wrapper must pass every "yes" row. The nice-to-have rows are optional.
 | Failover resume from `STATE.md` | UMAS builds the compressed context from `hook-store` and calls the gateway with the fallback alias |
 | Error classes and retry table | Same policy expressed as [error-classifier](../error-classifier/README.md) catalog entries (section 9 there); the gateway still enforces its own policy |
 | P0 on auth error; P1 on exhausted | UMAS maps `AuthError` -> P0 escalation, `ProviderExhausted` -> P1 and `provider_failed` session status |
+| Context window per alias | UMAS config `context_windows.<alias>` in `umas.config.yaml` (3.2); read by UMAS, not by the gateway |
 | Per-role model mapping and panels | UMAS resolves a role to an alias; a panel is N `complete` calls plus synthesis (not gateway logic) |
-| Token accounting | `on_usage` -> `token-ledger.record(model, tokens)`. `model` = the payload's `alias`. `tokens` = `usage.input_tokens + usage.output_tokens`; cached-token fields are not added. Every attempt that reports usage is recorded, failed attempts included. An attempt with no usage report produces no entry (token-ledger section 9) |
+| Token accounting | `on_usage` -> `token-ledger.record(model, tokens)`. `model` = the payload's `model`, the model name that answered the attempt (for example `opus`), never the alias. `tokens` = `usage.input_tokens + usage.output_tokens` (3.1); cached-token fields are not added. Every attempt that reports usage is recorded, failed attempts included. An attempt with no usage report produces no entry (token-ledger section 9) |
 
 ## 10. Source Material and Deviations
 

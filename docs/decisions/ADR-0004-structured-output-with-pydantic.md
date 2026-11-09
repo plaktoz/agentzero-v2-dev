@@ -6,15 +6,15 @@ title: Validate structured model output with Pydantic v2 at the Python boundary
 status: accepted
 author: tianhonglee
 created: 2026-10-25
-updated: 2026-10-25
+updated: 2026-11-09
 supersedes: []
 superseded_by: []
-links: [../../packs/README.md, ../../packs/anti-slop/schema/review-output.json, ../../umas/TECHNICAL-DESIGN-SPEC.md]
+links: [../../packs/README.md, ../../packs/router-heuristic/schema/decision.json, ../../umas/TECHNICAL-DESIGN-SPEC.md]
 ---
 
 ## Context
 
-Packs define their output as JSON Schema files (for example `packs/anti-slop/schema/review-output.json`). Model output that feeds packs or the orchestrator must be parsed and validated. The stack is Python (see `umas/TECHNICAL-DESIGN-SPEC.md` Appendix A, and the stack note at its top).
+Packs define their output as JSON Schema files (for example `packs/router-heuristic/schema/decision.json`). Model output that feeds packs or the orchestrator must be parsed and validated. The stack is Python (see `umas/TECHNICAL-DESIGN-SPEC.md` Appendix A, and the stack note at its top).
 
 A separate structured-output-parser library was proposed for this job. No evidence was found that it adds anything over the Python stack's own validation.
 

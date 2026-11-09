@@ -519,6 +519,13 @@ event_types:
       severity: enum[P0, P1, P2, P3]
       reason: string
       escalated_to: string
+
+  monitor_escalation:
+    data:
+      session_id: string
+      task_id: string
+      context_used: integer
+      context_limit: integer
       
   token_usage:
     data:
@@ -526,10 +533,12 @@ event_types:
       cumulative_tokens: integer
       percentage_used: float
       
-  handoff_initiated:
+  handoff_request:
     data:
-      from_agent: string
-      to_agent: string
-      reason: string
-      state_transferred: boolean
+      session_id: string
+      task_id: string
+      reason: enum[context_graceful, context_emergency]
+      context_used: integer
+      context_limit: integer
+      packet: string
 ```

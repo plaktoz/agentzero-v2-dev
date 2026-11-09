@@ -236,7 +236,7 @@ All agent signals use these exact strings. No synonym, no abbreviation. The Sche
 | Task complete | Git commit message | `[umas:done] <task-id>` | Scheduler |
 | Checkpoint | Git commit message | `[umas:checkpoint] <summary>` | Project Monitor |
 | Task blocked / escalate | Append to `events.jsonl` | `{"event":"escalate","severity":"P1","reason":"..."}` | Coordinator |
-| Handoff request | Append to `events.jsonl` | `{"event":"handoff_request","session_id":"...","reason":"..."}` | Scheduler |
+| Handoff request | Append to `events.jsonl` | `{"event":"handoff_request","session_id":"...","task_id":"...","reason":"...","context_used":0,"context_limit":0,"packet":"..."}`. `reason` is `context_graceful` or `context_emergency` | Scheduler |
 | Step complete | Append to `events.jsonl` | `{"event":"step_complete","agent":"...","hook":"...","summary":"..."}` | Project Monitor |
 
 > **Open question Q8:** `agent-platform` currently uses `[done]`/`[blocked]`. One must change to match this table. Decision pending; tracked in `TECHNICAL-DESIGN-SPEC.md §14.8`.

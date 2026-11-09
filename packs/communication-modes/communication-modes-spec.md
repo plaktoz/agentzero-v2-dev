@@ -22,7 +22,7 @@ Agents talk to each other often and to people rarely, and those two audiences ne
 - Fixtures that check meaning survives compression
 
 **Non-goals**
-- Removing generic AI patterns from plain text. See [anti-slop](../anti-slop/anti-slop-spec.md); plain mode composes with it.
+- Removing generic AI patterns from plain text. Prose cleanup is the `unslop` skill in [agent-garage](https://github.com/plaktoz/agent-garage); this pack does not call it.
 - Context packing and summarisation. See [agent-session](../../libs/agent-session/README.md), section "Context packing".
 - Translating between human languages
 
@@ -103,15 +103,15 @@ This list is the safety rule that the source leaves implicit.
 
 ### 5.5 Routing
 
-| Document type | Register | Anti-slop |
-|---------------|----------|-----------|
-| PRD | plain | yes |
-| Technical documentation | plain | yes |
-| Reports, escalation text to a human | plain | yes |
-| Agent logs | compact | no |
-| Status updates (agent to agent) | compact | no |
-| Handoff notes (agent to agent) | compact, level 2 | no |
-| Handoff summary shown to a human | plain | yes |
+| Document type | Register |
+|---------------|----------|
+| PRD | plain |
+| Technical documentation | plain |
+| Reports, escalation text to a human | plain |
+| Agent logs | compact |
+| Status updates (agent to agent) | compact |
+| Handoff notes (agent to agent) | compact, level 2 |
+| Handoff summary shown to a human | plain |
 
 Unknown types default to plain. A mistaken plain message costs tokens; a mistaken compact message can cost understanding.
 
@@ -122,10 +122,10 @@ default_register: plain
 agent_to_agent: { register: compact, intensity: 2 }
 human_facing:   { register: plain,   require_examples: true }
 documents:
-  - { type: prd,           register: plain,   anti_slop: true }
-  - { type: tech_docs,     register: plain,   anti_slop: true }
-  - { type: agent_log,     register: compact, anti_slop: false }
-  - { type: status_update, register: compact, anti_slop: false }
+  - { type: prd,           register: plain }
+  - { type: tech_docs,     register: plain }
+  - { type: agent_log,     register: compact }
+  - { type: status_update, register: compact }
 protected_patterns: [code_fence, inline_code, path, url, number, quoted]
 ```
 
@@ -149,8 +149,8 @@ protected_patterns: [code_fence, inline_code, path, url, number, quoted]
 | F2 | Same status at intensity 3 | Still contains task, per-item status, blocker, and next step; no fact lost |
 | F3 | Message containing a command, a path, and an error string | All three appear verbatim in compact output |
 | F4 | The same status for a project sponsor | Full sentences; sections Completed, In Progress, Pending, Blocker, Next Steps; no abbreviations |
-| F5 | Doc type "prd" | Routed to plain with anti-slop |
-| F6 | Doc type "agent_log" | Routed to compact without anti-slop |
+| F5 | Doc type "prd" | Routed to plain |
+| F6 | Doc type "agent_log" | Routed to compact |
 | F7 | Unknown doc type | Plain |
 
 ### 8.2 Acceptance criteria
@@ -170,7 +170,7 @@ protected_patterns: [code_fence, inline_code, path, url, number, quoted]
 |--------------|---------|
 | PRD §11.9, `config/communication-modes.yaml` | `routing.yaml` and the config here |
 | Event log text, `STATE.md` notes, handoff notes | Compact |
-| PRDs, ADRs, PRFAQ, escalation summaries to people | Plain, then [anti-slop](../anti-slop/anti-slop-spec.md) |
+| PRDs, ADRs, PRFAQ, escalation summaries to people | Plain |
 | Handoff packet content | Compact (the successor shares the task context in the packet) |
 
 ## 10. Source Material and Deviations

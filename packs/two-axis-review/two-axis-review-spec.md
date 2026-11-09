@@ -214,7 +214,7 @@ max_findings_per_axis: 25
 | Block merge on critical and high | The merge-queue treats `gate.recommend == block` as an unmet condition for `ready_to_merge` |
 | On-call and production-impact checklist (PRD) | 5.4 |
 | Test coverage under selective mode | [test-policy](../test-policy/test-policy-spec.md) classifier supplies the "risky logic" list the Standards pass checks |
-| Anti-slop code rules | Standards pass may cite [anti-slop](../anti-slop/anti-slop-spec.md) 5.4 as pattern findings |
+| Anti-slop code rules | Standards pass may cite the former anti-slop pack's code rules (§5.4) as pattern findings. The pack was removed; the rules are in this repo's history at `44c1ef6` (`packs/anti-slop/anti-slop-spec.md`) and are not in [unslop](https://github.com/plaktoz/agent-garage), which covers prose only |
 
 ## 10. Source Material and Deviations
 

@@ -191,8 +191,6 @@ Escalation of system faults (`idp_unavailable`, `store_unavailable`, `audit_unav
 | `user:manage` | `max_role` (a role name from section 5.2) | `{"max_role": "developer"}` | The role being bound must not rank above `max_role`. Decided by A.5.4 (Project Owner, up to Developer). |
 | `task:write` or `agent:stop` | `own_only` (boolean) | `{"own_only": true}` | Only if section 9, item 4 chooses option (b). Otherwise not used. |
 
-The `budget:set` limit (money cap) was removed (ADR-0005).
-
 ### 4. Parameters
 
 Two groups apply. The kc-axi rows set how the admin CLI reaches Keycloak. They are not API settings. The API rows set how the check works.
@@ -271,8 +269,6 @@ Status: **Decided** marks a name from D21 (owner answer (a)), from A.5.6 or from
 | `worktree:clean` | project | Clean stale worktrees | Proposed (D36 recommendation) |
 | `hook:create` | project | Create a hook | Proposed (D36 recommendation) |
 | `hook:commit` | worktree | Commit to a Worker's own hook branch | Proposed (D36 recommendation) |
-
-`budget:read` and `budget:set` were removed (ADR-0005).
 
 Secrets have no permission name. No role grants access to them (A.5.4). The API can only report whether a secret is set.
 
@@ -358,7 +354,7 @@ No binding API exists in Phase 1 (section 9, item 13). Step 4 and step 5 are the
 | [orchestration](../orchestration/orchestration-spec.md) | The Coordinator creates and revokes agent credentials at spawn, handoff and end (A.5.2, A.5.7). It writes `acting_for_id` on the credential (section 2). It writes `requested_by` on each work item (decided, D10). | Function call at spawn. Update at handoff or end. | Sync at spawn. Async at end (proposed) |
 | [agent-execution](../agent-execution/agent-execution-spec.md) | Agent sessions carry the scoped credential. The launch path is agent-execution's (decided, D12). Its launch calls `check` for `agent:spawn` as the Coordinator's principal (proposed). The harness and sandbox enforce the worktree and the provider-only network (A.5.7). | Credential in `config`. Function call. Sandbox rules. | Sync |
 | [exception-flows](../exception-flows/exception-flows-spec.md) | Boot recovery marks sessions `auth_expired` (6.17). Boot-time validation of agent credentials is section 9, item 11. A database lock or corruption affects the store (6.12). | Boot check. Store error. | Async at boot. Sync on a request. |
-| [interfaces](../interfaces/interfaces-spec.md) (names to change) | Interfaces uses `worktree:write` (`worktrees clean`, `worktrees recover`). This changes in that module to the `worktree:clean` and `worktree:recover` names in section 5.1 (proposed, D36). Its `budget:write` check on `PATCH /api/v1/projects/{id}` is dropped with the budget (ADR-0005). That is a change in interfaces, not here. | Name change | Not applicable |
+| [interfaces](../interfaces/interfaces-spec.md) (names to change) | Interfaces uses `worktree:write` (`worktrees clean`, `worktrees recover`). This changes in that module to the `worktree:clean` and `worktree:recover` names in section 5.1 (proposed, D36). | Name change | Not applicable |
 
 ### 7. Libraries and packs used
 
@@ -403,8 +399,7 @@ Closed by owner answers (2026-10-25). The decision is recorded in the section sh
 - OIDC on every call, one sign-in path (D11 A). Section 2, human sign-in.
 - Launch path owned by agent-execution (D12 A). Section 6.
 - Service principals created by `umas init`, with `service_principals` for custom processes only (C3 B). Sections 4 and 5.3.
-- Names `metrics:read`, `agent:handoff` and `agent:resume` (D21). Section 5.1. The `budget:set` name was removed (ADR-0005).
-- Removed (ADR-0005): money as the budget unit (C2), and its `context.amount` check.
+- Names `metrics:read`, `agent:handoff` and `agent:resume` (D21). Section 5.1.
 
 1. **Break-glass access during a Keycloak outage (interfaces I-1).** Keycloak is down, and every person and service request is refused (section 8). An operator may still need to stop a runaway agent.
    - (a) No break-glass. An outage stops every command.

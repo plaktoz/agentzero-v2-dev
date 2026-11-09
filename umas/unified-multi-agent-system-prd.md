@@ -4,8 +4,6 @@
 **Date:** October 17, 2026  
 **Status:** Draft for Review
 
-> **Budget requirements removed 2026-11-09 (ADR-0005).** UMAS records tokens used, model and timestamp for each LLM call. It does not budget, price, pause or alert on usage. The context-window handoff is kept.
-
 ---
 
 ## Executive Summary
@@ -234,11 +232,10 @@ Track code size, tokens, time, test coverage, and production reliability.
 **Requirements:**
 - **MUST:** Record tokens used, model and timestamp for each LLM call in the token ledger (`libs/token-ledger`)
 - **MUST:** Show token totals by model (`umas metrics tokens`)
-- Token usage does not limit, reserve, price, pause or alert on work (ADR-0005)
 
 **Rationale:**
 - Usage is measured so the owner can see where tokens go
-- Spend is not capped. Stall supervision (`watchdog`) and the concurrency cap (`task-queue`) limit runaway loops
+- Stall supervision (`watchdog`) and the concurrency cap (`task-queue`) limit runaway loops
 
 ### Database Scaling
 
@@ -1278,7 +1275,7 @@ security:
 **Required Error Fields:**
 ```yaml
 error:
-  code: string              # Machine-readable error code (e.g., "AGENT_TOKEN_EXHAUSTED")
+  code: string              # Machine-readable error code (e.g., "AGENT_CONTEXT_HANDOFF_FAILED")
   severity: string          # P0, P1, P2, P3
   recoverability: string    # transient, permanent, ambiguous
   message: string           # Human-readable description
@@ -1355,20 +1352,20 @@ error:
 
 **Example Agent Error Response:**
 ```
-Error: AGENT_TOKEN_EXHAUSTED (P1, transient)
+Error: AGENT_CONTEXT_HANDOFF_FAILED (P2, transient)
 Context: worker-alice, session-789, task: auth-feature
 Context Window: 145,000 / 150,000 tokens (97%)
 Operation: Implementing login endpoint
 
 Recovery Actions:
-1. [AUTOMATIC] Committing current state to hook: auth-feature/
+1. [AUTOMATIC] Handoff packet not written. Falling back to the last STATE.md checkpoint (degraded)
 2. [AUTOMATIC] Spawning fresh agent (worker-bob) with same hook
-3. [AUTOMATIC] Transferring context to worker-bob
+3. [AUTOMATIC] Transferring the checkpoint to worker-bob
 
 Expected Resolution: 30 seconds
 No human intervention required.
 
-Documentation: https://docs.system.com/errors/token-exhausted
+Documentation: https://docs.system.com/errors/context-handoff-failed
 ```
 
 ### Human-Facing Error Handling
@@ -3917,7 +3914,7 @@ work_bundle:
 - **Context Tracking**: Monitor each agent session's context window fill
 - **Proactive Handoff**: Trigger handoff before the context window is full
 - **Context Carried Forward**: Minimize the context passed into a handoff
-- Handoff thresholds protect the context window. They do not limit spend and never pause work (ADR-0005)
+- Handoff thresholds protect the context window
 
 **Implementation:**
 
@@ -4397,7 +4394,7 @@ Workspace A:
 **Mitigation:** Parallel execution where possible, configurable verification depth.
 
 ### Risk 4: Token Growth
-**Risk:** Multi-agent coordination and diverse panels increase token use. Spend is not capped (ADR-0005).  
+**Risk:** Multi-agent coordination and diverse panels increase token use.  
 **Mitigation:** Capacity governance (`task-queue` concurrency cap), selective panel usage, `watchdog` stall supervision. Token totals by model are reported by `umas metrics tokens`.
 
 ### Risk 5: Adoption Friction
@@ -4554,7 +4551,7 @@ Workspace A:
 
 - **Agent Handoff:** Process of transferring work from one agent to another when the first agent's context window fills. Enabled by hook-based architecture where work is tied to hooks, not agent identity.
 
-- **Context Window:** Maximum number of tokens a model can hold in one agent session. Handoff thresholds are fractions of it. It is not a spend limit (ADR-0005).
+- **Context Window:** Maximum number of tokens a model can hold in one agent session. Handoff thresholds are fractions of it.
 
 - **Handoff Threshold:** Percentage of the context window at which the system proactively triggers a graceful handoff (typically 90%). Emergency handoff applies at 95%.
 

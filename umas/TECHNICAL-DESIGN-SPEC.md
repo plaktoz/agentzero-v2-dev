@@ -13,7 +13,7 @@
 >
 > This is the single authoritative technical design document. The four-file split from v1.x has been collapsed here.
 > All code that was inline in the previous documents has been moved into `libs/` and `packs/` reference appendices.
-> **Reusable components:** [libs/README.md](../libs/README.md) (14 libraries) · [packs/README.md](../packs/README.md) (9 content packs)
+> **Reusable components:** [libs/README.md](../libs/README.md) (13 libraries) · [packs/README.md](../packs/README.md) (7 content packs here; 2 pointers to agent-garage)
 > **Product requirements:** [unified-multi-agent-system-prd.md](./unified-multi-agent-system-prd.md)
 
 ---
@@ -288,8 +288,8 @@ Parts of the design are extracted as standalone units with no dependency on UMAS
 
 | Component in this doc | Standalone spec |
 |-----------------------|-----------------|
-| Minimalism ladder, shortcut comments (§5.3) | [minimalism-ladder](../packs/minimalism-ladder/minimalism-ladder-spec.md) |
-| Anti-slop principles | [anti-slop](../packs/anti-slop/anti-slop-spec.md) |
+| Minimalism ladder, shortcut comments (§5.3) | [minimalism-ladder](https://github.com/plaktoz/agent-garage) |
+| Anti-slop principles | [anti-slop](https://github.com/plaktoz/agent-garage) |
 | Communication modes (compact vs. plain) | [communication-modes](../packs/communication-modes/communication-modes-spec.md) |
 | Code Review, two-axis (§5.4) | [two-axis-review](../packs/two-axis-review/two-axis-review-spec.md) |
 | Specialized Agents (§5.3) | [specialist-agents](../packs/specialist-agents/specialist-agents-spec.md) |
@@ -513,7 +513,7 @@ def on_task_complete(task_id):
 | Task complete | Commit: `[umas:done] <task-id>` | Scheduler |
 | Task blocked | Append to `events.jsonl`: escalate event | Coordinator |
 | Checkpoint | Commit: `[umas:checkpoint] <summary>` | Project Monitor |
-| Handoff request | Append to `events.jsonl`: handoff_request event | Scheduler |
+| Handoff request | Append to `events.jsonl`: `handoff_request` with `{ session_id, task_id, reason, context_used, context_limit, packet }`. `reason` is `context_graceful` or `context_emergency` | Scheduler |
 
 **Minimalism ladder** (runs *after* reading relevant code, *before* writing any):
 
@@ -524,7 +524,7 @@ def on_task_complete(task_id):
 5. Can it be one readable line?
 6. Otherwise: minimum code that works
 
-> Standalone spec: [packs/minimalism-ladder.md](../packs/minimalism-ladder/minimalism-ladder-spec.md)
+> Standalone skill: [agent-garage](https://github.com/plaktoz/agent-garage) (`skills/minimalism-ladder`). The UMAS consumer notes that were in the source spec (its §9 and §12) were removed with the pack; see git history at 44c1ef6.
 
 **Shortcut comments:** Agents may leave `// SHORTCUT: <what> — <when to fix>` to mark a deliberate deferral. Must be tracked in the project's debt ledger. All other comments require justifying "why" code exists.
 
@@ -640,14 +640,14 @@ Recovery order: Nudge → Graceful handoff → Emergency handoff
 
 ### 5.6 Token Usage and Handoff
 
-**Usage recording:** Every LLM call is recorded to [token-ledger](../libs/token-ledger/README.md) as `{ts, model, tokens}`, and nothing else. A call whose harness reports no usage produces no entry. `metrics-store` holds the same figures as `token.used` rows tagged `model`, and `umas metrics tokens` reports totals by model. Usage is recorded only: it is not limited, priced or used to pause work ([ADR-0005](../docs/decisions/ADR-0005-track-token-usage-only.md)).
+**Usage recording:** Every LLM call is recorded to [token-ledger](../libs/token-ledger/README.md) as `{ts, model, tokens}`, and nothing else. A call whose harness reports no usage produces no entry. `metrics-store` holds the same figures as `token.used` rows tagged `model`, and `umas metrics tokens` reports totals by model.
 
-**Handoff triggers:** The thresholds are fractions of the model's context window. They trigger a handoff and never pause work.
+**Handoff triggers:** The thresholds are fractions of the model's context window. They trigger a handoff.
 
 | Trigger | Type | Action |
 |---------|------|--------|
 | Session context use ≥ 90% of context window | Graceful | Agent commits state, requests handoff |
-| Session context use ≥ 95% of context window | Emergency | Monitor forces handoff from last checkpoint |
+| Session context use ≥ 95% of context window | Emergency | Monitor appends a `monitor_escalation` event; the Coordinator sends the handoff from the last checkpoint |
 
 **Context compression on handoff** — full context (~175k tokens) compressed to handoff packet (~15k tokens) by `pack()` in agent-session (section "Context packing"):
 
@@ -796,12 +796,6 @@ Worktree branches committed before deletion still exist in the Git object store.
 | `binary` | Cannot chain — warn, skip, polling-only mode |
 
 On `umas update`, only the `# umas-managed` marker line is replaced; all other hook entries are left untouched.
-
----
-
-### 6.6 Removed (ADR-0005)
-
-UMAS no longer pauses or defers work because of token usage ([ADR-0005](../docs/decisions/ADR-0005-track-token-usage-only.md)).
 
 ---
 
@@ -1093,7 +1087,7 @@ WebSocket: /ws/events   (Phase 4 only)
 | Tier 2 | 20 | PostgreSQL | 5–10 developers |
 | Tier 3 | 30+ | PostgreSQL + connection pool | 10+ developers |
 
-**Token usage:** Each LLM call is recorded in token-ledger, and `umas metrics tokens` reports totals by model. Nothing limits or prices usage ([ADR-0005](../docs/decisions/ADR-0005-track-token-usage-only.md)).
+**Token usage:** Each LLM call is recorded in token-ledger, and `umas metrics tokens` reports totals by model.
 
 ---
 
@@ -1208,7 +1202,7 @@ Tier 1 and Tier 2 is a cleaner cut than Bob's original five categories, because 
 |---|---|---|---|
 | [hook-store](../libs/hook-store/README.md) | `worktree-manager` / `hook-store` | Done | Renamed because a worktree is a hook holding a unit of work. Adds leases, `STATE.md`, GC and recovery. |
 | [event-log](../libs/event-log/README.md) | `event-log` / `event-log` | Done | Adds cursor polling, rotation, repair and redaction. Unifies the two inconsistent envelope shapes in the source. Decided (2026-10-25): files stay the default; the SQLite WAL backend is added when the writer count reaches 20 to 30 (A.4.4). |
-| [token-ledger](../libs/token-ledger/README.md) | `token-budget` / `budget-meter` (renamed) | Done, Changed | A multi-process usage log of `{ts, model, tokens}`. Renamed from `budget-meter`; reservations, limits and thresholds were removed ([ADR-0005](../docs/decisions/ADR-0005-track-token-usage-only.md)). `pack()`, the mechanical half of Bob's `context-compressor`, moved to [agent-session](../libs/agent-session/README.md). |
+| [token-ledger](../libs/token-ledger/README.md) | `token-ledger` / `token-ledger` | Done | Append-only usage log. One line `{v, ts, model, tokens}` per LLM call: tokens, model and time only ([ADR-0005](../docs/decisions/ADR-0005-track-token-usage-only.md)) |
 | [merge-queue](../libs/merge-queue/README.md) | `umas-merge-queue` / `merge-queue` | Done | Prefix-bisect replaces split-half (which misses combination failures). Adds crash recovery, baseline check, persisted state. The original code is flagged defective (CAS issue, no conflict handling, in-memory queue). **No adopt-or-build evaluation**, although Claude suggested GitHub merge queue or Mergify. |
 | [test-adapters](https://github.com/plaktoz/test-adapters) | `umas-test-runner` / `test-adapters` | Own repository | Developed outside this repo. |
 | [llm-gateway](../libs/llm-gateway/README.md) | `llm-gateway` / `llm-gateway` | Done | Build posture changed on 2026-10-25 from "adopt first" to wrapping the provider SDKs ([ADR-0003](../docs/decisions/ADR-0003-llm-gateway-wraps-provider-sdks.md)); the evaluation list is now the wrapper's acceptance checklist. Forbids hard-coded model IDs. Has the no-blind-retry rule, circuit breaker, and per-class error taxonomy. |
@@ -1241,8 +1235,8 @@ Not extracted:
 
 | Pack | Covers | Assessment |
 |---|---|---|
-| [minimalism-ladder](../packs/minimalism-ladder/minimalism-ladder-spec.md) | 6-rung ladder, three enforcement levels, shortcut format | Correct tier. |
-| [anti-slop](../packs/anti-slop/anti-slop-spec.md) | 7-category slop definition, two-pass review, forbidden-phrase linter | Novel addition, high value. Split from the ladder into its own pack. |
+| [minimalism-ladder](https://github.com/plaktoz/agent-garage) | 6-rung ladder, three enforcement levels, shortcut format | Correct tier. |
+| [anti-slop](https://github.com/plaktoz/agent-garage) | 7-category slop definition, two-pass review, forbidden-phrase linter | Novel addition, high value. Split from the ladder into its own pack. Superseded (2026-11-09) by `unslop` in agent-garage; the pack is kept as a record. |
 | [communication-modes](../packs/communication-modes/communication-modes-spec.md) | Compact (agent to agent) and plain (human-facing) registers | Novel addition. Addresses token waste. |
 | [two-axis-review](../packs/two-axis-review/two-axis-review-spec.md) | Standards and Spec passes, finding schema, severity gate | Replaces the `CodeReviewAgent` stub. |
 | [specialist-agents](../packs/specialist-agents/specialist-agents-spec.md) | Analyst, PM, UX, Architect, Developer prompts and output contracts | Done as prompt packs, not code. The original Python stubs sit in its section 12. Covers the 35M-token cost driver. |
@@ -1251,7 +1245,7 @@ Not extracted:
 | [test-policy](../packs/test-policy/test-policy-spec.md) | Selective vs strict modes, risky-logic classifier, trivial-change exemption | Policy correctly separated from test execution. |
 
 Open points on the packs:
-- Shipping "as Claude Code skills on day one" is **in progress**. Each pack describes how it becomes a `SKILL.md`. Three are being built now (minimalism-ladder, anti-slop, test-policy); see A.2.4.
+- Shipping "as Claude Code skills on day one" is **in progress**. Each pack describes how it becomes a `SKILL.md`. Three were being built at the time of the review (minimalism-ladder, anti-slop, test-policy); see A.2.4. minimalism-ladder is now in agent-garage, and anti-slop is superseded by `unslop` there.
 - "Tier 2 gives the most reuse for the least cost" is plausible but untested. The packs have fixtures and acceptance criteria and have not been run against a model.
 - "Specialist agents are cheaper as prompt packs" is unverified. The 35M-token estimate has not been re-costed.
 
@@ -1277,8 +1271,8 @@ Merged from the reusable components review. Its tiers still hold; the status col
 | `error-classifier` | Any multi-component system | Record format and retry-advice table | Done |
 | `watchdog` | Any set of long-running local processes | Python package under the OS service manager (A.4.6) | Done |
 | `two-axis-review` (pack) | Any dev team, for PR review | `SKILL.md` | Spec only |
-| `anti-slop` (pack) | Any project with AI-assisted text or code | `SKILL.md` | Being built |
-| `minimalism-ladder` (pack) | Any coding agent | `SKILL.md` | Being built |
+| `anti-slop` (pack) | Any project with AI-assisted text or code | `SKILL.md` | Superseded by `unslop` in agent-garage (2026-11-09) |
+| `minimalism-ladder` (pack) | Any coding agent | `SKILL.md` | Migrated to agent-garage `skills/minimalism-ladder` (2026-11-09) |
 | `grilling` (pack) | Any agent that takes requirements | `SKILL.md` | Spec only |
 
 **Tier B: reusable with small changes**
@@ -1305,7 +1299,7 @@ Merged from the reusable components review. Its tiers still hold; the status col
 **Reuse gaps**
 
 1. **No shared schema registry.** Ten components write JSONL with `schema_version`, each with its own inline schema. A project that uses three of them must reconcile three schemas. Proposal: a `schemas/` folder at the repo root with canonical JSON Schema files that each spec references. Not decided (A.7, item 8).
-2. **Packs have no shippable artifact.** Until `PACK.md` exists, a pack is reusable only by reading its spec. Three are being built now (minimalism-ladder, anti-slop, test-policy) in `packs/`, then copied to claude-mods, per `docs/tasks-skills-claude-mods-2026-10-25.md`. The review named anti-slop and two-axis-review as the first packs to ship. two-axis-review is not in this batch.
+2. **Packs have no shippable artifact.** Until `PACK.md` exists, a pack is reusable only by reading its spec. Of the three being built at the review (minimalism-ladder, anti-slop, test-policy), minimalism-ladder is now in agent-garage and anti-slop is superseded by `unslop` there (2026-11-09). test-policy is still in `packs/`, to be copied to claude-mods per `docs/tasks-skills-claude-mods-2026-10-25.md`. The review named anti-slop and two-axis-review as the first packs to ship. two-axis-review is not in this batch.
 
 ---
 
@@ -1422,7 +1416,7 @@ Today there is no broker. The libs use files (`events.jsonl`, heartbeat files, s
 #### A.4.5 Effects on the existing specs
 
 Done on 2026-10-25:
-- The Rust code in section 12 of `hook-store` (2 blocks), `budget-meter` (now `token-ledger`) and `watchdog` is marked legacy: the language is not in the stack and the code is to be ported to Python.
+- The Rust code in section 12 of `hook-store` (2 blocks), `token-ledger` and `watchdog` is marked legacy: the language is not in the stack and the code is to be ported to Python.
 - The implementation-language table in the libs README now says Python for the libs that listed Go, Rust or "Any".
 - The summary document, the stack spec, the build assessment, `UMAS-DNA.md` and the setup guide now state Python as the chosen stack, and keep Rust wording only where it describes the source design.
 
@@ -1550,8 +1544,6 @@ S means system-wide, P means within the projects the user is bound to, and a das
 | Manage users and role bindings | S | P (members, up to Developer) | - | - | - | - | - |
 | Read the audit log | S | P | - | - | - | S | - |
 | Read or write secrets through the API | never | never | never | never | never | never | never |
-
-Removed (ADR-0005): the "Set a project budget" row.
 
 Self-approval: nobody can approve their own change by default. That exception is the separate permission `merge:approve_own`, which no built-in role holds. An Admin or Project Owner grants it through an access-control entry (a role binding that carries the permission, for one principal and one scope). Without the grant, the two-person rule applies (A.5.9, question 4).
 
@@ -1723,7 +1715,6 @@ Keycloak facts in this section come from the issue and general knowledge. Its li
 | `CodingAgentAdapter` and `LLMGateway`; supported platforms | Two abstractions, or unified; which vendors | Keep separate | Resolved: kept separate. IBM Bob is removed from the solution. Claude and OpenAI are harnesses (Claude Code, Codex CLI), and Codex also runs Gemini models (ADR-0002). Each provider is registered in `llm-gateway` and each harness in `agent-platform`, so either layer can be replaced by configuration |
 | IPC mechanism | Filesystem, or message broker | Broker interface now, filesystem implementation for Phase 1-2 | Decided with the message broker row: filesystem implementation for Phase 1-2 behind a transport interface (A.4.7). The broker itself stays deferred. `event-log` open question 1 is answered: files by default, SQLite WAL when the writer count reaches 20 to 30 (Q7) |
 | Auth | Defer to Phase 4, or RBAC skeleton in Phase 1 | RBAC data model and middleware hook in Phase 1; roles and model in A.5 | Approved: the roles and data model in A.5 are accepted. Questions 1 to 4 and 6 in A.5.9 are answered. Questions 5 and 7 have recommendations and await confirmation. None blocks the Phase 1 skeleton |
-| Token budgets, pause and cost (D14, D17, D18, D19, D22, D22a, C2 in [decisions-pending-2026-10-25](../docs/decisions-pending-2026-10-25.md)) | Keep budgets, never pause; keep a cost field; track token use only ([ADR-0005](../docs/decisions/ADR-0005-track-token-usage-only.md), alternatives not taken) | Track token use only | Removed (ADR-0005), owner decision 2026-11-09. Context-window handoff stays (§5.6) |
 
 ---
 
