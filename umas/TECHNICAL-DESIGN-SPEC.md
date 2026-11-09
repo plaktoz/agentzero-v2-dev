@@ -1222,7 +1222,7 @@ Tier 1 and Tier 2 is a cleaner cut than Bob's original five categories, because 
 | [event-log](../libs/event-log/README.md) | `event-log` / `event-log` | Done | Adds cursor polling, rotation, repair and redaction. Unifies the two inconsistent envelope shapes in the source. Decided (2026-10-25): files stay the default; the SQLite WAL backend is added when the writer count reaches 20 to 30 (A.4.4). |
 | [budget-meter](../libs/budget-meter/README.md) | `token-budget` / `budget-meter` | Done | Adds reservations, multi-process ledger, live limit changes, and `pack()` for context fitting. The mechanical half of Bob's `context-compressor` lives here. |
 | [merge-queue](../libs/merge-queue/README.md) | `umas-merge-queue` / `merge-queue` | Done | Prefix-bisect replaces split-half (which misses combination failures). Adds crash recovery, baseline check, persisted state. The original code is flagged defective (CAS issue, no conflict handling, in-memory queue). **No adopt-or-build evaluation**, although Claude suggested GitHub merge queue or Mergify. |
-| [test-adapters](../libs/test-adapters/README.md) | `umas-test-runner` / `test-adapters` | Done | Framework detection, normalised `TestResult`, flaky tracking, adapter interface. Policy is deliberately left out. |
+| [test-adapters](../libs/test-adapters/README.md) | `umas-test-runner` / `test-adapters` | Moved to its own repository (2026-11-09); requirements only, no code yet | UMAS depends on it as an external tool. Framework detection, normalised `TestResult`, flaky tracking, adapter interface, and exit codes that separate failed, error and timeout. Policy is deliberately left out. |
 | [llm-gateway](../libs/llm-gateway/README.md) | `llm-gateway` / `llm-gateway` | Done | Build posture changed on 2026-10-25 from "adopt first" to wrapping the provider SDKs ([ADR-0003](../docs/decisions/ADR-0003-llm-gateway-wraps-provider-sdks.md)); the evaluation list is now the wrapper's acceptance checklist. Forbids hard-coded model IDs. Has the no-blind-retry rule, circuit breaker, and per-class error taxonomy. |
 | [watchdog](../libs/watchdog/README.md) | `umas-daemon` / `watchdog` | Done | A generic supervision library. The three-tier Daemon, Triage, Patrol design is three levels of it. The Rust Daemon is demoted to legacy reference code, to be ported to Python. |
 | [decision-artifacts](../libs/decision-artifacts/README.md) | not in Bob's plan / `decision-artifacts` | Done | PRFAQ/ADR/Spec/GLOSSARY templates and shortcut-debt tracking. |
@@ -1285,7 +1285,7 @@ Merged from the reusable components review. Its tiers still hold; the status col
 | `budget-meter` | Any LLM application that tracks spend | Python package and CLI | Done |
 | `task-queue` | Any local job system with dependent jobs | Python package, no broker | Done |
 | `merge-queue` | Any team repo, with or without agents | Python package: `merge-queue status`, `merge-queue run --verify "pytest"` | Done. Adopt-or-build check open (A.7) |
-| `test-adapters` | Any harness that needs one test result format | Python package | Done |
+| `test-adapters` | Any harness that needs one test result format | Python package, own repository | Requirements done; build pending |
 | `error-classifier` | Any multi-component system | Record format and retry-advice table | Done |
 | `watchdog` | Any set of long-running local processes | Python package under the OS service manager (A.4.6) | Done |
 | `two-axis-review` (pack) | Any dev team, for PR review | `SKILL.md` | Spec only |
