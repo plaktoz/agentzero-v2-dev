@@ -31,7 +31,7 @@ Tier 3 — System Patrol (Python, always running)
 | No heartbeat | > 5 min | Agent likely crashed → graceful handoff |
 | Context-window usage without handoff request, in-process sessions only | >= 95% of `context_limit` | Append a `monitor_escalation` event, which the Coordinator reads and answers with the emergency handoff from the last checkpoint |
 
-Recovery order: Nudge → Graceful handoff → Emergency handoff. The Monitor does not send the emergency handoff. It appends a `monitor_escalation` event, and the Coordinator sends it. The event does not change bundle state (Open 26). CLI Workers have no `context_tokens` (agent-execution Open 6), so the 95 % rule does not apply to them. For a CLI Worker the Monitor relies on the time and checkpoint limits.
+Recovery order: Nudge → Graceful handoff → Emergency handoff. The Monitor does not send the emergency handoff. It appends a `monitor_escalation` event, and the Coordinator sends it. The event does not change bundle state (Open 26). If no `handoff_request` for that session appears within `escalation.handoff_wait_seconds` (proposed default 120), the Monitor appends `escalate` at P1 with `data={severity: "P1", reason: "emergency handoff not received"}`. That path does not depend on the Coordinator. CLI Workers have no `context_tokens` (agent-execution Open 6), so the 95 % rule does not apply to them. For a CLI Worker the Monitor relies on the time and checkpoint limits.
 
 > Standalone spec: [libs/watchdog.md](../../../libs/watchdog/README.md)
 
@@ -245,7 +245,9 @@ Each item is **Open** unless marked decided. Each recommendation is [P]. The own
 23. **Open.** Dashboard phase. §12 places the minimal HTML dashboard in Phase 3 [S §12]. A.7 item 5 says the Phase 2 placement is undecided [S A.7, item 5]. Decide the phase. Recommendation [P]: Phase 3, as §12 shows.
 24. **Open.** Escalation metric names. `metrics-store` counts `error.p0_count` and `error.p1_count` from `error-classifier` [S metrics-store §4; A.7, item 6]. Decide whether this module's escalations feed those names. Recommendation [P]: check against A.7 item 6 before build.
 25. **Open.** AXI decisions for watchdog. See the AXI support section, items 1, 2, 4 and 6.
-26. **Decided (owner, 2026-11-09, Option A).** The Monitor's escalation is a separate `monitor_escalation` event with `data={session_id, task_id, context_used, context_limit}`. The Coordinator reads it and sends the emergency handoff. It does not change bundle state, so orchestration's state table (`MONITORING` → `ESCALATED` on `escalate` only) is unchanged. Still open, outside this decision: (a) the alert path when the Coordinator or the handoff fails; (b) the naming of `escalate` and `session_escalated` (Open 24 and exception-flows Open 4).
+26. **Decided (owner, 2026-11-09, Option A).** The Monitor's escalation is a separate `monitor_escalation` event with `data={session_id, task_id, context_used, context_limit}`. The Coordinator reads it and sends the emergency handoff. It does not change bundle state, so orchestration's state table (`MONITORING` → `ESCALATED` on `escalate` only) is unchanged.
+    **Decided (owner, 2026-11-09, Option A, alert path).** If no `handoff_request` for the session arrives within `escalation.handoff_wait_seconds` (proposed default 120, not yet checked against the Coordinator's poll interval, which no spec sets), the Monitor appends `escalate` at P1. This does not depend on the Coordinator. Open: the default value.
+    **Decided (owner, 2026-11-09, naming).** The escalation event is `escalate`. See Open 24 and exception-flows Open 4 for the resolution.
 
 ## AXI support
 

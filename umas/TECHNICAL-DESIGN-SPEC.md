@@ -524,7 +524,7 @@ def on_task_complete(task_id):
 5. Can it be one readable line?
 6. Otherwise: minimum code that works
 
-> Standalone skill: [agent-garage](https://github.com/plaktoz/agent-garage) (`skills/minimalism-ladder`). The UMAS consumer notes that were in the source spec (its §9 and §12) were removed with the pack; see git history at 44c1ef6.
+> Standalone skill: [agent-garage](https://github.com/plaktoz/agent-garage) (`skills/minimalism-ladder`). UMAS consumer mapping (was §9 of the source spec): [docs/reference/minimalism-ladder-consumers.md](../docs/reference/minimalism-ladder-consumers.md). The reference code (was §12) is in git history at 44c1ef6.
 
 **Shortcut comments:** Agents may leave `// SHORTCUT: <what> — <when to fix>` to mark a deliberate deferral. Must be tracked in the project's debt ledger. All other comments require justifying "why" code exists.
 
