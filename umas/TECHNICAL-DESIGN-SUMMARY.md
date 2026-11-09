@@ -2,6 +2,8 @@
 
 > **Stack note (2026-10-25):** The language choices in this document are superseded. The stack is Python (TypeScript only where no Python option exists). Rust and Go references describe the source design. See umas/TECHNICAL-DESIGN-SPEC.md Appendix A.4.
 
+> **Budget requirements removed (2026-11-09, ADR-0005):** UMAS records tokens used, model and timestamp for each LLM call in the token ledger. It does not budget, limit, price, pause or alert on spend. The context-window handoff (90% graceful, 95% emergency) is kept.
+
 **Version:** 2.0
 **Date:** October 21, 2026
 **Status:** Active — Unified
@@ -25,7 +27,7 @@ Reusable parts of the design are specified separately. Each one is usable withou
 
 | Set | Index | Contents |
 |-----|-------|----------|
-| Tier 1, libraries (13) | [libs/README.md](../libs/README.md) | [hook-store](../libs/hook-store/README.md), [event-log](../libs/event-log/README.md), [merge-queue](../libs/merge-queue/README.md), [test-adapters](https://github.com/plaktoz/test-adapters), [budget-meter](../libs/budget-meter/README.md), [llm-gateway](../libs/llm-gateway/README.md), [watchdog](../libs/watchdog/README.md), [decision-artifacts](../libs/decision-artifacts/README.md), [error-classifier](../libs/error-classifier/README.md), [agent-platform](../libs/agent-platform/README.md), [agent-session](../libs/agent-session/README.md), [metrics-store](../libs/metrics-store/README.md), [task-queue](../libs/task-queue/README.md) |
+| Tier 1, libraries (13) | [libs/README.md](../libs/README.md) | [hook-store](../libs/hook-store/README.md), [event-log](../libs/event-log/README.md), [merge-queue](../libs/merge-queue/README.md), [test-adapters](https://github.com/plaktoz/test-adapters), [token-ledger](../libs/token-ledger/README.md), [llm-gateway](../libs/llm-gateway/README.md), [watchdog](../libs/watchdog/README.md), [decision-artifacts](../libs/decision-artifacts/README.md), [error-classifier](../libs/error-classifier/README.md), [agent-platform](../libs/agent-platform/README.md), [agent-session](../libs/agent-session/README.md), [metrics-store](../libs/metrics-store/README.md), [task-queue](../libs/task-queue/README.md) |
 | Tier 2, content packs (9) | [packs/README.md](../packs/README.md) | [minimalism-ladder](../packs/minimalism-ladder/minimalism-ladder-spec.md), [anti-slop](../packs/anti-slop/anti-slop-spec.md), [communication-modes](../packs/communication-modes/communication-modes-spec.md), [two-axis-review](../packs/two-axis-review/two-axis-review-spec.md), [specialist-agents](../packs/specialist-agents/specialist-agents-spec.md), [router-heuristic](../packs/router-heuristic/router-heuristic-spec.md), [grilling](../packs/grilling/grilling-spec.md), [test-policy](../packs/test-policy/test-policy-spec.md), [playbook-runner](../packs/playbook-runner/playbook-runner-spec.md) |
 
 ### Key changes in v2.0
@@ -157,7 +159,6 @@ Model IDs are not fixed in the design. They are llm-gateway alias-table values (
 
 3. **Scheduler** (Python)
    - Capacity management
-   - Token budget tracking
    - Queue management
    - Prevent API rate limits
 
@@ -177,7 +178,7 @@ Model IDs are not fixed in the design. They are llm-gateway alias-table values (
    - Task-specific execution
    - Ephemeral sessions, persistent identity
    - Token usage tracking
-   - Automatic handoff on token exhaustion
+   - Automatic handoff when the context window nears its limit (90% graceful, 95% emergency)
 
 2. **Specialized Agents** (Python)
    - ProductManagerAgent: Define user needs
@@ -192,7 +193,7 @@ Model IDs are not fixed in the design. They are llm-gateway alias-table values (
    - Measure reuse percentage
 
 **Key Data Structures:**
-- `AgentConfig`: agent_id, model, token_limit, handoff_threshold
+- `AgentConfig`: agent_id, model, context_limit, handoff_threshold, emergency_threshold
 - `LadderResult`: rung, rationale, solution, code_avoided
 
 ---
@@ -273,8 +274,7 @@ Daemon (Python) ← heartbeat every 3 min
    - React 18+ / TypeScript is superseded and not planned
 
 3. **Metrics Display**
-   - Cost per task
-   - Token usage
+   - Token usage by model
    - Code reuse percentage
    - Test coverage
 
@@ -327,13 +327,13 @@ Daemon (Python) ← heartbeat every 3 min
 
 ---
 
-### Module 10: Agent Handoff & Token Management
+### Module 10: Agent Handoff & Context Window
 
-**Purpose:** Seamless agent handoff on token exhaustion.
+**Purpose:** Seamless agent handoff when an agent's context window fills.
 
 **Key Concepts:**
 - Hook-based work assignment (work tied to hook, not agent)
-- Proactive handoff at 90% token usage
+- Graceful handoff at 90% of the model's context window; emergency handoff at 95%. Handoff is not a spend limit
 - Context compression for efficiency
 - Sequential, parallel, and collaborative handoff patterns
 
@@ -395,7 +395,6 @@ umas watch
 
 # Monitoring
 umas metrics tokens
-umas metrics cost
 umas metrics quality
 umas metrics agents
 
@@ -423,7 +422,6 @@ POST   /api/v1/work-bundles
 GET    /api/v1/work-bundles/{id}
 
 GET    /api/v1/metrics/tokens
-GET    /api/v1/metrics/cost
 GET    /api/v1/metrics/quality
 
 WebSocket: /ws/events
@@ -469,11 +467,10 @@ WebSocket: /ws/events
 - PostgreSQL with connection pooling
 - Large teams (10+ developers)
 
-### Token Budget Management
-- Daily token budget per project
-- Per-task token budget
-- Alerts at 80%, 90%, 95%
-- Graceful budget exhaustion handling
+### Token Usage and Context Window
+- Tokens used, model and timestamp recorded per LLM call (token ledger)
+- No budgets, limits, prices or pauses on usage
+- Context-window handoff at 90% (graceful) and 95% (emergency) of the model's context window
 
 ---
 
@@ -498,7 +495,7 @@ WebSocket: /ws/events
 
 ### Performance Tests
 - 30 concurrent agents
-- Token budget exhaustion
+- Context-window handoff near the limit
 - Database query performance
 - API rate limit handling
 
@@ -576,7 +573,6 @@ Server/Cloud
 - Code reuse percentage
 
 ### Performance
-- Cost reduction: Target -25%
 - Time reduction: Target -35%
 - Token reduction: Target -40%
 
@@ -596,7 +592,7 @@ Server/Cloud
 
 ## Open Questions & Decisions Needed
 
-1. **Multi-model panel cost:** Balance decision quality vs. cost
+1. **Multi-model panel token use:** Balance decision quality vs. token use
 2. **Grilling frequency:** How often vs. direct execution
 3. **Test coverage threshold:** Selective vs. comprehensive
 4. **Federation timing:** When to add Federation Layer

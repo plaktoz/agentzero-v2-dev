@@ -30,7 +30,7 @@
    - 5.3 Agent Execution System
    - 5.4 Verification System
    - 5.5 Monitoring System
-   - 5.6 Token Budget and Handoff
+   - 5.6 Token Usage and Handoff
    - 5.7 Model Policy
    - 5.8 Scalability Roadmap
    - 5.9 CLI Design
@@ -274,13 +274,13 @@ Parts of the design are extracted as standalone units with no dependency on UMAS
 | `.umas/events.jsonl` signalling (§5.1, §5.3) | [event-log](../libs/event-log/README.md) |
 | Merge Queue Processor (§5.4) | [merge-queue](../libs/merge-queue/README.md) |
 | Test Runner (§5.4) | [test-adapters](https://github.com/plaktoz/test-adapters) |
-| Token budget, handoff packet (§5.6) | [budget-meter](../libs/budget-meter/README.md) |
+| Token usage log (§5.6) | [token-ledger](../libs/token-ledger/README.md) |
 | Provider failure handling (§5.7, §6.7) | [llm-gateway](../libs/llm-gateway/README.md) |
 | Three-tier watchdog (§5.5) | [watchdog](../libs/watchdog/README.md) |
 | Decision artifacts, shortcut ledger (§5.1) | [decision-artifacts](../libs/decision-artifacts/README.md) |
 | Error severity, recoverability, escalation records (§6) | [error-classifier](../libs/error-classifier/README.md) |
 | Platform adapters, work assignment, cross-platform transfer (§5.3) | [agent-platform](../libs/agent-platform/README.md) |
-| Agent session lifecycle (§5.3) | [agent-session](../libs/agent-session/README.md) |
+| Agent session lifecycle (§5.3), handoff packet packing (§5.6) | [agent-session](../libs/agent-session/README.md) |
 | Metrics recording, query, retention (§1.2) | [metrics-store](../libs/metrics-store/README.md) |
 | Dependency graph, leased task queue, concurrency cap, retry (§5.2) | [task-queue](../libs/task-queue/README.md) |
 
@@ -344,12 +344,11 @@ CREATE TABLE agent_sessions (
     -- handoff         : committed state, transferring to successor
     -- crashed         : unresponsive past heartbeat threshold
     -- done            : task completed
-    -- budget_paused   : daily token budget exhausted
     -- provider_failed : primary + fallback providers unavailable
     -- machine_paused  : host machine shut down or suspended; session paused at last checkpoint
     -- auth_expired    : OIDC token expired while machine was off; re-authentication required before resume
-  token_used     INTEGER DEFAULT 0,
-  token_limit    INTEGER NOT NULL,
+  token_used     INTEGER DEFAULT 0,  -- cumulative tokens this session; usage detail, not a limit
+  context_limit  INTEGER NOT NULL,   -- model context window in tokens
   last_heartbeat DATETIME,
   paused_at      DATETIME,          -- set when status enters machine_paused or auth_expired
   started_at     DATETIME NOT NULL,
@@ -357,7 +356,7 @@ CREATE TABLE agent_sessions (
 );
 ```
 
-Sessions in `budget_paused`, `provider_failed`, `machine_paused`, or `auth_expired` are resumable. They are not treated as failures unless they remain in that state beyond the configurable timeout (default: 24 hours for `budget_paused`/`provider_failed`; no timeout for `machine_paused`/`auth_expired` — they wait until the human acts).
+Sessions in `provider_failed`, `machine_paused`, or `auth_expired` are resumable. They are not treated as failures unless they remain in that state beyond the configurable timeout (default: 24 hours for `provider_failed`; no timeout for `machine_paused`/`auth_expired` — they wait until the human acts).
 
 ---
 
@@ -429,7 +428,7 @@ Multiple concurrent bundles each have their own independent state machine. `ESCA
 ```yaml
 coordinator_config:
   model: default                  # llm-gateway alias, not a model ID
-  token_limit: 200000
+  context_limit: 200000           # model context window in tokens
   complexity_thresholds:
     simple:  {max_files: 3, max_lines: 100, no_architecture_change: true}
     medium:  {max_files: 10, max_lines: 500, limited_architecture_change: true}
@@ -440,7 +439,7 @@ coordinator_config:
     max_questions: 10
     timeout_seconds: 300
   specialized_agents: {pm: true, architect: true, ux: true, analyst: true}
-  session_resumable_statuses: [budget_paused, provider_failed]
+  session_resumable_statuses: [provider_failed]
   resumable_timeout_hours: 24
 
   # Playbook — optional. null = default implicit workflow (unchanged behaviour)
@@ -484,7 +483,7 @@ Override: `--route simple|medium|large|greenfield`
 #### Scheduler
 
 - Maintains a `ready_queue` of tasks with no unresolved dependencies, using [libs/task-queue.md](../libs/task-queue/README.md)
-- Dispatches agents up to the concurrency limit; tasks wait in queue when at capacity (`max_claimed` plus an `admit` callback backed by `budget-meter`)
+- Dispatches agents up to the concurrency limit (`max_claimed`); tasks wait in queue when at capacity. Dependency readiness is the only other condition. Dispatch does not look at token usage.
 - On every task completion: marks complete → unblocks dependents → dispatches newly ready tasks
 
 ```python
@@ -631,7 +630,7 @@ Tier 3 — System Patrol (Python, always running)
 |-----------|-----------|--------|
 | No `STATE.md` commit | > 10 min | Agent may be stuck → nudge |
 | No heartbeat | > 5 min | Agent likely crashed → graceful handoff |
-| Token usage without handoff request | > 95% | Emergency handoff from last checkpoint |
+| Context use without handoff request | > 95% of context window | Emergency handoff from last checkpoint |
 
 Recovery order: Nudge → Graceful handoff → Emergency handoff
 
@@ -639,18 +638,18 @@ Recovery order: Nudge → Graceful handoff → Emergency handoff
 
 ---
 
-### 5.6 Token Budget and Handoff
+### 5.6 Token Usage and Handoff
 
-**Handoff triggers:**
+**Usage recording:** Every LLM call is recorded to [token-ledger](../libs/token-ledger/README.md) as `{ts, model, tokens}`, and nothing else. A call whose harness reports no usage produces no entry. `metrics-store` holds the same figures as `token.used` rows tagged `model`, and `umas metrics tokens` reports totals by model. Usage is recorded only: it is not limited, priced or used to pause work ([ADR-0005](../docs/decisions/ADR-0005-track-token-usage-only.md)).
+
+**Handoff triggers:** The thresholds are fractions of the model's context window. They trigger a handoff and never pause work.
 
 | Trigger | Type | Action |
 |---------|------|--------|
-| Session token usage ≥ 90% | Graceful | Agent commits state, requests handoff |
-| Session token usage ≥ 95% | Emergency | Monitor forces handoff from last checkpoint |
-| Daily project budget ≥ 80% | Warning | Alert human |
-| Daily project budget = 100% | Exhaustion | Queue new work; do not fail in-progress work |
+| Session context use ≥ 90% of context window | Graceful | Agent commits state, requests handoff |
+| Session context use ≥ 95% of context window | Emergency | Monitor forces handoff from last checkpoint |
 
-**Context compression on handoff** — full context (~175k tokens) compressed to handoff packet (~15k tokens):
+**Context compression on handoff** — full context (~175k tokens) compressed to handoff packet (~15k tokens) by `pack()` in agent-session (section "Context packing"):
 
 - Current task and progress percentage
 - Last 10 decisions
@@ -659,7 +658,7 @@ Recovery order: Nudge → Graceful handoff → Emergency handoff
 
 The incoming agent reads the handoff packet and the worktree's `STATE.md`. It does not re-read the full conversation history.
 
-> Standalone spec: [libs/budget-meter.md](../libs/budget-meter/README.md)
+> Standalone libs: [token-ledger](../libs/token-ledger/README.md) (usage log) · [agent-session](../libs/agent-session/README.md) (handoff packet and `pack()`, section "Context packing")
 
 ---
 
@@ -800,16 +799,9 @@ On `umas update`, only the `# umas-managed` marker line is replaced; all other h
 
 ---
 
-### 6.6 Token Budget Exhausted Mid-Task
+### 6.6 Removed (ADR-0005)
 
-**Behaviour:** In-progress agents complete their current atomic step and commit state. New dispatch is paused.
-
-Agent steps when budget signal received:
-1. Complete current atomic step
-2. Commit: `[umas] budget-pause — state committed`
-3. Set status `budget_paused`
-
-When budget is increased via `umas project config --budget <N>`, Project Monitor resumes dispatch within 60 s — does not wait for UTC midnight.
+UMAS no longer pauses or defers work because of token usage ([ADR-0005](../docs/decisions/ADR-0005-track-token-usage-only.md)).
 
 ---
 
@@ -973,10 +965,10 @@ Written to the worktree root alongside `STATE.md` on any clean pause (machine sh
 # PAUSE: <task_id>
 
 **Paused at:** <RFC 3339 UTC>
-**Paused by:** <machine_shutdown | user | budget>
+**Paused by:** <machine_shutdown | user>
 **Agent:** <agent_id>
 **Session:** <session_id>
-**Token usage at pause:** <token_used> / <token_limit>
+**Context use at pause:** <context_tokens> / <context_limit>
 
 ## State at pause
 <same fields as STATE.md — current task, next steps, recent decisions, file pointers>
@@ -996,7 +988,7 @@ Sessions that were `spawned` (never started) at shutdown time are reset to `pend
 
 #### No timeout for `machine_paused` / `auth_expired`
 
-Unlike `budget_paused` (24-hour timeout), these statuses have **no expiry**. A laptop that stays off for a week resumes cleanly. `umas health-check` surfaces them as informational (`machine_paused`) or actionable (`auth_expired`) — never as failures.
+Unlike `provider_failed` (24-hour timeout), these statuses have **no expiry**. A laptop that stays off for a week resumes cleanly. `umas health-check` surfaces them as informational (`machine_paused`) or actionable (`auth_expired`) — never as failures.
 
 > **Standalone lib impact:** `agent-session` adds `machine_paused` and `auth_expired` to `SessionStatus` and a `pause()` operation (§3.2, §4). `watchdog` adds a boot-time stale-detection rule (§7). `agent-platform` must honour `<hook-path>/.pause` polling at step boundaries.
 
@@ -1022,7 +1014,6 @@ umas cleanup [--dry-run]
 umas project register <name>
 umas project list
 umas project switch <name>
-umas project config <name> --budget <tokens>
 
 # Agents
 umas agents list
@@ -1046,7 +1037,6 @@ umas worktrees recover <name>
 
 # Metrics
 umas metrics tokens
-umas metrics cost
 umas metrics quality
 umas metrics agents
 
@@ -1078,7 +1068,6 @@ POST   /api/v1/work-bundles
 GET    /api/v1/work-bundles/{id}
 
 GET    /api/v1/metrics/tokens
-GET    /api/v1/metrics/cost
 GET    /api/v1/metrics/quality
 
 WebSocket: /ws/events   (Phase 4 only)
@@ -1104,7 +1093,7 @@ WebSocket: /ws/events   (Phase 4 only)
 | Tier 2 | 20 | PostgreSQL | 5–10 developers |
 | Tier 3 | 30+ | PostgreSQL + connection pool | 10+ developers |
 
-**Token budget management:** Daily budget per project with per-task limits. Threshold alerts at 80%, 90%, 95%. Graceful exhaustion — no in-progress work is failed.
+**Token usage:** Each LLM call is recorded in token-ledger, and `umas metrics tokens` reports totals by model. Nothing limits or prices usage ([ADR-0005](../docs/decisions/ADR-0005-track-token-usage-only.md)).
 
 ---
 
@@ -1115,7 +1104,7 @@ WebSocket: /ws/events   (Phase 4 only)
 | Unit | All core modules, 90%+ coverage, <1 s per test |
 | Integration | Agent-to-agent, database, git ops, LLM provider |
 | E2E | Complete workflows (simple/medium/complex), crash recovery, handoff, merge queue |
-| Performance | 30 concurrent agents, budget exhaustion, DB query, API rate limits |
+| Performance | 30 concurrent agents, DB query, API rate limits |
 
 ---
 
@@ -1150,7 +1139,6 @@ Production:
 | Code quality | Lines of code reduction | –40% |
 | Code quality | Test coverage | 95%+ |
 | Code quality | Code reuse percentage | tracked |
-| Performance | Cost reduction | –25% |
 | Performance | Time reduction | –35% |
 | Performance | Token reduction | –40% |
 | Reliability | Agent uptime | 99%+ |
@@ -1163,7 +1151,7 @@ Production:
 ## 14. Open Questions
 
 1. **RBAC data model** — Roles and model approved; Keycloak (OIDC) chosen for sign-in. Agents act with the intersection of their role and the requesting user's permissions, and the security-finding recipient is the Project Owner (Admin if none) ([Appendix A.5.9](#a59-questions-and-answers)). Both are decided.
-2. **Scheduler glue** — The queue half is extracted as [libs/task-queue.md](../libs/task-queue/README.md). The dispatch loop, routing tags, per-task hook creation and the `admit` rule still need a short UMAS-side spec.
+2. **Scheduler glue** — The queue half is extracted as [libs/task-queue.md](../libs/task-queue/README.md). The dispatch loop, routing tags and per-task hook creation still need a short UMAS-side spec.
 3. **`structured-output-parser` decision** — Resolved ([ADR-0004](../docs/decisions/ADR-0004-structured-output-with-pydantic.md)): Pydantic v2 is the standard parsing mechanism for Python agents; no dedicated lib needed. Each pack's output schema is the contract; Pydantic validates against it. Playbook steps validate step outputs against `schema/<role>.json` before passing them to the next step.
 4. **CLI launcher** — Coding Workers run as external CLI harnesses. The component that launches and supervises those processes is not specified.
 5. **IPC at scale** — File-based `events.jsonl` is fine for Phase 1–2. Phase 3 bottleneck risk flagged in [event-log §11](../libs/event-log/README.md). Broker interface design deferred.
@@ -1220,7 +1208,7 @@ Tier 1 and Tier 2 is a cleaner cut than Bob's original five categories, because 
 |---|---|---|---|
 | [hook-store](../libs/hook-store/README.md) | `worktree-manager` / `hook-store` | Done | Renamed because a worktree is a hook holding a unit of work. Adds leases, `STATE.md`, GC and recovery. |
 | [event-log](../libs/event-log/README.md) | `event-log` / `event-log` | Done | Adds cursor polling, rotation, repair and redaction. Unifies the two inconsistent envelope shapes in the source. Decided (2026-10-25): files stay the default; the SQLite WAL backend is added when the writer count reaches 20 to 30 (A.4.4). |
-| [budget-meter](../libs/budget-meter/README.md) | `token-budget` / `budget-meter` | Done | Adds reservations, multi-process ledger, live limit changes, and `pack()` for context fitting. The mechanical half of Bob's `context-compressor` lives here. |
+| [token-ledger](../libs/token-ledger/README.md) | `token-budget` / `budget-meter` (renamed) | Done, Changed | A multi-process usage log of `{ts, model, tokens}`. Renamed from `budget-meter`; reservations, limits and thresholds were removed ([ADR-0005](../docs/decisions/ADR-0005-track-token-usage-only.md)). `pack()`, the mechanical half of Bob's `context-compressor`, moved to [agent-session](../libs/agent-session/README.md). |
 | [merge-queue](../libs/merge-queue/README.md) | `umas-merge-queue` / `merge-queue` | Done | Prefix-bisect replaces split-half (which misses combination failures). Adds crash recovery, baseline check, persisted state. The original code is flagged defective (CAS issue, no conflict handling, in-memory queue). **No adopt-or-build evaluation**, although Claude suggested GitHub merge queue or Mergify. |
 | [test-adapters](https://github.com/plaktoz/test-adapters) | `umas-test-runner` / `test-adapters` | Own repository | Developed outside this repo. |
 | [llm-gateway](../libs/llm-gateway/README.md) | `llm-gateway` / `llm-gateway` | Done | Build posture changed on 2026-10-25 from "adopt first" to wrapping the provider SDKs ([ADR-0003](../docs/decisions/ADR-0003-llm-gateway-wraps-provider-sdks.md)); the evaluation list is now the wrapper's acceptance checklist. Forbids hard-coded model IDs. Has the no-blind-retry rule, circuit breaker, and per-class error taxonomy. |
@@ -1228,10 +1216,10 @@ Tier 1 and Tier 2 is a cleaner cut than Bob's original five categories, because 
 | [decision-artifacts](../libs/decision-artifacts/README.md) | not in Bob's plan / `decision-artifacts` | Done | PRFAQ/ADR/Spec/GLOSSARY templates and shortcut-debt tracking. |
 | [error-classifier](../libs/error-classifier/README.md) | `error-classifier` / not in plan | Done | Added after Bob's review found the gap. A shared record format with deterministic rules, not a shared import. Adds redaction, `retry_plan`, agent and human renderings, fingerprinting and pattern alerts. Ships no catalog. Five open questions in its section 11 (for example whether unmatched errors default to P2 or P1). The other libs map to it by data only (see A.8). |
 | [agent-platform](../libs/agent-platform/README.md) | `CodingAgentAdapter` plugin registry (Category D) / platform adapters in Tier 4 | Done, Changed | Moved from Tier 4 to Tier 1. Harness adapters only, never LLM providers. `assign` writes files and does not spawn processes. `read_signal` is non-blocking. Context packs carry a SHA-256 checksum and reject path traversal. Built-in adapters: `claude-code`, `openai-codex` (also runs Gemini models through a custom endpoint, [ADR-0002](../docs/decisions/ADR-0002-gemini-and-openai-via-codex-cli.md)), `copilot`. The separate Gemini CLI adapter was removed. Bob's original advice to unify it with `llm-gateway` was wrong: one routes work to harnesses, the other routes inference calls. |
-| [agent-session](../libs/agent-session/README.md) | `agent-session` / not in plan | Done | Shared lifecycle skeleton for all six agent types (`spawned`, `active`, `handoff`, `crashed`, `done`), durable `STATE.md`, checkpoint commits, handoff packets, token thresholds. Reference code for `WorkerAgent` and `CoordinatorAgent` is in its section 12. |
-| [metrics-store](../libs/metrics-store/README.md) | `umas-metrics-collector` / not in plan | Done | Two backends behind one interface: JSONL ledger (Phase 1-2), then a relational table in SQLite or PostgreSQL (Phase 3+). TimescaleDB is an optional one-line upgrade, not a dependency. Source adapters turn `budget-meter`, `event-log` and test-run callbacks into metric rows. |
+| [agent-session](../libs/agent-session/README.md) | `agent-session` / not in plan | Done | Shared lifecycle skeleton for all six agent types (`spawned`, `active`, `handoff`, `crashed`, `done`), durable `STATE.md`, checkpoint commits, handoff packets (`pack()`, section "Context packing"), context-window thresholds. Reference code for `WorkerAgent` and `CoordinatorAgent` is in its section 12. |
+| [metrics-store](../libs/metrics-store/README.md) | `umas-metrics-collector` / not in plan | Done | Two backends behind one interface: JSONL ledger (Phase 1-2), then a relational table in SQLite or PostgreSQL (Phase 3+). TimescaleDB is an optional one-line upgrade, not a dependency. Source adapters turn `token-ledger`, `event-log` and test-run callbacks into metric rows. |
 
-| [task-queue](../libs/task-queue/README.md) | Scheduler `ready_queue` / not in plan | Done, New | Extracted from the Scheduler (A.8). Dependency graph, ready queue, leased claims, concurrency cap, retry, parent/child groups. Event log plus snapshot on files. Admission is a callback, so it never imports `budget-meter`. Evaluate existing tools before building (its section 10). |
+| [task-queue](../libs/task-queue/README.md) | Scheduler `ready_queue` / not in plan | Done, New | Extracted from the Scheduler (A.8). Dependency graph, ready queue, leased claims, concurrency cap, retry, parent/child groups. Event log plus snapshot on files. The `admit` callback is generic, so the lib imports no other lib. Evaluate existing tools before building (its section 10). |
 
 | [kc-axi](../libs/kc-axi/README.md) | GitHub issue 18 / not in plan | Done, New | Run a Keycloak container (Docker or Podman) and administer it through an agent-friendly CLI. Standalone: Python package (optional frozen build for Linux and Windows), REST API, no shell dependency. The realm and client definitions are UMAS data, not part of the lib. |
 
@@ -1240,7 +1228,7 @@ Merged, with no library of their own:
 | Item | Where it went |
 |---|---|
 | `signal-bus` (Bob) | Split between `hook-store` (commit message format) and `event-log` (JSONL appends). Each half belongs with the library that owns the transport. |
-| `context-compressor` (Bob) | Two concerns: fitting content into a limit is `budget-meter` `pack()`; deciding what goes in a handoff packet is the Developer prompt in `specialist-agents`. |
+| `context-compressor` (Bob) | Two concerns: fitting content into a limit is `pack()` in agent-session (section "Context packing"); deciding what goes in a handoff packet is the Developer prompt in `specialist-agents`. |
 | `minimalism-enforcer` (Bob) | Moved to Tier 2 as `minimalism-ladder`. Bob's original placement in agent infrastructure was wrong; the ladder is a prompt and rule set. |
 
 Not extracted:
@@ -1282,7 +1270,7 @@ Merged from the reusable components review. Its tiers still hold; the status col
 | Component | Who else uses it | Reuse form | Status |
 |---|---|---|---|
 | `event-log` | Any pipeline, CI system or multi-process tool | Python package with an `event-log` CLI and `--json`. The JSONL format is already language-neutral | Done |
-| `budget-meter` | Any LLM application that tracks spend | Python package and CLI | Done |
+| `token-ledger` | Any LLM application that records token use | Python package and CLI | Done |
 | `task-queue` | Any local job system with dependent jobs | Python package, no broker | Done |
 | `merge-queue` | Any team repo, with or without agents | Python package: `merge-queue status`, `merge-queue run --verify "pytest"` | Done. Adopt-or-build check open (A.7) |
 | [test-adapters](https://github.com/plaktoz/test-adapters) | Any harness that needs one test result format | Python package, own repository | External |
@@ -1330,7 +1318,7 @@ Merged from the reusable components review. Its tiers still hold; the status col
 | 3 | Dashboard backend inconsistent (FastAPI or Express, Socket.io) | Partial | ADR-0001 removes the Socket.io question. FastAPI is decided (A.4.6). The single shared OpenAPI definition is not written. |
 | 4 | Heavy observability and data stores | Partial | The libs need no OpenTelemetry, Prometheus or database. TimescaleDB is resolved (optional upgrade, see `metrics-store`). Claude's view that SQLite plus OpenTelemetry as the instrumentation API is enough at this scale still stands; Prometheus, Jaeger and Loki are not decided. Bob agrees OpenTelemetry is the right vendor-neutral choice. Spec §1.4 now places OpenTelemetry wiring in the application layer. |
 | 5 | Build versus buy | Partial | `llm-gateway` wraps the provider SDKs (ADR-0003). `merge-queue` is a full build spec with no evaluation (see A.2.1). Build only what carries the design's novelty: hooks, signalling, minimalism, handoff. |
-| 6 | Stale model and pricing basis | Partial | `llm-gateway` forbids hard-coded IDs and `budget-meter` takes the pricing table from the caller. Example configs now use the `default` alias instead of a pinned ID, and the PRD takes the model from config (2026-10-25). The full cost estimate is not re-based (A.7). |
+| 6 | Stale model basis | Partial | `llm-gateway` forbids hard-coded IDs. Example configs now use the `default` alias instead of a pinned ID, and the PRD takes the model from config (2026-10-25). The build-effort estimate is not re-based (A.7). |
 | 7 | External CLI agents or in-process LLM loop | Decided: hybrid | Coding Workers and Reviewers run as external CLI harnesses through `agent-platform`. The coordination agents call `llm-gateway` directly. See A.4.8. |
 | 8 | JWT/RBAC deferred to Phase 4 although the PRD requires RBAC from the start | Not done | No lib or pack addresses authentication. A proposed role set, permission model and data model are in A.5; the roles and model are approved, but nothing is built yet. A security risk until the Phase 1 skeleton lands. |
 | 9 | SQLite to PostgreSQL path; Python for agent logic | Holds up | Pragmatic; LLM SDKs are Python-first. |
@@ -1372,7 +1360,7 @@ Modules are those of the summary document. The libraries listed are the standalo
 | Module (libraries) | Workload | Language | Consideration |
 |---|---|---|---|
 | 1. Context persistence (`hook-store`, `event-log`, `decision-artifacts`) | Git subprocesses, file I/O, text | Python | Every harness calls these by CLI (`<name> <command> --json`), so the language does not matter to a caller. Formats stay language-neutral. |
-| 2. Orchestration (Coordinator, Router, Scheduler; `budget-meter`, `router-heuristic`, `task-queue`) | LLM calls, queues, arithmetic | Python | Coordinator and Router are LLM-heavy. The Scheduler dispatch loop wires `task-queue` to routing in one process, so no process boundary is crossed. |
+| 2. Orchestration (Coordinator, Router, Scheduler; `token-ledger`, `router-heuristic`, `task-queue`) | LLM calls, queues, arithmetic | Python | Coordinator and Router are LLM-heavy. The Scheduler dispatch loop wires `task-queue` to routing in one process, so no process boundary is crossed. |
 | 3. Agent execution (`agent-session`, `specialist-agents`, `minimalism-ladder`) | Harness driver, state files | Python | Workers are external CLI harnesses (A.4.8), so this layer is mostly a subprocess driver. |
 | 4. Verification (`merge-queue`, `two-axis-review`) | Git, test-runner subprocesses, report parsing | Python | `merge-queue` must run in CI with no agents. A `pipx` or `uv tool` install is enough. Review is a prompt pack, so it needs no language. |
 | 5. Monitoring (`watchdog`, Triage, Patrol, Project Monitors) | Supervision, heartbeats, restarts | Python | The watchdog must outlive what it supervises. Run it under launchd, systemd or a Windows service so the service manager restarts it (A.4.6). AI-judgement callbacks live in the same package. |
@@ -1380,7 +1368,7 @@ Modules are those of the summary document. The libraries listed are the standalo
 | 7. Multi-agent platform (`agent-platform`, `llm-gateway`) | Provider and harness SDKs, file formats | Python | Wrap the provider SDKs (ADR-0003). |
 | 8. Error handling (`error-classifier`) | Pure functions over data files | Python | One implementation. Any other language calls its CLI and does not reimplement it. |
 | 9. Installation and deployment | Packaging, updates, rollback | Python packages through `uv` or `pipx`; one release channel | An optional frozen single-file build per operating system is allowed for a tool whose users may not have Python (`kc-axi`). |
-| 10. Handoff and token management (`budget-meter`, `metrics-store`) | Ledger files, arithmetic, SQL | Python | The ledger owner and its callers share a process, so reservations are function calls. |
+| 10. Handoff and token management (`token-ledger`, `agent-session`, `metrics-store`) | Ledger files, arithmetic, SQL | Python | The ledger owner and its callers share a process, so recording a call is a function call. |
 
 #### A.4.3 Stack options
 
@@ -1434,7 +1422,7 @@ Today there is no broker. The libs use files (`events.jsonl`, heartbeat files, s
 #### A.4.5 Effects on the existing specs
 
 Done on 2026-10-25:
-- The Rust code in section 12 of `hook-store` (2 blocks), `budget-meter` and `watchdog` is marked legacy: the language is not in the stack and the code is to be ported to Python.
+- The Rust code in section 12 of `hook-store` (2 blocks), `budget-meter` (now `token-ledger`) and `watchdog` is marked legacy: the language is not in the stack and the code is to be ported to Python.
 - The implementation-language table in the libs README now says Python for the libs that listed Go, Rust or "Any".
 - The summary document, the stack spec, the build assessment, `UMAS-DNA.md` and the setup guide now state Python as the chosen stack, and keep Rust wording only where it describes the source design.
 
@@ -1454,7 +1442,7 @@ Decided (2026-10-25): **Python only.** TypeScript is allowed per component when 
 
 Consequences:
 - **One toolchain, one release channel.** Libraries ship as Python packages through `uv` or `pipx`. An optional frozen build is allowed for a tool whose users may not have Python.
-- **Callbacks work in-process.** The consuming application wires libraries together in one process: the `metrics-store` source adapters register on `budget-meter`, `event-log` and a test runner; the `task-queue` `admit` rule calls `budget-meter` reservations as function calls. The libs still do not import each other, and the `<name> <command> --json` CLI and file formats stay the contract for any non-Python caller and for external harness CLIs.
+- **Callbacks work in-process.** The consuming application wires libraries together in one process: the `metrics-store` source adapters register on `token-ledger`, `event-log` and a test runner. The libs still do not import each other, and the `<name> <command> --json` CLI and file formats stay the contract for any non-Python caller and for external harness CLIs.
 - **Process supervision.** The watchdog is a Python process. It cannot restart itself, so it runs under the operating system's service manager (launchd on macOS, systemd on Linux, a Windows service on Windows), and that manager is the top of the supervision chain. The watchdog spec should say so.
 - **Database owner.** The API process (Python) is the single owner of the relational store (SQLite in Phase 1, PostgreSQL in Phase 2): RBAC tables, project data and the `metrics-store` relational backend. The libs keep using files only.
 - **Tier 3 glue is Python.** The Scheduler dispatch loop, routing tags, hook creation per task, the `admit` rule and the CLI launcher (gap 3) are Python.
@@ -1476,7 +1464,7 @@ Work this creates: define the transport interface (publish, subscribe, ack, dead
 
 #### A.4.8 Agent execution model decision
 
-Decided: hybrid, with coarse Worker token caps accepted. Language does not change this decision (updated 2026-10-25 for Python only).
+Decided: hybrid, with Worker token use recorded only as far as each CLI reports it. Language does not change this decision (updated 2026-10-25 for Python only).
 
 | Agent | Runs as | Reached through | Why |
 |---|---|---|---|
@@ -1486,7 +1474,7 @@ Decided: hybrid, with coarse Worker token caps accepted. Language does not chang
 
 Reasons: the available in-process loops (Claude Agent SDK, OpenAI's agents SDK, Google's ADK) are each tied to one vendor, and a vendor-neutral loop would be the largest build item. Using external harnesses keeps every vendor replaceable.
 
-Accepted cost: Worker token use is visible only as far as each CLI reports it, so `budget-meter` enforces per-task time and checkpoint limits for Workers, not exact token caps. Coordination agents are metered exactly. What each CLI reports (for example live or end-of-run usage) has not been checked.
+Accepted cost: Worker token use is visible only as far as each CLI reports it, so `token-ledger` records Worker usage only when a CLI reports it. Coordination agents are recorded exactly. What each CLI reports (for example live or end-of-run usage) has not been checked.
 
 Consequences:
 - `agent-platform` stays as written: `assign` writes files, `read_signal` does not block, and nothing in it spawns processes.
@@ -1530,15 +1518,15 @@ The PRD's three roles are kept as written. Four more are proposed because the sp
 
 | Role | Scope | Purpose | Source | Phase |
 |---|---|---|---|---|
-| Admin | System | Manage users, providers, model mapping, limits and system configuration; see all projects | PRD | 1 |
-| Project Owner | Project | Run one project: members, budget within the system cap, review policy, escalation handling. This is what makes "own projects" mean something and keeps the Admin out of daily work | Proposed; implied by "own projects" | 1 |
+| Admin | System | Manage users, providers, model mapping and system configuration; see all projects | PRD | 1 |
+| Project Owner | Project | Run one project: members, review policy, escalation handling. This is what makes "own projects" mean something and keeps the Admin out of daily work | Proposed; implied by "own projects" | 1 |
 | Developer | Project | Submit work requests, spawn and stop agents in assigned projects, read everything in those projects | PRD | 1 |
 | Viewer | System | Read-only access to metrics, agents, tasks and all projects. Cannot see secrets or raw agent prompts | PRD, widened to all projects (A.5.9, question 3) | 1 |
 | Approver | Project | Human gate for merges, ADR acceptance and review overrides, separate from the person who requested the work (two-person rule) | Proposed; PRD "required reviewers" and "auto-merge rules" | 2 |
 | Operator | System | Respond to P0 escalations: acknowledge, pause or resume agents, reset a failed watchdog node, restart services. No access to project content or configuration | Proposed; PRD P0 "human intervention" | 3 |
-| Auditor | System | Read the audit log, metrics and cost only. No access to code or the ability to change anything | Proposed; PRD audit and enterprise compliance mode | 3 |
+| Auditor | System | Read the audit log and metrics only. No access to code or the ability to change anything | Proposed; PRD audit and enterprise compliance mode | 3 |
 
-Why not more roles: a `security-reviewer` role is a routing label for agents and a responder tag on escalations, not a separate access role. Budget owner is a permission held by Project Owner and Admin. A small number of roles with named permissions is easier to audit than many overlapping roles.
+Why not more roles: a `security-reviewer` role is a routing label for agents and a responder tag on escalations, not a separate access role. A small number of roles with named permissions is easier to audit than many overlapping roles.
 
 For a single developer (the 5-agent MVP) only one local Admin exists. A.5.8 describes that mode.
 
@@ -1549,20 +1537,21 @@ S means system-wide, P means within the projects the user is bound to, and a das
 | Capability | Admin | Project Owner | Developer | Approver | Operator | Auditor | Viewer |
 |---|---|---|---|---|---|---|---|
 | View agents, tasks, work bundles, merge queue | S | P | P | P | S | - | S |
-| View metrics and cost | S | P | P | P | S | S | S |
+| View metrics | S | P | P | P | S | S | S |
 | Submit a work request | S | P | P | - | - | - | - |
 | Spawn an agent | S | P | P | - | - | - | - |
 | Stop or pause an agent | S | P | P (own) | - | S | - | - |
 | Approve a merge, accept an ADR, override a review finding | S | P | - | P | - | - | - |
-| Set a project budget | S (any) | P (up to the system cap) | - | - | - | - | - |
 | Change project configuration (review policy, test policy) | S | P | - | - | - | - | - |
-| Change system configuration (providers, model mapping, limits) | S | - | - | - | - | - | - |
+| Change system configuration (providers, model mapping) | S | - | - | - | - | - | - |
 | Acknowledge or resolve a P0 escalation | S | P | - | - | S | - | - |
 | Reset a failed watchdog node, restart a service | S | - | - | - | S | - | - |
 | Create or delete a project | S | - | - | - | - | - | - |
 | Manage users and role bindings | S | P (members, up to Developer) | - | - | - | - | - |
 | Read the audit log | S | P | - | - | - | S | - |
 | Read or write secrets through the API | never | never | never | never | never | never | never |
+
+Removed (ADR-0005): the "Set a project budget" row.
 
 Self-approval: nobody can approve their own change by default. That exception is the separate permission `merge:approve_own`, which no built-in role holds. An Admin or Project Owner grants it through an access-control entry (a role binding that carries the permission, for one principal and one scope). Without the grant, the two-person rule applies (A.5.9, question 4).
 
@@ -1575,13 +1564,12 @@ The diagram shows who acts at each step of a normal work item, from project set-
 ```mermaid
 flowchart TB
     subgraph ADM["Admin - system scope"]
-        A1["Create project and set system limits"]
+        A1["Create project and set system configuration"]
         A2["Assign Project Owner"]
     end
 
     subgraph OWN["Project Owner - project scope"]
         O1["Add members and bind roles"]
-        O2["Set project budget within system cap"]
         O3["Set review and test policy"]
         O4["Handle security finding"]
     end
@@ -1610,10 +1598,10 @@ flowchart TB
 
     subgraph RO["Read-only roles"]
         V1["Viewer reads metrics and all projects"]
-        U1["Auditor reads audit log, metrics and cost"]
+        U1["Auditor reads audit log and metrics"]
     end
 
-    A1 --> A2 --> O1 --> O2 --> O3
+    A1 --> A2 --> O1 --> O3
     O3 --> D1 --> G1 --> G2 --> G3 --> G4 --> P1
     D2 -.-> G1
     P1 -- "approved, author differs" --> M["Merged to target branch"]
@@ -1631,16 +1619,16 @@ Reading the diagram:
 - **Set-up (top lanes).** Only the Admin creates a project; the Project Owner then runs it. The Admin does not appear again unless system configuration changes.
 - **Normal flow.** A Developer submits the request. From there agents do the work and the Approver is the only human gate before the merge. The two-person rule means the Approver cannot be the person who submitted the request (A.5.9, question 4; the exception is the `merge:approve_own` grant).
 - **Escalation.** P0 events go to the Operator, who acts on agents and services but never sees project content. A security issue found in review goes to the Project Owner of that project (the Admin if there is none), because the Operator cannot read the code it concerns. This routing is decided (A.5.9, question 7). P1 stays inside the agent layer with the Coordinator.
-- **Read-only.** Viewer and Auditor have no write path. The Viewer sees all projects; the Auditor sees the audit log, metrics and cost. The dotted lines show they observe results and are not part of the approval chain.
+- **Read-only.** Viewer and Auditor have no write path. The Viewer sees all projects; the Auditor sees the audit log and metrics. The dotted lines show they observe results and are not part of the approval chain.
 
 #### A.5.5 Agent roles
 
 An agent role is a set of permissions bound to one agent identity and one scope (project and worktree). This is the PRD's least-privilege requirement made concrete. Names follow the existing agent types.
 
-| Agent role | Code in own worktree | Target branch | Decision artifacts | Tasks and bundles | Spawn or stop agents | Config and budget | Events | Escalate |
+| Agent role | Code in own worktree | Target branch | Decision artifacts | Tasks and bundles | Spawn or stop agents | Config | Events | Escalate |
 |---|---|---|---|---|---|---|---|---|
 | Coordinator | read | - | read | create, assign | spawn, stop | read | append, read | P1 handling, raise P0 |
-| Worker (Developer) | read, write, commit to own hook branch | - | read | update own task | - | read own budget | append | raise P0, P1 |
+| Worker (Developer) | read, write, commit to own hook branch | - | read | update own task | - | - | append | raise P0, P1 |
 | Specialist (Analyst, PM, UX, Architect) | read | - | write (PRFAQ, ADR, spec, glossary) | update own task | - | - | append | raise P1 |
 | Reviewer | read the change under review | - | read | - | - | - | append | raise P0 (security) |
 | Merge Queue Processor | merge in its permanent worktree | merge, publish | read | update PR status | - | - | append | raise P1 |
@@ -1651,7 +1639,7 @@ Rules that follow from the table:
 - No agent role both writes code and merges it. The Worker commits to its hook branch and only the Merge Queue Processor writes to the target branch.
 - A Reviewer cannot commit to the branch under review and cannot approve a change it authored.
 - Only the Coordinator creates and assigns tasks, and only the Coordinator and Monitors can stop another agent.
-- No agent can read or write configuration, budget limits or secrets beyond its own remaining budget.
+- No agent can read or write configuration or secrets.
 - Network access is limited to the providers configured in `llm-gateway`. Filesystem access is limited to the project directory and, for Workers, the one worktree.
 
 #### A.5.6 Data model
@@ -1663,7 +1651,7 @@ Permissions are fixed in code, because middleware must check known names. Roles,
 | `principal` | `id`, `kind` (`user`, `agent`, `service`), `name`, `status` (`active`, `disabled`), `created_at`, `external_id` (Keycloak `sub`; required for `user` principals, empty for agents) | One table for all three kinds, so audit and bindings work the same way. |
 | `role` | `id`, `name`, `kind` (`human`, `agent`), `builtin` (bool), `description` | Built-in roles cannot be edited or deleted. Custom roles are allowed only in a later phase. |
 | `permission` | `id`, `resource`, `action` | Written as `resource:action`, for example `agent:spawn`, `merge:approve`, `config:write`, `audit:read`. Seeded by code. |
-| `role_permission` | `role_id`, `permission_id`, `limit` (optional JSON) | The limit expresses caps such as a budget ceiling. |
+| `role_permission` | `role_id`, `permission_id`, `limit` (optional JSON) | The limit expresses a cap on the permission. No built-in role sets one. |
 | `project` | `id`, `name`, `owner_principal_id`, `created_at` | Existing entity; only the owner link is new. |
 | `role_binding` | `id`, `principal_id`, `role_id`, `scope_type` (`system`, `project`, `worktree`), `scope_id`, `granted_by`, `granted_at`, `expires_at` (optional) | The core table. A principal holds many bindings. An agent binding sets `scope_type = worktree` and a short `expires_at`. |
 | `credential` | `id`, `principal_id`, `kind` (`api_key`, `agent_session`), `hash`, `issued_at`, `expires_at`, `revoked_at`, `last_used_at` | Only a hash of any key is stored. Human sessions belong to Keycloak and are not stored here. |
@@ -1724,9 +1712,9 @@ Keycloak facts in this section come from the issue and general knowledge. Its li
 | Rust in the stack | Keep, optional, or remove | Claude: Python-first. Bob: keep Rust. | Resolved: Rust removed (learning curve too high) |
 | Implementation languages | Python only; TypeScript where no Python option exists | A.4.3 | Decided (2026-10-25): Python for every component, including the CLI, watchdog and API. Replaces the earlier Go-core split. See A.4.6 |
 | Message broker | None (files), RabbitMQ, ActiveMQ Classic, ActiveMQ Artemis | A.4.4: keep files as the source of truth; RabbitMQ if a broker is added | Decided: files are the source of truth and no broker ships in Phase 1-2. If one is added (Phase 3-4), it is RabbitMQ as an optional outbox transport. ActiveMQ is not chosen. See A.4.7 |
-| External CLI agents or in-process SDK loop | See stack item 7 | Hybrid | Decided: hybrid, with coarse Worker token caps accepted. See A.4.8 |
+| External CLI agents or in-process SDK loop | See stack item 7 | Hybrid | Decided: hybrid, with Worker token use recorded only as far as each CLI reports it. See A.4.8 |
 | Publish Tier 1 and 2 as separate packages, or keep internal seams | Monorepo of independent packages, or separate repos | None given | Decided: option B, one monorepo with each lib built and versioned as its own package, and nothing published yet. A lib can be split into its own repo later (history-preserving) if someone outside UMAS needs it. |
-| Scheduler: UMAS-internal component, or extract a `task-queue` lib | Internal, or standalone lib | Extract if reusable | Decided: extract `task-queue`, because the dependency graph, leased claims and concurrency cap are a generic problem with no UMAS knowledge. Admission is a callback, so it does not import `budget-meter`. Dispatch loop, routing tags, hook creation and the CLI launcher stay as UMAS glue. An adopt-or-build check comes first (its section 10). |
+| Scheduler: UMAS-internal component, or extract a `task-queue` lib | Internal, or standalone lib | Extract if reusable | Decided: extract `task-queue`, because the dependency graph, leased claims and concurrency cap are a generic problem with no UMAS knowledge. The `admit` callback is generic, so the lib imports no other lib. Dispatch loop, routing tags, hook creation and the CLI launcher stay as UMAS glue. An adopt-or-build check comes first (its section 10). |
 | Identity provider and policy engine | Build, Keycloak, Casbin, Open Policy Agent | Adopt if it fits | Decided: Keycloak for sign-in and accounts (OIDC) from Phase 1; authorisation stays in UMAS. Setup and the agent-facing CLI wrapper are in [kc-axi](../libs/kc-axi/README.md). Adds a container runtime as a Phase 1 prerequisite. |
 | Dashboard | Terminal UI, minimal HTML, full React | Bob: TUI first, React in Phase 4 | Resolved: minimal read-only HTML |
 | TimescaleDB | Hard dependency, or optional upgrade | Optional | Resolved: JSONL ledger, then PostgreSQL, then TimescaleDB as a one-liner |
@@ -1735,13 +1723,14 @@ Keycloak facts in this section come from the issue and general knowledge. Its li
 | `CodingAgentAdapter` and `LLMGateway`; supported platforms | Two abstractions, or unified; which vendors | Keep separate | Resolved: kept separate. IBM Bob is removed from the solution. Claude and OpenAI are harnesses (Claude Code, Codex CLI), and Codex also runs Gemini models (ADR-0002). Each provider is registered in `llm-gateway` and each harness in `agent-platform`, so either layer can be replaced by configuration |
 | IPC mechanism | Filesystem, or message broker | Broker interface now, filesystem implementation for Phase 1-2 | Decided with the message broker row: filesystem implementation for Phase 1-2 behind a transport interface (A.4.7). The broker itself stays deferred. `event-log` open question 1 is answered: files by default, SQLite WAL when the writer count reaches 20 to 30 (Q7) |
 | Auth | Defer to Phase 4, or RBAC skeleton in Phase 1 | RBAC data model and middleware hook in Phase 1; roles and model in A.5 | Approved: the roles and data model in A.5 are accepted. Questions 1 to 4 and 6 in A.5.9 are answered. Questions 5 and 7 have recommendations and await confirmation. None blocks the Phase 1 skeleton |
+| Token budgets, pause and cost (D14, D17, D18, D19, D22, D22a, C2 in [decisions-pending-2026-10-25](../docs/decisions-pending-2026-10-25.md)) | Keep budgets, never pause; keep a cost field; track token use only ([ADR-0005](../docs/decisions/ADR-0005-track-token-usage-only.md), alternatives not taken) | Track token use only | Removed (ADR-0005), owner decision 2026-11-09. Context-window handoff stays (§5.6) |
 
 ---
 
 ### A.7 Open gaps, in priority order
 
 1. **RBAC data model.** A security gap. The roles and model are approved in A.5 and six of the seven questions in A.5.9 are answered. Confirm question 5 (agents act with the intersection of permissions). The skeleton, including Keycloak sign-in, should land in Phase 1, not Phase 4.
-2. **Scheduler.** Decided: extract `task-queue` (see `libs/task-queue/README.md`). What remains is UMAS glue, not a library: the dispatch loop, routing tags, hook creation per task and the `admit` rule.
+2. **Scheduler.** Decided: extract `task-queue` (see `libs/task-queue/README.md`). What remains is UMAS glue, not a library: the dispatch loop, routing tags and hook creation per task.
 3. **CLI launcher.** Nothing specifies the component that starts, supervises and stops the external harness CLIs (A.4.8). It is the second half of the Scheduler glue: it claims a task from `task-queue`, starts the harness as a `watchdog` node, and reports the result. Python (A.4.6).
 4. **`structured-output-parser` decision record.** Done: [ADR-0004](../docs/decisions/ADR-0004-structured-output-with-pydantic.md).
 5. **Follow-ups from closed items:**
@@ -1765,7 +1754,7 @@ Closed since the earlier reviews: the IBM Bob sign-off (dropped because Bob was 
 - Moved implementation code from the three technical design files into a non-normative "12. Reference implementation" section of each matching lib and pack (20 blocks, verbatim, with pointers left behind). Code with no standalone home stayed in place. The `agent-session` and `metrics-store` sections 12 were added separately.
 - Added a "source material and deviations" section (section 10) to every spec.
 - Wired the other libs to `error-classifier` by data only: each keeps its own typed errors, and its failure-modes section ends with an "Error records" table of suggested `recoverability`, with `llm-gateway` having an equivalent note on its error taxonomy. Severity stays the consumer's policy. No imports were added.
-- Extracted the Scheduler's queue half into `libs/task-queue.md` after a reusability check, and noted that the Scheduler's own dispatch loop stays as UMAS glue.
+- Extracted the Scheduler's queue half into `libs/task-queue/README.md` after a reusability check, and noted that the Scheduler's own dispatch loop stays as UMAS glue.
 
 ### A.9 Corrections to the earlier assessments
 

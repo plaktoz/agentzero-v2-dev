@@ -3,7 +3,7 @@
 > Part of the UMAS technical design. Main spec: [TECHNICAL-DESIGN-SPEC.md](../../TECHNICAL-DESIGN-SPEC.md) · Module map: [module map](../../TECHNICAL-DESIGN-SPEC.md#5-component-design)
 > **Owns:** The 17 exception flows in section 6, as one cross-cutting view of trigger, detection, recovery and the state each flow leaves.
 > **Uses:** [agent-session](../../../libs/agent-session/README.md) · [watchdog](../../../libs/watchdog/README.md) · [llm-gateway](../../../libs/llm-gateway/README.md) · [agent-platform](../../../libs/agent-platform/README.md)
-> **Depends on modules:** [monitoring](../monitoring/monitoring-spec.md) · [verification](../verification/verification-spec.md) · [orchestration](../orchestration/orchestration-spec.md) · [budget-and-models](../budget-and-models/budget-and-models-spec.md)
+> **Depends on modules:** [monitoring](../monitoring/monitoring-spec.md) · [verification](../verification/verification-spec.md) · [orchestration](../orchestration/orchestration-spec.md) · [models-and-usage](../models-and-usage/models-and-usage-spec.md)
 
 ## 6. Exception Flows
 
@@ -80,16 +80,9 @@ On `umas update`, only the `# umas-managed` marker line is replaced; all other h
 
 ---
 
-### 6.6 Token Budget Exhausted Mid-Task
+### 6.6 Removed (ADR-0005)
 
-**Behaviour:** In-progress agents complete their current atomic step and commit state. New dispatch is paused.
-
-Agent steps when budget signal received:
-1. Complete current atomic step
-2. Commit: `[umas] budget-pause — state committed`
-3. Set status `budget_paused`
-
-When budget is increased via `umas project config --budget <N>`, Project Monitor resumes dispatch within 60 s — does not wait for UTC midnight.
+This flow is removed: UMAS has no token budget, so no flow starts on one.
 
 ---
 
@@ -253,10 +246,10 @@ Written to the worktree root alongside `STATE.md` on any clean pause (machine sh
 # PAUSE: <task_id>
 
 **Paused at:** <RFC 3339 UTC>
-**Paused by:** <machine_shutdown | user | budget>
+**Paused by:** <machine_shutdown | user>
 **Agent:** <agent_id>
 **Session:** <session_id>
-**Token usage at pause:** <token_used> / <token_limit>
+**Context usage at pause:** <context_tokens> / <context_limit>
 
 #### State at pause
 <same fields as STATE.md — current task, next steps, recent decisions, file pointers>
@@ -276,7 +269,7 @@ Sessions that were `spawned` (never started) at shutdown time are reset to `pend
 
 #### No timeout for `machine_paused` / `auth_expired`
 
-Unlike `budget_paused` (24-hour timeout), these statuses have **no expiry**. A laptop that stays off for a week resumes cleanly. `umas health-check` surfaces them as informational (`machine_paused`) or actionable (`auth_expired`) — never as failures.
+These statuses have **no expiry**. A laptop that stays off for a week resumes cleanly. `umas health-check` surfaces them as informational (`machine_paused`) or actionable (`auth_expired`) — never as failures.
 
 > **Standalone lib impact:** `agent-session` adds `machine_paused` and `auth_expired` to `SessionStatus` and a `pause()` operation ([§3.2](../../../libs/agent-session/README.md#32-sessionstatus), [§4](../../../libs/agent-session/README.md#4-interface)). `watchdog` adds a boot-time stale-detection rule ([§7](../../../libs/watchdog/README.md#7-failure-modes)). `agent-platform` must honour `<hook-path>/.pause` polling at step boundaries.
 
@@ -306,7 +299,7 @@ Severity comes from section 6 where section 6 names one. Recoverability comes fr
 | 6.3 Corrupted `.umas/` directory | Missing or corrupt files | `umas init --project`; `umas health-check` | `umas init --project`, which is idempotent | Missing files recreated. Bad `config.yaml` saved as `.bak`. Bad `events.jsonl` saved, and an empty log started | Not given |
 | 6.4 Project moved or renamed | Project path changed | As 6.1 | Re-register at the new path | `path` column updated. History kept | Not given |
 | 6.5 Git hook conflict | Existing hook manager found | `umas init --project`; `umas update` | UMAS installs or chains its hook by hook type | `# umas-managed` line in the hook file. Polling-only mode for `binary` | Not given |
-| 6.6 Token budget exhausted mid-task | Daily project budget at 100% | Budget signal | Agents finish the current step. New dispatch paused. Dispatch resumes within 60 s after the budget rises | Commit `[umas] budget-pause — state committed`. Status `budget_paused` | Not given |
+| 6.6 Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) |
 | 6.7 LLM provider failure mid-task | 429, 5xx, timeout over 30 s, or 401/403 | [llm-gateway](../../../libs/llm-gateway/README.md) error classes | Retry, then failover. With no fallback, human runs `umas agents resume <session-id>` | `STATE.md` in the worktree. P0 escalation (401/403) or P1 escalation (no fallback) | 401/403: P0. No fallback: P1. 429, 5xx and timeout: transient. 401/403: permanent (from source: llm-gateway section 3.3) |
 | 6.8 Stale worktrees after agent crash | Agent crash leaves a worktree. Age 24 h, then 7 days | `umas health-check`, by age | Human, or `umas worktrees recover <name>` (triage agent) | Worktree marked `stale`. Tagged `stale-dirty` if uncommitted changes. Never cleaned automatically when dirty | Not given |
 | 6.9 Merge queue bisect finds no clean subset | Bisect finds no passing subset | Merge queue bisect | Originating agents re-spawned. After 3 consecutive failures per PR: P1 escalation. Human resets with `--reset-retries` | PR `blocked: failed_in_isolation`. Retry count | P1 beyond 3 failures. Recoverability not given |
@@ -365,7 +358,7 @@ Carrier names come from sections 5 and 6. Rows marked **proposed** are new.
 | Pause signal | in (to agent) | File `<hook-path>/.pause` | `{v, reason, ts, grace_seconds}`. **From source:** [agent-session](../../../libs/agent-session/README.md) section 5.6 | Writer: daemon (**from source**, Part A 6.17). Reader: agents |
 | Clean-pause record | out | File `PAUSE.md` in the worktree root | Fields in the `PAUSE.md` format (6.17). Names differ from agent-session (Open 3) | [context-persistence](../context-persistence/context-persistence-spec.md) (**proposed**) |
 | Committed state | out | File `STATE.md` in the worktree root | Current task, progress, last 10 decisions, next steps, file references (section 5.1) | [context-persistence](../context-persistence/context-persistence-spec.md) |
-| Session status | out | Database row | `status`: `active`, `machine_paused`, `auth_expired`, `budget_paused`, `crashed`. `provider_failed` (from source: agent-session section 3.2; its use for 6.7 is Open 11). Project `status`: `orphaned` | Main spec, [data model](../../TECHNICAL-DESIGN-SPEC.md#4-data-model) |
+| Session status | out | Database row | `status`: `active`, `machine_paused`, `auth_expired`, `crashed`. `provider_failed` (from source: agent-session section 3.2; its use for 6.7 is Open 11). Project `status`: `orphaned` | Main spec, [data model](../../TECHNICAL-DESIGN-SPEC.md#4-data-model) |
 | Boot summary | out | Event `boot_recovery` in `events.jsonl` | Payload not given in section 6 (Open 5) | [interfaces](../interfaces/interfaces-spec.md) |
 | Daemon status | out | File `~/.umas/daemon.pid` | `status: paused` after a clean stop | Daemon (**from source**, 6.17). Module owner (**proposed**): [interfaces](../interfaces/interfaces-spec.md) |
 | Recovery commands | in | CLI | `umas health-check`, `umas init --project`, `umas start-all [--resume]`, `umas auth login`, `umas agents pause`, `umas agents resume <session-id>`, `umas agents reconcile`, `umas worktrees recover <name>`, `umas work-bundle retry <id> [--reset-retries]`, `umas update [--now]`, `umas cleanup --dry-run` | [interfaces](../interfaces/interfaces-spec.md) |
@@ -383,7 +376,7 @@ Every value comes from section 6 or from a lib that section 6 uses. A value with
 | Lock wait | duration | 5 s | Text only (6.12, 6.13) | Time a write waits for `~/.umas/.lock` before it fails |
 | ENOSPC retry delay | duration | 5 s | Text only (6.16) | Wait before the one retry of a failed `git commit` |
 | Disk thresholds | size | 2 GB, 500 MB, 100 MB | Text only (6.16) | Free space that raises P2, P1 and P0 |
-| Budget exhausted | percent | 100% | Text only (6.6; budget-meter thresholds, section 5.1) | Usage that starts the exhaustion path |
+| 6.6 Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) |
 | Provider backoff | seconds | 5, 15, 45 | [llm-gateway](../../../libs/llm-gateway/README.md) policy (section 3.3) | Delay between 429 retries |
 | Provider timeout | seconds | 30 | [llm-gateway](../../../libs/llm-gateway/README.md) `timeout` (section 3.3) | Wait before the 2 timeout retries |
 | Provider 5xx retries | count | 3 | [llm-gateway](../../../libs/llm-gateway/README.md) policy (section 3.3) | Immediate retries before failover |
@@ -407,7 +400,7 @@ No permission name in the snapshot covers most of these actions. The table gives
 | Acknowledge a P0 escalation | Admin, Project Owner, Operator (A.5.4) | Not named |
 | Reset a failed watchdog node or restart a service | Admin, Operator (A.5.4) | Not named |
 | Retry a work bundle with `--reset-retries` | Human (not in the A.5.4 table) | Not named |
-| Set a project budget: `umas project config --budget` | Admin, Project Owner up to the system cap (A.5.4) | Not named |
+| 6.6 Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) |
 | Recover a stale worktree: `umas worktrees recover <name>` | Human, through a triage agent (6.8) | Not named |
 | Commit a checkpoint and write `PAUSE.md` on pause | Agent, in its own worktree (A.5.5) | Agent role scope. No permission name |
 
@@ -421,11 +414,10 @@ Owner assignments are **proposed** unless the section 6 text names the owner. Ca
 | [monitoring](../monitoring/monitoring-spec.md) | 6.2, 6.15, 6.16 | Project Monitor detects a deleted project and reconciles sessions. P1 escalation to System Patrol | Poll (60 s), `escalate` event | Async |
 | [verification](../verification/verification-spec.md) | 6.9, 6.11 | Bisect result, PR retry state, flaky flag | Merge queue state, event | Async |
 | [orchestration](../orchestration/orchestration-spec.md) | 6.10 | Rejects a bundle at creation. Moves a task to `ready_queue`. Reads `escalate` events | Function call, event poll | Sync at creation. Async at runtime |
-| [budget-and-models](../budget-and-models/budget-and-models-spec.md) | 6.6 | Budget signal. Dispatch pause. Status `budget_paused` | budget-meter events, database row | Async |
 | [agent-execution](../agent-execution/agent-execution-spec.md) | 6.7 (Open 9). Pause poll in 6.17 | Provider errors in. Pause signal out | llm-gateway result, `.pause` file | Sync for provider calls. Async, polled at each step, for pause |
 | [context-persistence](../context-persistence/context-persistence-spec.md) | 6.8, 6.17 (state files) | Worktree tags. `PAUSE.md` and `STATE.md` for recovery | Git commits and files in the worktree | Async |
 | [access-control](../access-control/access-control-spec.md) | 6.17 (auth expiry part) | Token check at boot. Status `auth_expired` | Keycloak token (OIDC) | Sync at boot |
-| Main spec, [data model](../../TECHNICAL-DESIGN-SPEC.md#4-data-model) | 6.12 (Open 10) | Database rows and statuses for 6.1, 6.2, 6.6 | SQLite database | Sync |
+| Main spec, [data model](../../TECHNICAL-DESIGN-SPEC.md#4-data-model) | 6.12 (Open 10) | Database rows and statuses for 6.1, 6.2 | SQLite database | Sync |
 
 6.17 has no single owner. See Open 19.
 
@@ -438,7 +430,7 @@ Owner assignments are **proposed** unless the section 6 text names the owner. Ca
 - [error-classifier](../../../libs/error-classifier/README.md): record shape, P0 to P3, recoverability, `retry_plan`. Sections 3.1 to 3.3, 5.3.
 - [hook-store](../../../libs/hook-store/README.md): `STATE.md`, the `stale` status and `dirty` flag, `recover`, `gc`. Sections 3.2, 3.4, 5.4, 5.5. Used by 6.8.
 - [event-log](../../../libs/event-log/README.md): `events.jsonl` appends, `repair`, retention. Sections 5.3, 5.4, 9. Used by 6.3, 6.16.
-- [budget-meter](../../../libs/budget-meter/README.md): thresholds and the `exhausted` event. Sections 3.3, 5.1. Used by 6.6.
+- budget-meter: Removed (ADR-0005). It was used only by 6.6.
 - [merge-queue](../../../libs/merge-queue/README.md): block reasons, `rerun_on_fail`, `flaky_suspected`. Sections 3.3, 5.3. Used by 6.9, 6.11.
 - [task-queue](../../../libs/task-queue/README.md): cycle and unknown-dependency rejection. Section 5.4. Used by 6.10.
 
@@ -458,20 +450,20 @@ No pack is used by these flows.
 
 1. **Open. P1 responder conflict.** Section 6.2 sends P1 to System Patrol. Appendix A.5.4.1 keeps P1 inside the agent layer, with the Coordinator. Decision: one P1 responder per flow. Recommendation: the Coordinator for work-level P1 (6.7, 6.9). System Patrol for monitor-level P1 (6.2). Record the choice in the register.
 2. **Open. Missed grace window.** Section 6.17 treats the last `STATE.md` as the recovery surface when the window is missed. Boot step 3b treats a session without `PAUSE.md` as crashed and does not resume it (step 4). Decision: resume from `STATE.md`, or follow 6.8. Recommendation: resume when the worktree is clean. Follow 6.8 when it is dirty.
-3. **Open. `PAUSE.md` field names.** Section 6.17 uses `Paused at` and `Paused by`. [agent-session](../../../libs/agent-session/README.md) section 5.6 uses `paused_at` and `paused_reason`. Decision: one set of names. Recommendation: the agent-session names, with the 6.17 values `machine_shutdown | user | budget`.
+3. **Open. `PAUSE.md` field names.** Section 6.17 uses `Paused at` and `Paused by`. [agent-session](../../../libs/agent-session/README.md) section 5.6 uses `paused_at` and `paused_reason`. Decision: one set of names. Recommendation: the agent-session names, with the 6.17 values `machine_shutdown | user`.
 4. **Open. Escalation event name.** Sections 5.2 and 5.3 use `escalate`. [agent-session](../../../libs/agent-session/README.md) section 5.8 uses `session_escalated`. [event-log](../../../libs/event-log/README.md) section 9 uses `escalate`. Its section 12 sample uses `escalation_triggered`. Recommendation: `escalate` with `data: {severity, reason}`.
 5. **Open. Boot summary event.** Section 6.17 writes `boot_recovery`. Agent-session section 5.8 writes `session_resumed` per session. Recommendation: keep both. `session_resumed` per session. `boot_recovery` once per boot. Confirm the payload.
 6. **Open. Corrupt `events.jsonl`.** Section 6.3 backs up the file and starts an empty log, with the history loss warned. [event-log](../../../libs/event-log/README.md) section 5.4 moves the file to quarantine and records a `log.repaired` event. Recommendation: 6.3 uses `event-log repair`, so the loss stays in the log.
 7. **Open. Merge queue naming.** Section 6.9 uses `blocked: failed_in_isolation` and `--reset-retries`. [merge-queue](../../../libs/merge-queue/README.md) section 3.3 uses the reasons `test_failure` and `max_attempts`. Its `requeue(id)` keeps attempts (section 4). Recommendation: keep `max_attempts` as the reason. Make the human reset clear attempts.
 8. **Open. Stale numbering in libs.** [hook-store](../../../libs/hook-store/README.md) section 9 cites "exception flow 4.8". [merge-queue](../../../libs/merge-queue/README.md) section 9 cites "4.11". These are now 6.8 and 6.11. Recommendation: the lib README owners update the links. This module does not edit them.
-9. **Open. Owner of 6.7.** Proposed: [agent-execution](../agent-execution/agent-execution-spec.md), because section 5.3 (Multi-Platform Support) names the llm-gateway provider registry. Alternative: [budget-and-models](../budget-and-models/budget-and-models-spec.md), which owns the model policy (5.7). Recommendation: agent-execution.
+9. **Open. Owner of 6.7.** Proposed: [agent-execution](../agent-execution/agent-execution-spec.md), because section 5.3 (Multi-Platform Support) names the llm-gateway provider registry. Alternative: [models-and-usage](../models-and-usage/models-and-usage-spec.md), which owns the model policy (5.7). Recommendation: agent-execution.
 10. **Open. Owner of 6.12 and 6.16.** No module owns the database or free-space checks. The API process owns the relational store (Appendix A, [A.4.6](../../TECHNICAL-DESIGN-SPEC.md#a46-language-decision)). Recommendation: 6.12 stays with the main spec data model. 6.16 detection goes to monitoring.
 11. **Open. Provider session status.** Section 6.7 names no status. Agent-session section 3.2 has `provider_failed`. Recommendation: use `provider_failed` for 6.7.
 12. **Open. Missing check values.** Section 6.12 gives no corruption check. Section 6.16 gives no free-space check interval. Section 6.17 gives no boot time limit. Recommendation: use the watchdog `startup_grace_seconds` (60 s) for the boot limit. Use 60 s for the free-space check, matching the Project Monitor poll. Both are **proposed**.
 13. **Open. Text-only parameters.** Section 4 lists values with no config key. Decision: which values become keys, and in which file. Recommendation: one recovery block in the [interfaces](../interfaces/interfaces-spec.md) config.
-14. **Open. Permission names.** Section 5 lists actions with no permission name in Appendix A.5.4 and A.5.6. Decision: names for pause, resume, P0 acknowledge, node reset, budget and worktree recovery. Recommendation: [access-control](../access-control/access-control-spec.md) defines them in `resource:action` form. This module does not invent names.
+14. **Open. Permission names.** Section 5 lists actions with no permission name in Appendix A.5.4 and A.5.6. Decision: names for pause, resume, P0 acknowledge, node reset and worktree recovery. Recommendation: [access-control](../access-control/access-control-spec.md) defines them in `resource:action` form. This module does not invent names.
 15. **Open. `.pause` in agent-platform.** Section 6.17 assigns `.pause` polling to agent-platform. The [agent-platform](../../../libs/agent-platform/README.md) README does not mention pause. Recommendation: its owner adds the rule. Or [agent-execution](../agent-execution/agent-execution-spec.md) states it.
-16. **Open. Budget commit prefix.** Section 6.6 commits `[umas] budget-pause`. Agent-session sections 5.2 to 5.4 define `[checkpoint]`, `[done]` and `[handoff]`, with no budget prefix. Decision: the prefix for a budget pause. Recommendation: add a `[budget-pause]` prefix to agent-session as a configuration parameter, as it does for the other prefixes.
+16. **Open.** Removed (ADR-0005).
 17. **Open. P0 append on a full disk.** Section 6.16 appends the P0 event to `events.jsonl` after an ENOSPC. That append also needs disk space. Decision: a fallback location for the P0 record. Recommendation: a separate small file on the same volume, written first. Mark **proposed**.
 
 18. **Open. Checkpoint prefix.** Section 6.17 commits `[umas:checkpoint] <summary> — machine shutdown`. Agent-session section 5.2 uses `[checkpoint]`, and section 5.6 uses `[umas:checkpoint]`. Decision: one checkpoint prefix. Recommendation: one prefix for every checkpoint commit, set in the agent-session configuration.

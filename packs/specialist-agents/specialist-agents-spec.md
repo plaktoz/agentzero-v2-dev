@@ -405,27 +405,27 @@ Source: `TECHNICAL-DESIGN-SPEC-PART3.md` §5.3.3
 specialized_agents:
   product_manager:
     model: default                  # llm-gateway alias, not a model ID
-    token_limit: 100000
+    context_limit: 100000
     role: "Product Manager"
     
   architect:
     model: default                  # llm-gateway alias, not a model ID
-    token_limit: 150000
+    context_limit: 150000
     role: "Software Architect"
     
   ux_designer:
     model: default                  # llm-gateway alias, not a model ID
-    token_limit: 100000
+    context_limit: 100000
     role: "UX Designer"
     
   developer:
     model: default                  # llm-gateway alias, not a model ID
-    token_limit: 200000
+    context_limit: 200000
     role: "Developer"
     minimalism_enforced: true
     
   analyst:
     model: default                  # llm-gateway alias, not a model ID
-    token_limit: 80000
+    context_limit: 80000
     role: "Business Analyst"
 ```

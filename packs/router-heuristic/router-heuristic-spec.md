@@ -216,7 +216,7 @@ Extracted from `UMAS-TECH-DESIGN-SPEC.md` §3.2 (Router), `TECHNICAL-DESIGN-SPEC
 
 ## 11. Open Questions
 
-1. Is routing cost-sensitive? A large route spends more tokens; the budget could cap routes, but that is outside the pack.
+1. Removed (ADR-0005): the question of whether routing is cost-sensitive. Routing does not consider token use.
 2. Should a pure data migration be `large` by itself? It is risky but may touch few files. A "irreversible" signal could be added.
 3. Is the codebase scan cheap enough to run every time, or only when the request is ambiguous?
 4. Should the router also pick a minimalism or test level (for example `ultra` for large)? Kept out for now.

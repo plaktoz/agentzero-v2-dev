@@ -407,7 +407,7 @@ Source: `TECHNICAL-DESIGN-SPEC-PART2.md` §3.3.2
 
 Source: `TECHNICAL-DESIGN-SPEC-PART2.md` §3.3.3
 
-> **Note:** `libs/decision-artifacts.md` §2 explicitly removes the database requirement — artifacts are files, not rows. This schema is retained here as a historical reference only. It represents the original design before the file-first redesign.
+> **Note:** `libs/decision-artifacts/README.md` §2 explicitly removes the database requirement — artifacts are files, not rows. This schema is retained here as a historical reference only. It represents the original design before the file-first redesign.
 
 ```sql
 -- Artifacts table

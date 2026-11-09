@@ -8,7 +8,7 @@
 
 ## 1. Purpose
 
-Record scalar measurements — token counts, durations, costs, error rates, coverage percentages — from multiple processes, make them queryable by time window and dimension, and serve the `metrics *` CLI commands. The library has two backends behind one interface: a flat JSONL ledger (zero infrastructure) and a relational `metrics` table (SQL aggregates). The caller switches backends via configuration; application code does not change.
+Record scalar measurements — token counts, durations, error rates, coverage percentages — from multiple processes, make them queryable by time window and dimension, and serve the `metrics *` CLI commands. The library has two backends behind one interface: a flat JSONL ledger (zero infrastructure) and a relational `metrics` table (SQL aggregates). The caller switches backends via configuration; application code does not change.
 
 ## 2. Scope and Non-Goals
 
@@ -17,11 +17,11 @@ Record scalar measurements — token counts, durations, costs, error rates, cove
 - Querying by name, time window, and tag filters with aggregation (sum, avg, min, max, percentile)
 - 90-day retention policy with pruning
 - Two backends: JSONL file ledger and a relational table (SQLite or PostgreSQL)
-- Adapters that translate existing source ledgers (`budget-meter`, `event-log`, a test runner) into metric rows without requiring those libraries to be modified
+- Adapters that translate existing source ledgers (`token-ledger`, `event-log`, a test runner) into metric rows without requiring those libraries to be modified
 - A thin CLI for the `umas metrics *` commands
 
 **Non-goals**
-- Real-time streaming or push alerting. Budget threshold alerts belong to [budget-meter](../budget-meter/README.md); process health alerts to [watchdog](../watchdog/README.md).
+- Real-time streaming or push alerting. Process health alerts belong to [watchdog](../watchdog/README.md).
 - Distributed tracing or log aggregation. Those are OpenTelemetry concerns and are optional exports, not core storage.
 - TimescaleDB. Standard PostgreSQL with a `(name, ts)` index is sufficient at UMAS scale. If query latency becomes a measured problem, `SELECT create_hypertable('metrics', 'ts')` upgrades the table in one statement with no application code change.
 - Dashboards or chart rendering. The library returns structured data; visualisation is the CLI's or dashboard's job.
@@ -50,9 +50,7 @@ UMAS uses these names. The library enforces no catalogue; these are documented f
 
 | Name | Unit | Source |
 |------|------|--------|
-| `token.input` | tokens | `budget-meter` ledger |
-| `token.output` | tokens | `budget-meter` ledger |
-| `token.cost` | USD | `budget-meter` ledger |
+| `token.used` | tokens | `token-ledger` entries (tagged `model`) |
 | `task.duration_ms` | ms | `event-log` (session_started → session_ended) |
 | `task.handoff_rate` | 0–1 | `event-log` (handoff_initiated / session count) |
 | `task.escalation_rate` | 0–1 | `event-log` (session_escalated / session count) |
@@ -128,7 +126,7 @@ Works identically in SQLite (TEXT timestamps, JSON functions) and PostgreSQL (TI
 | `query(Query) -> QueryResult[]` | Aggregate query. See §5.2. |
 | `raw(name, since?, until?, tags?, limit?) -> Measurement[]` | Return raw measurements, newest first. No aggregation. |
 | `prune(retain_days) -> int` | Delete measurements older than the retention window. Returns count removed. |
-| `ingest_budget_meter(ledger_path, since?) -> int` | Source adapter: read a `budget-meter` ledger and write `token.*` and `token.cost` measurements. Returns count ingested. |
+| `ingest_token_ledger(ledger_path, since?) -> int` | Source adapter: read a [token-ledger](../token-ledger/README.md) file and write one `token.used` measurement per entry. Returns count ingested. |
 | `ingest_event_log(log_dir, since?) -> int` | Source adapter: fold a `event-log` directory and derive `task.*` measurements from session events. |
 | `ingest_test_result(result_json_path) -> int` | Source adapter: read a test result JSON file (as written by [test-adapters](https://github.com/plaktoz/test-adapters)) and write `test.*` measurements. |
 | `backend() -> "file" \| "sqlite" \| "postgres"` | Return the active backend. |
@@ -152,10 +150,12 @@ Multiple processes writing concurrently: the file backend uses the `O_APPEND` si
 
 ### 5.3 Source adapters
 
-The three `ingest_*` operations are idempotent: each source record carries a deterministic `id` derived from its source identifier (ledger entry ULID, event-log event ID, test run timestamp + framework). Re-running an ingest skips already-present IDs. This means ingestion can run on a schedule (e.g., every 5 minutes) without duplicating data.
+The three `ingest_*` operations are idempotent: each source record carries a deterministic `id` derived from its source identifier (ledger `ts` + `model` + line offset, event-log event ID, test run timestamp + framework). Re-running an ingest skips already-present IDs. This means ingestion can run on a schedule (e.g., every 5 minutes) without duplicating data.
 
-`ingest_budget_meter` maps ledger operations to metric names:
-- `commit` operation → `token.input`, `token.output`, `token.cost` (one measurement each, tagged with `model` and `actor`)
+`ingest_token_ledger` reads entries `{v, ts, model, tokens}`:
+- Each valid entry → one `token.used` measurement with `value = tokens`, the entry's `ts`, and tag `model`.
+- The `id` is derived from the entry's `ts`, `model` and its line offset in the ledger file, so a re-run yields the same `id`.
+- Corrupt lines and lines with an unknown `v` are skipped.
 
 `ingest_event_log` derives computed metrics:
 - Pairs of `session_started` + `session_ended` → `task.duration_ms` (tagged with `agent_id`, `task_id`)
@@ -200,7 +200,7 @@ prune_on_startup: false   # run prune() automatically when the library initialis
 
 # Ingest schedule (optional — the caller drives ingestion if not set)
 ingest:
-  budget_meter_ledger: ""      # path to budget-meter ledger dir; empty = disabled
+  token_ledger: ""             # path to the token-ledger file (e.g. .token-ledger/usage.jsonl); empty = disabled
   event_log_dir: ""            # path to event-log dir; empty = disabled
   interval_seconds: 300        # how often to run ingest_* when paths are configured
 ```
@@ -231,8 +231,8 @@ This library keeps its own typed errors and does not import any error library. A
 ## 8. Acceptance Criteria
 
 1. `record()` from 10 concurrent processes writes no duplicate or interleaved lines in the file backend (same guarantee as `event-log`).
-2. `query({ name: "token.used", aggregate: "sum", group_by: ["agent_id"] })` returns one row per distinct `agent_id` with the correct sum, on both backends.
-3. `ingest_budget_meter` run twice on the same ledger inserts each measurement exactly once.
+2. `query({ name: "token.used", aggregate: "sum", group_by: ["model"] })` returns one row per distinct `model` with the correct sum, on both backends.
+3. `ingest_token_ledger` run twice on the same ledger inserts each `token.used` measurement exactly once, and the sum per `model` equals the sum of `tokens` in the ledger.
 4. `migrate_to_relational` followed by a second run on the same ledger writes no duplicates.
 5. `prune(90)` never removes a measurement with `ts` within the last 90 days; removes all measurements older than 90 days.
 6. The file backend returns `QueryTooLarge` when asked to aggregate more than 500k raw rows; the relational backend handles the same query without error.
@@ -245,27 +245,28 @@ This library keeps its own typed errors and does not import any error library. A
 
 | UMAS concept | Mapping |
 |---|---|
-| `umas metrics tokens` | `query({ name: ["token.input","token.output"], aggregate: "sum", group_by: ["agent_id"], since: "7d" })` |
-| `umas metrics cost` | `query({ name: "token.cost", aggregate: "sum", group_by: ["project","model"] })` |
+| `umas metrics tokens` | `query({ name: "token.used", aggregate: "sum", group_by: ["model"], since: "7d" })` |
+| `umas metrics cost` | Removed (ADR-0005). No cost is recorded |
 | `umas metrics quality` | `query({ name: ["test.coverage_pct","merge_queue.success_rate","error.p1_count"], aggregate: "avg" })` |
 | `umas metrics agents` | `query({ name: "task.duration_ms", aggregate: "p95", group_by: ["agent_id"] })` |
 | Phase 1–2 (SQLite tier, ≤5 agents) | `backend: file` — zero extra infrastructure |
 | Phase 3 (PostgreSQL tier, 20 agents) | `backend: postgres`, `db_url` points to the existing UMAS PostgreSQL instance. The `metrics` table lives in the same database as `projects`, `work_bundles`, `agent_sessions` |
 | TimescaleDB | Not used. `SELECT create_hypertable('metrics', 'ts')` is available as a future operational upgrade if query latency becomes a measured problem; no application code change required |
-| Metrics DB record in TECHNICAL-DESIGN-SUMMARY.md | `token_usage` and `cost_tracking` tables are replaced by `metrics` rows tagged with `agent_id` and `task_id` |
+| Metrics DB record in TECHNICAL-DESIGN-SUMMARY.md | The `token_usage` table is replaced by `token.used` rows tagged with `model`. The `cost_tracking` table is removed (ADR-0005) |
 | 90-day retention (PRD) | `retain_days: 90` |
 
 ## 10. Source Material and Deviations
 
-Extracted from `TECHNICAL-DESIGN-SPEC.md` §1.2 (`metrics_storage`), `TECHNICAL-DESIGN-SUMMARY.md` (database schema overview, `token_usage` and `cost_tracking` tables), PRD §Observability Requirements, and the design discussion that produced this spec.
+Extracted from `TECHNICAL-DESIGN-SPEC.md` §1.2 (`metrics_storage`), `TECHNICAL-DESIGN-SUMMARY.md` (database schema overview, `token_usage` table), PRD §Observability Requirements, and the design discussion that produced this spec.
 
 | Deviation | Why |
 |-----------|-----|
 | TimescaleDB removed as a requirement | TimescaleDB is a PostgreSQL extension that adds automatic time-based partitioning. At UMAS scale (30 agents, 90-day retention) a standard `(name, ts)` index is sufficient. TimescaleDB is an operational upgrade path, not a design dependency. The spec's original rationale ("time-series database") does not withstand scrutiny: the queries are aggregations over a fixed schema, not streaming time-series analytics |
-| Single `metrics` table replaces `token_usage` + `cost_tracking` | The original schema had two separate tables. One narrow table with a `name` column and a `tags` JSON column covers both, and every future metric category, without schema changes |
+| Single `metrics` table replaces `token_usage` | The original schema had separate tables per category. One narrow table with a `name` column and a `tags` JSON column covers token use and every future metric category, without schema changes |
+| Cost metric removed | Owner decision 2026-11-09 ([ADR-0005](../../docs/decisions/ADR-0005-track-token-usage-only.md)): track tokens, model and time only. One `token.used` replaces `token.input`, `token.output` and `token.cost` |
 | `tags` as JSON column, not separate tag table | A normalised tags table would require joins on every query. At this measurement volume, a JSON column with expression indexes (PostgreSQL) or `json_extract` (SQLite) is simpler and fast enough |
 | File ledger as Phase 1–2 backend | The original spec required TimescaleDB from day one. A file ledger defers all infrastructure until Phase 3 without losing any data |
-| Source adapters (ingest_*) instead of direct instrumentation | The other libs (`budget-meter`, `event-log`) already write their own ledgers. Having them also write to a metrics store would couple them to this library, violating the no-cross-library-imports rule. Adapters read existing ledgers on a schedule |
+| Source adapters (ingest_*) instead of direct instrumentation | The other libs (`token-ledger`, `event-log`) already write their own ledgers. Having them also write to a metrics store would couple them to this library, violating the no-cross-library-imports rule. Adapters read existing ledgers on a schedule |
 
 ## 11. Open Questions
 

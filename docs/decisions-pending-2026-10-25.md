@@ -1,5 +1,22 @@
 # Decisions pending from the owner (2026-10-25)
 
+## Closed 2026-11-09: budgets removed (ADR-0005)
+
+The owner decided D22a: **remove budget pause requirements. Track only tokens used, model and timestamp per LLM call.** Recorded in [ADR-0005](./decisions/ADR-0005-track-token-usage-only.md). Every budget item in this file is closed by that decision. None of them needs an answer.
+
+| Item | Status |
+|------|--------|
+| D14 (wall-clock unit added to budget-meter) | Closed. No budget unit, no time cap in the ledger. Worker run limits are not part of this change |
+| D17, D18, D19, D22, D22a (money basis, Worker spend, `budget_paused`, thresholds, pause point) | Closed. No budget, no pause, no money |
+| C2 (budgets in money, realigned) and C2 follow-ups | Closed |
+| D21 `budget:set` and the other budget permission names | Closed. `budget:set` is not added. `metrics:read`, `agent:handoff`, `agent:resume` stand, subject to their own items |
+| D23 (Worker budget unit) | Closed. No budget unit exists |
+| D28 `budget:set` | Closed. Other names in D28 unchanged |
+| D39 (95 % trigger for CLI Workers) | Closed for budgets. The context-window handoff trigger still applies where usage is visible (ADR-0005) |
+| D20 `deep` alias | Unaffected. Already done |
+
+The budget-related assessments (`docs/assessments/caller-assessment-budget-and-models-2026-10-25.md`) are history. The findings they raised about budgets do not apply.
+
 ## Owner answers (2026-10-25)
 
 | # | Answer | Done in the repo | Still to do |

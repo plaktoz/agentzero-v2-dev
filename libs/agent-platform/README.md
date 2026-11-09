@@ -25,7 +25,7 @@ Abstract the differences between coding agent harnesses — the tools that actua
 - Spawning OS processes or managing agent lifecycle. The harness decides how it runs; this library only defines what it reads and writes.
 - Routing or selection logic (which platform to use for which task). That belongs to [packs/router-heuristic](../../packs/router-heuristic/router-heuristic-spec.md) and the consuming application.
 - Authentication or secrets management. Credentials are passed in by the caller; never stored by this library.
-- Metrics or alerting. Usage figures are returned in the completion signal; the caller forwards them to [budget-meter](../budget-meter/README.md).
+- Metrics or alerting. Usage figures are returned in the completion signal; the caller forwards model and token totals to [token-ledger](../token-ledger/README.md).
 
 ## 3. Concepts and Data Model
 

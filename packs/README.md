@@ -12,7 +12,7 @@
 
 | Pack | One-line purpose | Standalone use |
 |------|------------------|----------------|
-| [minimalism-ladder](./minimalism-ladder/minimalism-ladder-spec.md) | A six-rung check an agent runs after reading the code and before writing any | Cuts needless code in any coding agent |
+| [minimalism-ladder](./minimalism-ladder/minimalism-ladder-spec.md) | A six-rung check an agent runs after reading the code and before writing any, plus scope, bug-fix, test and never-cut rules | Cuts needless code in any coding agent. Portable skill set listed in its spec section 3 (ADR-0006) |
 | [anti-slop](./anti-slop/anti-slop-spec.md) | **KIV (parked 2026-10-27).** Built but not accepted; see [docs/tasks-skills-claude-mods-2026-10-25.md](../docs/tasks-skills-claude-mods-2026-10-25.md), task 3. Writing and code rules plus a two-pass review that removes generic AI patterns without touching facts | A review skill for docs and code in any repo |
 | [communication-modes](./communication-modes/communication-modes-spec.md) | **KIV (parked 2026-10-27).** Two registers (compact for agents, plain for humans) with intensity levels. The routing table is removed by owner decision; the spec text still lists it until revised. See [docs/tasks-communication-modes.md](../docs/tasks-communication-modes.md) | Token savings in agent-to-agent text, clarity in human-facing text |
 | [two-axis-review](./two-axis-review/two-axis-review-spec.md) | **KIV (parked 2026-10-28).** Replaced by the installed `code-review` skill. Independent Standards and Spec review passes, one finding format, severity-based gating | A PR review skill for any team |
@@ -34,7 +34,7 @@
 | Candidate | Decision | Reason |
 |-----------|----------|--------|
 | Audit skill (whole-repo impact-ranked analysis) | Not extracted | The PRD names it but gives no rule set to port. Nothing to specify beyond a title. Re-open when its behaviour is defined |
-| Handoff-packet compression levels | Not a pack | The mechanism is `pack()` in [budget-meter](../libs/budget-meter/README.md). What goes into the packet is task-specific and is covered by the Developer prompt in specialist-agents |
+| Handoff-packet compression levels | Not a pack | The mechanism is `pack()` in [agent-session](../libs/agent-session/README.md), section "Context packing". What goes into the packet is task-specific and is covered by the Developer prompt in specialist-agents |
 
 ---
 

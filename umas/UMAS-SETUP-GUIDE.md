@@ -71,8 +71,6 @@ project:
   review:
     required: true
     auto_merge: false
-  token_efficiency:
-    budget_per_task: 50000
   llm_provider:
     default: anthropic
     fallback: openai
@@ -164,8 +162,7 @@ umas request "Build a REST API for task management"
 umas watch                          # real-time stream for active project
 umas agents status                  # all agents across all projects
 umas work-bundle show <bundle-name> # drill into a specific bundle
-umas metrics tokens                 # per-project token burn
-umas metrics cost                   # dollar cost breakdown
+umas metrics tokens                 # tokens used, totals by model
 ```
 
 ---
@@ -178,7 +175,7 @@ umas metrics cost                   # dollar cost breakdown
 | Production | 20 | PostgreSQL | Small team (5–10 devs) |
 | Scale | 30+ | PostgreSQL + connection pooling | Large team, many projects |
 
-Token budget alerts fire at **80% / 90% / 95%** of daily budget per project. On exhaustion, work **queues** — it does not fail.
+Token usage is recorded per LLM call and never limits or pauses work. When an agent's context window nears its limit, the agent hands off to a fresh agent: graceful at **90%** of the model's context window, emergency at **95%**.
 
 ---
 
@@ -189,17 +186,14 @@ Token budget alerts fire at **80% / 90% / 95%** of daily budget per project. On 
 │
 ├── Project: my-api            → ~/projects/my-api/.umas/
 │   ├── Active agents: 2
-│   ├── Work bundles: rate-limit-login (in review)
-│   └── Token budget: 32k / 50k used today
+│   └── Work bundles: rate-limit-login (in review)
 │
 ├── Project: payments-svc      → ~/work/payments-svc/.umas/
-│   ├── Active agents: 0
-│   └── Token budget: 5k / 50k used today
+│   └── Active agents: 0
 │
 └── Project: frontend-app      → ~/Desktop/experiment/.umas/
     ├── Active agents: 3 (parallel greenfield build)
-    ├── Work bundles: task-api (Alice, Bob, Charlie working)
-    └── Token budget: 41k / 50k used today
+    └── Work bundles: task-api (Alice, Bob, Charlie working)
 ```
 
 Each project is fully isolated — its own worktrees, config, and session history. The global scheduler enforces the total concurrency cap across all projects to prevent API rate exhaustion.

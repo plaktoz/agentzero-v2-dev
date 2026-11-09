@@ -196,7 +196,7 @@ The three-tier watchdog is three levels of this library, with intelligence added
 | System Patrol -> Project Monitors / Merge Queue | Level 3: patrol observes `external` nodes |
 | Project Monitor stuck detection | Per-worker `external` node: no heartbeat 5 min = `unresponsive`; no commit 10 min = `stalled` via `git_commit_time` |
 | Recovery: nudge -> graceful handoff -> emergency handoff | Stalled ladder: `nudge -> request_graceful -> callback(emergency_handoff)` |
-| 95% token usage with no handoff | Not a watchdog concern; combine a [budget-meter](../budget-meter/README.md) event with a callback |
+| Context window at `emergency_threshold` (95%) with no handoff | Not a watchdog concern. The context-window thresholds in [agent-session](../agent-session/README.md) trigger the handoff; watchdog only sees a session that stops making progress |
 | `escalate` events | Wrapped as records by UMAS; the node, ladder rung and reason go into `context`. See [error-classifier](../error-classifier/README.md) section 9 |
 | **Machine shutdown / boot recovery** | All worker nodes are `kind: external, machine_pause_aware: true`. On boot, the watchdog emits `boot_stale` per node and suppresses restart for one `startup_grace`. UMAS daemon reads `PAUSE.md` per worktree and either resumes (token valid) or sets `auth_expired` before the grace window ends. |
 

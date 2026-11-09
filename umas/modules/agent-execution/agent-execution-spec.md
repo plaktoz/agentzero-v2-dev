@@ -88,7 +88,7 @@ This module does not own:
 
 - Queueing, dispatch and routing of tasks. Orchestration owns them. `[S: main 5.2]`
 - Checks of a Worker's output after it reports done. Verification owns them. `[S: main 5.4]`
-- Token budgets and model choice. Budget and models owns them. `[S: main 5.6, 5.7]`
+- Context-window handoff thresholds, model choice and token usage recording. Models and usage owns them. `[S: main 5.6, 5.7; ADR-0005]`
 - Detection of stuck or crashed agents. Monitoring owns it. `[S: main 5.5]`
 
 ### 2. Flow
@@ -165,13 +165,13 @@ Figure 1. Coding Worker flow: happy path, blocked path and crash path. The diagr
 | Checkpoint commit | out (Worker to hook branch) | git commit message `[umas:checkpoint] <summary>` | `summary` text | this module | main 5.3 |
 | Done commit | out (Worker to hook branch) | git commit message `[umas:done] <task-id>` | `task-id` | this module | main 5.3 |
 | Escalate event | out (Worker to events log) | append to `events.jsonl` | Snapshot fields: `event` = `escalate`, `severity` (P1 in the snapshot), `reason`. Envelope fields from event-log: `v`, `id`, `ts`, `type`, `source`, `scope`, `data`. The two do not match (Open 4). | this module (payload); event-log (envelope) | main 5.3; el 3 |
-| Handoff request | out (Worker to events log) | append to `events.jsonl` | Snapshot names `handoff_request`. Fields in the reference code: `reason`, `token_usage`, `token_limit`, `task_id`. Name and fields do not match agent-session (Open 4). | this module | main 5.3; as 12.1 (reference) |
+| Handoff request | out (Worker to events log) | append to `events.jsonl` | Snapshot names `handoff_request`. Fields in the reference code: `reason`, `token_usage`, `context_limit`, `task_id`. Name and fields do not match agent-session (Open 4). | this module | main 5.3; as 12.1 (reference) |
 | Context pack | out and in | function calls `pack_context` and `unpack_context` | ContextPack: `schema_version`, `source_platform`, `target_platform`, `assignment_id`, `task_summary`, `decisions[]`, `artefact_paths[]`, `hook_path?`, `packed_at`, `checksum` | agent-platform | ap 3.5, 5.4 |
 | Hook worktree | in (from orchestration) | function call `create(name, base_branch, owner, task?)` | HookInfo | hook-store (called by orchestration) | hs 4 |
 | Spawn request | in | CLI `umas agents spawn --task <id>`; REST `POST /api/v1/agents` | `--task <id>`. The REST body is not specified. | interfaces | main 7 |
 | Pause signal | in (to agents) | file `<hook-path>/.pause` | `{ "v": 1, "reason": "machine_shutdown", "ts": "<RFC 3339>", "grace_seconds": 30 }` | agent-session (format); daemon (writes) | as 5.6 |
 | Pause record | out | file `PAUSE.md` in the worktree root | STATE fields plus `paused_reason`, `paused_at` | agent-session | as 5.6 |
-| Token usage | in | Not specified. CLI-reported usage (Open 6). | Not specified | budget-and-models | main A.4.8 |
+| Token usage | out (launcher to token-ledger) | function call `record(model, tokens, ts?)`. Source: the harness's reported total tokens and model (CompletionSignal `token_usage?`). Format per CLI not specified (Open 6). | `{ts, model, tokens}`. If the harness reports none, nothing is recorded and nothing is estimated. `[P]` | token-ledger | ADR-0005; token-ledger 4 |
 | Ladder record | out | structured output of the Developer role | `rung`, `rung_name`, `evidence` (required for rungs 1 to 4), `notes` | minimalism-ladder pack | ms 4.2, 5 |
 | Specialist output | out | structured output of each role | Fields per role in `sa` 4.2, plus `role`, `pack_version`, `based_on` | specialist-agents pack | sa 4.2 |
 
@@ -229,7 +229,7 @@ Rules that apply to every row:
 |--------|------------------------|---------------------------|---------|---------------|
 | [Orchestration](../orchestration/orchestration-spec.md) | Completion, escalation and handoff signals | Task ID, hook path, compressed context, platform choice | Function call for dispatch `[P]`; commits and `events.jsonl` for signals | Dispatch: sync `[P]`. Signals: async. |
 | [Context persistence](../context-persistence/context-persistence-spec.md) | State commits, `STATE.md` (Open 2) | `PAUSE.md` and `HANDOFF.md` on resume | Git commits and files | Async |
-| [Budget and models](../budget-and-models/budget-and-models-spec.md) | Per-task time and checkpoint counts `[P]` | Limits; the alias for each role; CLI-reported usage | Config; CLI report (format not specified) | Async |
+| [Models and usage](../models-and-usage/models-and-usage-spec.md) | Harness-reported total tokens and model, recorded in token-ledger by the launcher `[P]` | The alias for each role; context-window thresholds | Config; CLI report (format not specified) | Async |
 | [Verification](../verification/verification-spec.md) | Done branch for the Merge Queue Processor | Test-regression re-spawn with failing test names and PR diff | Git branch; function call `[S: main 6.11]` | Async |
 | [Monitoring](../monitoring/monitoring-spec.md) | Checkpoint commits and heartbeat | Nudge and handoff actions from the Project Monitor | Git log; heartbeat file; process supervision by watchdog | Async, Project Monitor polls every 60 seconds `[S: main 5.5]` |
 | [Interfaces](../interfaces/interfaces-spec.md) | `umas agents` command results | Spawn, status, pause and resume requests | CLI and REST `[S: main 7]` | Sync |
@@ -244,7 +244,7 @@ Rules that apply to every row:
 - [task-queue](../../../libs/task-queue/README.md): `claim`, `complete`, `fail` for task state. `[P: launcher calls these]` `[S: tq 4]`
 - [event-log](../../../libs/event-log/README.md): `append` and `poll` for `events.jsonl`. `[S: el 4]`
 - [watchdog](../../../libs/watchdog/README.md): supervises the harness process as a node. `[S: main A.4.8]`
-- [budget-meter](../../../libs/budget-meter/README.md): per-task time and checkpoint limits for Workers, because token caps are not exact. `[S: main A.4.8]`
+- [token-ledger](../../../libs/token-ledger/README.md): `record` for each harness usage report (`{ts, model, tokens}`). It only records. `[S: ADR-0005]`
 - [llm-gateway](../../../libs/llm-gateway/README.md): `complete` for non-editing Specialists, if they run as one prompt and one answer. `[P: Open 7]` `[S: lg 4, 11 Q2]`
 - [decision-artifacts](../../../libs/decision-artifacts/README.md): writes PRFAQ and ADR outputs. `[S: sa 2, 9]`
 - [error-classifier](../../../libs/error-classifier/README.md): optional error records for `CapabilityMissing`, `AssignmentWriteFailed` and `ChecksumMismatch`. `[S: ap 7]`
@@ -266,7 +266,7 @@ Rules that apply to every row:
 | No checkpoint for more than 10 minutes | main 5.5 | Project Monitor nudges the agent, then starts a graceful handoff. | Monitoring |
 | Project deleted while agents run | main 6.2 | Active sessions are marked `crashed`. | Exception flows, section 6.2 |
 | Machine shutdown | main 6.17 | Clean pause through `.pause` if the harness honours it. Otherwise recovery uses `STATE.md`. | Exception flows, section 6.17. CLI Workers: Open 5. |
-| Token budget exhausted | main 6.6 | In-progress Workers finish their step and commit. New dispatch pauses. | Exception flows, section 6.6 |
+| Token budget exhausted | main 6.6 | Removed (ADR-0005). No budget gate; Workers are not paused for usage. | Exception flows, section 6.6 |
 | LLM provider failure | main 6.7; lg 7 | Applies to coordination agents through `llm-gateway`. Failures inside a CLI Worker are not visible to UMAS (Open 6). | Exception flows, section 6.7 |
 | Agent causes test regression | main 6.11 | Worker is re-spawned with failing test names and the PR diff. | Exception flows, section 6.11; verification |
 | Specialist output fails validation | sa 7; ADR-0004 | Consumer retries once with the schema error. A second failure escalates. Output is not repaired silently. | Orchestration |
@@ -280,10 +280,10 @@ Each item needs an owner decision. The recommendation is not a decision.
 3. **Commit signal pattern.** The library default `\[(done|blocked|escalated)\]` does not match `[umas:done]`. The main spec uses `[umas:done]` and `[umas:checkpoint]`. The state commit in main 5.1 uses `[umas] <agent-id>`. Recommendation: set `signal_pattern` to `\[umas:(done|blocked|escalated)\]` in the consuming app config, with no library change. Pick one prefix for state commits. The owner is context-persistence. `[S: ap 5.1, 6; main 5.1, 5.3; as 9]`
 4. **Event names and envelope.** Main 5.3 uses `{"event":"escalate",...}` and `handoff_request`. event-log uses the envelope `v`, `id`, `ts`, `type`, `source`, `scope`, `data`. agent-session uses `session_escalated` and `handoff_initiated` (as 5.8). Recommendation: use the event-log envelope with the agent-session type names. `[S: main 5.3; el 3; as 5.8]`
 5. **Pause for CLI Workers.** Agents poll `.pause` at each step boundary (as 5.6). A CLI harness does not run that code. Main 6.17 says agent-platform must honour `.pause`. ap 5.3 says the library does not poll. Recommendation: the launcher polls `.pause` and stops the process after the next checkpoint commit. Test this with each CLI before Phase 2. `[S: as 5.6; main 6.17; ap 5.3]`
-6. **Handoff and token limits for CLI Workers.** Worker token use is visible only as far as each CLI reports it. The 90% and 95% thresholds need a token count. Also, the CLI usage report format is not checked. Recommendation: CLI Workers use per-task time and checkpoint limits from budget-meter. The thresholds stay for coordination agents. Owner: budget-and-models. `[S: main A.4.8; main 5.6]`
+6. **Handoff and usage reports for CLI Workers.** Worker context use is visible only as far as each CLI reports it. The 90% and 95% thresholds need a context token count. Also, the CLI usage report format is not checked. Recommendation: the thresholds stay for coordination agents. For CLI Workers, a handoff starts from the Project Monitor rule (no checkpoint for 10 minutes: nudge, then graceful handoff). The launcher records the reported total tokens and model in token-ledger when a CLI gives them. Owner: models-and-usage. `[S: main A.4.8; main 5.6; ADR-0005]`
 7. **Runtime of Specialized Agents.** A.4.8 places file-editing specialists in CLI harnesses. It does not place Analyst, Product Manager, UX Designer or Architect, which write documents only. Recommendation: run them through `llm-gateway` as one prompt and one answer, the coordination rule. `[S: main A.4.8; lg 11 Q2]`
-8. **Capability list for `openai-codex` with Gemini.** The list was written for OpenAI models. ap 11 Q1 and ADR-0002 require a check when Gemini runs through the harness. Recommendation: test each provider (`openai`, `google-gemini`) before Phase 2. Also name the owner of the provider choice per assignment. Recommendation: the Router or budget-and-models. `[S: ap 11 Q1; ADR-0002]`
-9. **Meaning of `agents.worker.model`.** The key names an `llm-gateway` alias. Workers bypass `llm-gateway`. Recommendation: for Workers, the alias maps to the harness provider and model, set per assignment. Owner: budget-and-models. `[S: main 5.7; lg 11 Q2; ADR-0002]`
+8. **Capability list for `openai-codex` with Gemini.** The list was written for OpenAI models. ap 11 Q1 and ADR-0002 require a check when Gemini runs through the harness. Recommendation: test each provider (`openai`, `google-gemini`) before Phase 2. Also name the owner of the provider choice per assignment. Recommendation: the Router or models-and-usage. `[S: ap 11 Q1; ADR-0002]`
+9. **Meaning of `agents.worker.model`.** The key names an `llm-gateway` alias. Workers bypass `llm-gateway`. Recommendation: for Workers, the alias maps to the harness provider and model, set per assignment. Owner: models-and-usage. `[S: main 5.7; lg 11 Q2; ADR-0002]`
 10. **Concurrency cap.** Main 2.3 sets `max_concurrent: 30`. Main 5.8 sets 5 agents for the MVP with SQLite. Recommendation: use 5 for the MVP. Owner: orchestration (Scheduler). `[S: main 2.3, 5.8]`
 11. **Retry count for CLI Workers.** `max_retries: 3` is in the in-process reference code only (as 12.2). Recommendation: CLI Workers use `fail(retry)` in task-queue. The in-process value does not apply to them. Owner: orchestration. `[S: as 12.2; tq 4]`
 12. **Permission names for stop, pause and resume.** A.5.4 names the capabilities but not the `resource:action` strings. No row covers `umas agents resume`. Recommendation (proposed): `agent:stop` for stop and pause, and `agent:resume` for resume. Owner: access-control. `[S: main A.5.4, A.5.6]`

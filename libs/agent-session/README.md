@@ -1,13 +1,13 @@
 # agent-session
 
 > Standalone library spec · Draft v0.1 · Part of [libs/README.md](./README.md)
-> **Independence:** no dependency on UMAS. Depends on [hook-store](../hook-store/README.md), [event-log](../event-log/README.md), and [budget-meter](../budget-meter/README.md) for their *data formats* only — not as code imports. Each format contract is reproduced here so the library can be used without reading those specs first.
+> **Independence:** no dependency on UMAS. Depends on [hook-store](../hook-store/README.md) and [event-log](../event-log/README.md) for their *data formats* only — not as code imports. Each format contract is reproduced here so the library can be used without reading those specs first.
 
 ---
 
 ## 1. Purpose
 
-Provide the shared lifecycle skeleton for any agent that runs an LLM-assisted session inside a worktree: spawn → execute → checkpoint → handoff → done. The library tracks state transitions, emits the standard signals that orchestrators read, enforces the context threshold policy, and builds the handoff packet when transitioning to a successor agent. All six agent types in UMAS (WorkerAgent, Analyst, ProductManager, Architect, UXDesigner, Developer) share this skeleton.
+Provide the shared lifecycle skeleton for any agent that runs an LLM-assisted session inside a worktree: spawn → execute → checkpoint → handoff → done. The library tracks state transitions, emits the standard signals that orchestrators read, enforces the context-window threshold policy, and builds the handoff packet when transitioning to a successor agent. The thresholds (`handoff_threshold`, `emergency_threshold`) are fractions of the model's context window. They protect the session from overflowing that window. They never pause work and never limit spend. All six agent types in UMAS (WorkerAgent, Analyst, ProductManager, Architect, UXDesigner, Developer) share this skeleton.
 
 ## 2. Scope and Non-Goals
 
@@ -17,8 +17,9 @@ Provide the shared lifecycle skeleton for any agent that runs an LLM-assisted se
 - Checkpoint commits (`[checkpoint] <summary>`) at configurable intervals
 - Done commits (`[done] <task-id>`) on completion
 - Handoff packet construction: compress full context to a size-limited packet when the context threshold is reached
+- Context packing: fit prioritised sections into a token limit (`pack`, section 5.9)
 - Escalation events appended to the event log when the agent is blocked
-- Token usage tracking and threshold monitoring (soft at 90%, hard at 95%)
+- Context-window monitoring (soft handoff at 90%, hard handoff at 95% of `context_limit`)
 - Recovery: reconstruct session state from `STATE.md` and the event log on restart or handoff
 
 **Non-goals**
@@ -26,7 +27,9 @@ Provide the shared lifecycle skeleton for any agent that runs an LLM-assisted se
 - Prompt construction, tool execution, or code writing. Those are agent-specific and belong to the caller.
 - Orchestration: spawning other agents, managing work bundles, or routing requests.
 - Worktree creation or branch management. The caller creates the hook via [hook-store](../hook-store/README.md) and passes the path in.
-- Budget enforcement across a project. That is [budget-meter](../budget-meter/README.md)'s period budget. This library only tracks and signals within a single session.
+- Limiting, pricing or pausing work on token use. The thresholds guard the context window only (ADR-0005).
+- Recording token usage. [token-ledger](../token-ledger/README.md) does that. This library does not read the ledger. If the session needs a token count, it counts the context window itself with a caller-supplied counter.
+- Counting tokens for text. The caller supplies the counter function.
 
 ## 3. Concepts and Data Model
 
@@ -41,7 +44,7 @@ Session:
   event_log_dir:   string          # dir for event-log appends
   config:          SessionConfig
   status:          SessionStatus
-  token_used:      int             # cumulative tokens this session (spend detail; not a trigger)
+  token_used:      int             # cumulative tokens the caller reported for this session (informational; not a trigger)
   context_tokens:  int             # tokens in the context window at the last step (the handoff trigger)
   started_at:      string          # RFC 3339
   ended_at:        string?
@@ -55,13 +58,12 @@ active          execute() is running
 handoff         context threshold reached; successor session being prepared
 crashed         unhandled exception; session ended without a done signal
 done            task completed; done commit written
-budget_paused   period budget exhausted; session suspended until budget resets
 provider_failed both primary and fallback LLM providers failed; session suspended
 machine_paused  host machine shut down or suspended; session paused at last checkpoint commit
 auth_expired    OIDC token expired while machine was off; re-authentication required before resume
 ```
 
-`handoff`, `budget_paused`, `provider_failed`, `machine_paused`, and `auth_expired` are **resumable**: a successor session reads `STATE.md` (and `PAUSE.md` if present) and the event log to continue. `crashed` and `done` are terminal within a session run; the task may be retried externally.
+`handoff`, `provider_failed`, `machine_paused`, and `auth_expired` are **resumable**: a successor session reads `STATE.md` (and `PAUSE.md` if present) and the event log to continue. Removed (ADR-0005): the `budget_paused` status. No status exists for token use. `crashed` and `done` are terminal within a session run; the task may be retried externally.
 
 `machine_paused` and `auth_expired` carry **no timeout** — they wait indefinitely for the machine to boot or the human to re-authenticate. They are never promoted to `crashed` by the watchdog.
 
@@ -74,7 +76,8 @@ SessionConfig:
   emergency_threshold: float     # fraction of context_limit that triggers hard handoff (default 0.95)
   checkpoint_every:    int       # commit STATE.md after every N steps (default 1)
   handoff_packet_size: int       # max tokens in the handoff packet (default 15000)
-  compression_level:   string    # "lite" | "full" | "ultra" — passed to budget-meter pack()
+  compression_level:   string    # "lite" | "full" | "ultra" — not an input to pack(); the caller's own compression setting
+  counter:             fn(text) -> int   # caller-supplied token counter, used by pack() (section 5.9)
   event_source:        string    # written as `source` field in every event-log append
 ```
 
@@ -87,7 +90,7 @@ Step:
   summary:    string          # one sentence, written to STATE.md and the checkpoint commit
   decisions:  Decision[]      # { summary, rationale } — choices made this step
   files:      string[]        # files read or written
-  token_usage: int            # tokens consumed by this step's LLM call(s), spend detail
+  token_usage: int            # tokens consumed by this step's LLM call(s), informational
   context_tokens: int         # tokens in the context window after this step's LLM call
   done:       bool            # true if the task is complete after this step
   blocked:    Blocked?        # present if the agent cannot proceed
@@ -118,7 +121,7 @@ HandoffPacket:
   packed_at:       string
 ```
 
-The packet is not a context window dump — it is a structured summary produced by `budget-meter.pack()` from sections the caller registers throughout the session.
+The packet is not a context window dump — it is a structured summary produced by `pack()` (section 5.9) from sections the caller registers throughout the session.
 
 ### 3.6 STATE.md
 
@@ -158,7 +161,8 @@ Written atomically to the worktree root after every step. Plain Markdown; both h
 | `checkpoint(session, step) -> CommitRef` | Write `STATE.md`, commit the worktree with a checkpoint message, append a `step_complete` event. Called automatically by `execute` per `checkpoint_every`; also callable directly. |
 | `done(session, step) -> CommitRef` | Write final `STATE.md`, commit the worktree with the done message, append a `session_ended` event with `status: done`. |
 | `escalate(session, blocked) -> ()` | Append a `session_escalated` event with the severity and reason. Does not stop execution; the caller decides whether to continue or abort. |
-| `handoff(session) -> HandoffPacket` | Pack context via `budget-meter.pack()`, write `HANDOFF.md`, commit with handoff message, append a `handoff_initiated` event. Returns the packet. |
+| `pack(sections, limit, counter) -> Packed` | Fit sections into `limit` tokens. Section 5.9. |
+| `handoff(session) -> HandoffPacket` | Pack context via `pack()` (section 5.9), write `HANDOFF.md`, commit with handoff message, append a `handoff_initiated` event. Returns the packet. |
 | `pause(session, reason) -> CommitRef` | Write `PAUSE.md` and `STATE.md`, commit with pause message, set status `machine_paused`, append a `session_paused` event. Safe to call from a signal handler. Section 5.6. |
 | `recover(hook_path, event_log_dir, task_id) -> RecoveredSession` | Reconstruct session state from `STATE.md` and the event log. Reads `PAUSE.md` in preference to `STATE.md` if both exist. Section 5.5. |
 | `status(hook_path) -> SessionStatus` | Read current status from `STATE.md` without loading full history. |
@@ -177,7 +181,7 @@ create session → write STATE.md → append session_started
 loop:
   call execute_step_fn(context) → Step
 
-  track token_used += step.token_usage          # spend detail
+  track token_used += step.token_usage          # informational
   track context_tokens = step.context_tokens    # the handoff trigger
   append step to session history
 
@@ -272,11 +276,7 @@ The caller registers context sections throughout the session so `handoff()` can 
 register_context(session, section: PackSection)
 ```
 
-`PackSection` follows the [budget-meter](../budget-meter/README.md) `pack()` schema:
-```
-{ name, content, priority: int, mode: "required"|"truncatable"|"droppable",
-  truncate: "head"|"tail" }
-```
+`PackSection` is the section shape defined in section 5.9.
 
 Recommended sections the caller should register:
 - `task` (required): the task description
@@ -300,6 +300,24 @@ All events are appended via [event-log](../event-log/README.md) `append()`. The 
 | `session_paused` | `pause()` | `reason`, `token_used`, `pause_file: "PAUSE.md"` |
 | `session_resumed` | boot recovery in consuming app | `resumed_from: "machine_paused"\|"auth_expired"`, `session_id` |
 | `session_ended` | `done()` or unhandled exception | `status`, `token_used`, `step_count` |
+
+### 5.9 Context packing
+
+`pack(sections, limit, counter)` fits context into `limit` tokens when handing work to a fresh worker (the handoff packet). `handoff()` calls it with `limit = handoff_packet_size`, the sections from `register_context`, and `config.counter`.
+
+```
+section = { name, content, priority: int, mode: "required"|"truncatable"|"droppable",
+            truncate: "head"|"tail"|"summary_hint" }
+```
+
+1. Count each section with `counter`.
+2. Include all `required` sections. If they exceed `limit`, fail `RequiredTooLarge` (never silently truncate required content).
+3. Add remaining sections by descending `priority`. A `truncatable` section that does not fit is cut to the available space (by `truncate`) and marked `truncated: true`; a `droppable` section that does not fit is omitted.
+4. Output: ordered sections plus a manifest `{ included[], truncated[], dropped[], tokens }` so the receiving worker is told what is missing.
+
+Pointers (path plus line range) are cheap and should be preferred over inline content by callers; `pack` treats them like any other section.
+
+`pack` does not call an LLM and does not summarise. Compression by an LLM is the caller's job; `pack` only packs what the caller provides. Vendor tokenizers differ, so the caller supplies `counter`.
 
 ## 6. Configuration
 
@@ -335,7 +353,8 @@ decisions_in_packet: 10      # how many recent decisions to include in handoff p
 |-------|-------|-----------|
 | `HookNotFound` | `hook_path` does not exist | Fail `create()`; the caller must create the hook via hook-store first |
 | `StepFnError` | `execute_step_fn` raises | Catch, append `session_ended(status=crashed)`, write crash `STATE.md`, re-raise |
-| `RequiredSectionTooLarge` | Required handoff sections exceed `handoff_packet_size` | Fail `handoff()` with sizes; the caller must reduce required sections or increase limit |
+| `RequiredTooLarge` | `pack()`: required sections exceed `limit` | Fail with sizes per section. Never truncate required content |
+| `RequiredSectionTooLarge` | `handoff()`: `pack()` raised `RequiredTooLarge` for `handoff_packet_size` | Fail `handoff()` with the sizes; the caller must reduce required sections or increase the limit |
 | `CommitFailed` | Git commit in the worktree fails | Fail with `CommitFailed`; state is not lost (STATE.md was written before commit); retryable |
 | `EventLogWriteFailed` | Event-log append fails | Log a warning; do not stop execution. Session state is still in the worktree. |
 | `RecoveryIncomplete` | `STATE.md` absent and event log has no matching events | Return a minimal `RecoveredContext` from the task description alone; flag `recovery_degraded: true` |
@@ -348,7 +367,7 @@ This library keeps its own typed errors and does not import any error library. A
 |-------|--------------------------|
 | `CommitFailed`, `EventLogWriteFailed` | `transient` |
 | `StepFnError`, `RecoveryIncomplete` | `ambiguous` |
-| `HookNotFound`, `RequiredSectionTooLarge` | `permanent` |
+| `HookNotFound`, `RequiredTooLarge`, `RequiredSectionTooLarge` | `permanent` |
 
 ## 8. Acceptance Criteria
 
@@ -359,6 +378,7 @@ This library keeps its own typed errors and does not import any error library. A
 5. `checkpoint_every: 3` produces a checkpoint commit exactly on steps 3, 6, 9, … regardless of whether `done` or `handoff` fires in between.
 6. Two sessions with the same `task_id` but different `session_id`s append to the same event-log scope; `recover()` correctly identifies the most recent session.
 7. A session with no `register_context` calls produces a `HANDOFF.md` in degraded mode with `manifest.degraded: true`.
+8. `pack` with required sections that fit never drops them; the manifest lists everything truncated or dropped. `pack` with required sections over `limit` fails `RequiredTooLarge` and returns no packet.
 
 ## 9. Known Consumers
 
@@ -374,11 +394,12 @@ This library keeps its own typed errors and does not import any error library. A
 | Agent session record in `agent_sessions` table (UMAS-TECH-DESIGN-SPEC.md §2) | UMAS maintains this DB row; the library writes `STATUS` to `STATE.md` and the event log. UMAS reads those to update the row. |
 | `[umas:done]`, `[umas:checkpoint]`, `[umas:handoff]` commit prefixes | The `[done]`, `[checkpoint]`, `[handoff]` prefixes here. UMAS configures `commit_prefixes.done = "[umas:done]"` etc. at startup. |
 | Signalling protocol (UMAS-TECH-DESIGN-SPEC.md §3.3) | `done()` writes the done commit (Scheduler reads it). `escalate()` appends to event-log (Coordinator reads it). `handoff()` appends the handoff event (Scheduler reads it). |
-| `budget_paused` / `provider_failed` session statuses | UMAS sets `status: budget_paused` in the DB when `budget-meter` returns `Deferred` during session admission; `status: provider_failed` when `llm-gateway` raises `ProviderExhausted`. Both are set outside this library; UMAS then calls `recover()` when resuming. |
+| `provider_failed` session status | UMAS sets `status: provider_failed` in the DB when `llm-gateway` raises `ProviderExhausted`. It is set outside this library; UMAS then calls `recover()` when resuming. |
+| Handoff packet, about 15k tokens | `handoff()` calls `pack()` (section 5.9): `required` = task, next steps; `truncatable` = decisions, file pointers; `droppable` = step history |
 
 ## 10. Source Material and Deviations
 
-Extracted from `TECHNICAL-DESIGN-SPEC-PART3.md` §5.2 (`WorkerAgent`), `UMAS-TECH-DESIGN-SPEC.md` §3.3 (Agent Execution System, signalling protocol, handoff), and §3.6 (Token Budget and Handoff).
+Extracted from `TECHNICAL-DESIGN-SPEC-PART3.md` §5.2 (`WorkerAgent`), `UMAS-TECH-DESIGN-SPEC.md` §3.3 (Agent Execution System, signalling protocol, handoff), and §3.6 (handoff). The packing contract in section 5.9 comes from the former `budget-meter` spec section 5.5, moved here by ADR-0005.
 
 | Deviation | Why |
 |-----------|-----|
@@ -387,14 +408,16 @@ Extracted from `TECHNICAL-DESIGN-SPEC-PART3.md` §5.2 (`WorkerAgent`), `UMAS-TEC
 | `STATE.md` format specified | The source references `STATE.md` in commit protocol comments but never defines its schema; agents writing inconsistently formatted state files breaks recovery |
 | `HANDOFF.md` as a separate file | The source sends the handoff packet as a compressed context passed to the successor via an in-memory scheduler call. A file in the worktree makes the packet durable across crashes and readable without the scheduler |
 | `register_context` for packing | The source builds the handoff packet by compressing `session_history` — it does not give callers control over what to include. Caller-registered sections give agents control over what the successor sees |
-| `budget_paused` / `provider_failed` set externally | In the source, these statuses live inside `CoordinatorAgent` and the Scheduler. They are not session lifecycle states owned by the agent; UMAS sets them in the DB when external conditions trigger them |
+| `provider_failed` set externally | In the source, this status lives inside `CoordinatorAgent` and the Scheduler. It is not a session lifecycle state owned by the agent; UMAS sets it in the DB when the external condition triggers it |
+| `budget_paused` status removed | Owner decision 2026-11-09 ([ADR-0005](../../docs/decisions/ADR-0005-track-token-usage-only.md)): no budgets, no pause on token use. Context-window handoff stays |
+| `pack()` moved in from `budget-meter` | `agent-session` was its only caller. Contract unchanged |
 
 ## 11. Open Questions
 
 1. **Step granularity:** Should `checkpoint_every` be measured in *steps* (as specified) or in *token increments*? An agent that runs one expensive step (50k tokens) and many cheap steps (100 tokens each) will checkpoint differently under either policy. A token-increment option (`checkpoint_every_tokens: 10000`) may be more useful.
 2. **Concurrent sessions on the same task:** The spec allows only one active session per `task_id` at a time (the successor starts after the predecessor writes its handoff). Should the library enforce this, or leave it to the orchestrator?
 3. **STATE.md vs HANDOFF.md:** Should there be only one file? `HANDOFF.md` is a superset of `STATE.md` at handoff time. The duplication is intentional (STATE.md is always present; HANDOFF.md only exists at a handoff boundary), but it may confuse implementors.
-4. **Emergency handoff without a prior checkpoint:** If the agent reaches `emergency_threshold` without having committed a checkpoint (e.g., a single very expensive step), `HANDOFF.md` and `STATE.md` may be empty. Should the library force a checkpoint after every step when usage is above, say, 80%?
+4. **Emergency handoff without a prior checkpoint:** If the agent reaches `emergency_threshold` without having committed a checkpoint (e.g., a single very expensive step), `HANDOFF.md` and `STATE.md` may be empty. Should the library force a checkpoint after every step when the context window is above, say, 80% full?
 
 ---
 
@@ -473,7 +496,7 @@ class WorkerAgent:
             
             return result
             
-        except TokenExhaustionError:
+        except ContextLimitError:
             await self._trigger_handoff()
             raise
             
@@ -524,7 +547,7 @@ class WorkerAgent:
             },
         )
         
-        raise TokenExhaustionError("Token limit reached, handoff required")
+        raise ContextLimitError("Context window limit reached, handoff required")
 ```
 
 ### 12.2 WorkerAgent configuration (YAML)
