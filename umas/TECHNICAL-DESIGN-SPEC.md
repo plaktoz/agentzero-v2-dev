@@ -273,7 +273,7 @@ Parts of the design are extracted as standalone units with no dependency on UMAS
 | Hooks and worktree state (§5.1) | [hook-store](../libs/hook-store/README.md) |
 | `.umas/events.jsonl` signalling (§5.1, §5.3) | [event-log](../libs/event-log/README.md) |
 | Merge Queue Processor (§5.4) | [merge-queue](../libs/merge-queue/README.md) |
-| Test Runner (§5.4) | [test-adapters](../libs/test-adapters/README.md) |
+| Test Runner (§5.4) | [test-adapters](https://github.com/plaktoz/test-adapters) |
 | Token budget, handoff packet (§5.6) | [budget-meter](../libs/budget-meter/README.md) |
 | Provider failure handling (§5.7, §6.7) | [llm-gateway](../libs/llm-gateway/README.md) |
 | Three-tier watchdog (§5.5) | [watchdog](../libs/watchdog/README.md) |
@@ -603,7 +603,7 @@ Each finding: `{ location, what, problem, fix, consequence }`. Findings without 
 
 Trivial changes (renaming, formatting, config-only) require no tests under either mode.
 
-> Policy: [packs/test-policy.md](../packs/test-policy/test-policy-spec.md) · Execution and results: [libs/test-adapters.md](../libs/test-adapters/README.md)
+> Policy: [packs/test-policy.md](../packs/test-policy/test-policy-spec.md) · Execution and results: [test-adapters](https://github.com/plaktoz/test-adapters)
 
 ---
 
@@ -1222,14 +1222,14 @@ Tier 1 and Tier 2 is a cleaner cut than Bob's original five categories, because 
 | [event-log](../libs/event-log/README.md) | `event-log` / `event-log` | Done | Adds cursor polling, rotation, repair and redaction. Unifies the two inconsistent envelope shapes in the source. Decided (2026-10-25): files stay the default; the SQLite WAL backend is added when the writer count reaches 20 to 30 (A.4.4). |
 | [budget-meter](../libs/budget-meter/README.md) | `token-budget` / `budget-meter` | Done | Adds reservations, multi-process ledger, live limit changes, and `pack()` for context fitting. The mechanical half of Bob's `context-compressor` lives here. |
 | [merge-queue](../libs/merge-queue/README.md) | `umas-merge-queue` / `merge-queue` | Done | Prefix-bisect replaces split-half (which misses combination failures). Adds crash recovery, baseline check, persisted state. The original code is flagged defective (CAS issue, no conflict handling, in-memory queue). **No adopt-or-build evaluation**, although Claude suggested GitHub merge queue or Mergify. |
-| [test-adapters](../libs/test-adapters/README.md) | `umas-test-runner` / `test-adapters` | Moved to its own repository (2026-11-09); requirements only, no code yet | UMAS depends on it as an external tool. Framework detection, normalised `TestResult`, flaky tracking, adapter interface, and exit codes that separate failed, error and timeout. Policy is deliberately left out. |
+| [test-adapters](https://github.com/plaktoz/test-adapters) | `umas-test-runner` / `test-adapters` | Own repository | Developed outside this repo. |
 | [llm-gateway](../libs/llm-gateway/README.md) | `llm-gateway` / `llm-gateway` | Done | Build posture changed on 2026-10-25 from "adopt first" to wrapping the provider SDKs ([ADR-0003](../docs/decisions/ADR-0003-llm-gateway-wraps-provider-sdks.md)); the evaluation list is now the wrapper's acceptance checklist. Forbids hard-coded model IDs. Has the no-blind-retry rule, circuit breaker, and per-class error taxonomy. |
 | [watchdog](../libs/watchdog/README.md) | `umas-daemon` / `watchdog` | Done | A generic supervision library. The three-tier Daemon, Triage, Patrol design is three levels of it. The Rust Daemon is demoted to legacy reference code, to be ported to Python. |
 | [decision-artifacts](../libs/decision-artifacts/README.md) | not in Bob's plan / `decision-artifacts` | Done | PRFAQ/ADR/Spec/GLOSSARY templates and shortcut-debt tracking. |
 | [error-classifier](../libs/error-classifier/README.md) | `error-classifier` / not in plan | Done | Added after Bob's review found the gap. A shared record format with deterministic rules, not a shared import. Adds redaction, `retry_plan`, agent and human renderings, fingerprinting and pattern alerts. Ships no catalog. Five open questions in its section 11 (for example whether unmatched errors default to P2 or P1). The other libs map to it by data only (see A.8). |
 | [agent-platform](../libs/agent-platform/README.md) | `CodingAgentAdapter` plugin registry (Category D) / platform adapters in Tier 4 | Done, Changed | Moved from Tier 4 to Tier 1. Harness adapters only, never LLM providers. `assign` writes files and does not spawn processes. `read_signal` is non-blocking. Context packs carry a SHA-256 checksum and reject path traversal. Built-in adapters: `claude-code`, `openai-codex` (also runs Gemini models through a custom endpoint, [ADR-0002](../docs/decisions/ADR-0002-gemini-and-openai-via-codex-cli.md)), `copilot`. The separate Gemini CLI adapter was removed. Bob's original advice to unify it with `llm-gateway` was wrong: one routes work to harnesses, the other routes inference calls. |
 | [agent-session](../libs/agent-session/README.md) | `agent-session` / not in plan | Done | Shared lifecycle skeleton for all six agent types (`spawned`, `active`, `handoff`, `crashed`, `done`), durable `STATE.md`, checkpoint commits, handoff packets, token thresholds. Reference code for `WorkerAgent` and `CoordinatorAgent` is in its section 12. |
-| [metrics-store](../libs/metrics-store/README.md) | `umas-metrics-collector` / not in plan | Done | Two backends behind one interface: JSONL ledger (Phase 1-2), then a relational table in SQLite or PostgreSQL (Phase 3+). TimescaleDB is an optional one-line upgrade, not a dependency. Source adapters turn `budget-meter`, `event-log` and `test-adapters` callbacks into metric rows. |
+| [metrics-store](../libs/metrics-store/README.md) | `umas-metrics-collector` / not in plan | Done | Two backends behind one interface: JSONL ledger (Phase 1-2), then a relational table in SQLite or PostgreSQL (Phase 3+). TimescaleDB is an optional one-line upgrade, not a dependency. Source adapters turn `budget-meter`, `event-log` and test-run callbacks into metric rows. |
 
 | [task-queue](../libs/task-queue/README.md) | Scheduler `ready_queue` / not in plan | Done, New | Extracted from the Scheduler (A.8). Dependency graph, ready queue, leased claims, concurrency cap, retry, parent/child groups. Event log plus snapshot on files. Admission is a callback, so it never imports `budget-meter`. Evaluate existing tools before building (its section 10). |
 
@@ -1260,7 +1260,7 @@ Not extracted:
 | [specialist-agents](../packs/specialist-agents/specialist-agents-spec.md) | Analyst, PM, UX, Architect, Developer prompts and output contracts | Done as prompt packs, not code. The original Python stubs sit in its section 12. Covers the 35M-token cost driver. |
 | [router-heuristic](../packs/router-heuristic/router-heuristic-spec.md) | Scoring rubric, weights, route bands, classification prompt | Fixes the keyword-matching Router gap. The deterministic scorer keeps arithmetic out of the model. The Router itself is still to be built. |
 | [grilling](../packs/grilling/grilling-spec.md) | Bounded questioning protocol, alignment summary, trigger rules | Correct extraction. |
-| [test-policy](../packs/test-policy/test-policy-spec.md) | Selective vs strict modes, risky-logic classifier, trivial-change exemption | Policy correctly separated from `test-adapters`. |
+| [test-policy](../packs/test-policy/test-policy-spec.md) | Selective vs strict modes, risky-logic classifier, trivial-change exemption | Policy correctly separated from test execution. |
 
 Open points on the packs:
 - Shipping "as Claude Code skills on day one" is **in progress**. Each pack describes how it becomes a `SKILL.md`. Three are being built now (minimalism-ladder, anti-slop, test-policy); see A.2.4.
@@ -1285,7 +1285,7 @@ Merged from the reusable components review. Its tiers still hold; the status col
 | `budget-meter` | Any LLM application that tracks spend | Python package and CLI | Done |
 | `task-queue` | Any local job system with dependent jobs | Python package, no broker | Done |
 | `merge-queue` | Any team repo, with or without agents | Python package: `merge-queue status`, `merge-queue run --verify "pytest"` | Done. Adopt-or-build check open (A.7) |
-| `test-adapters` | Any harness that needs one test result format | Python package, own repository | Requirements done; build pending |
+| [test-adapters](https://github.com/plaktoz/test-adapters) | Any harness that needs one test result format | Python package, own repository | External |
 | `error-classifier` | Any multi-component system | Record format and retry-advice table | Done |
 | `watchdog` | Any set of long-running local processes | Python package under the OS service manager (A.4.6) | Done |
 | `two-axis-review` (pack) | Any dev team, for PR review | `SKILL.md` | Spec only |
@@ -1374,7 +1374,7 @@ Modules are those of the summary document. The libraries listed are the standalo
 | 1. Context persistence (`hook-store`, `event-log`, `decision-artifacts`) | Git subprocesses, file I/O, text | Python | Every harness calls these by CLI (`<name> <command> --json`), so the language does not matter to a caller. Formats stay language-neutral. |
 | 2. Orchestration (Coordinator, Router, Scheduler; `budget-meter`, `router-heuristic`, `task-queue`) | LLM calls, queues, arithmetic | Python | Coordinator and Router are LLM-heavy. The Scheduler dispatch loop wires `task-queue` to routing in one process, so no process boundary is crossed. |
 | 3. Agent execution (`agent-session`, `specialist-agents`, `minimalism-ladder`) | Harness driver, state files | Python | Workers are external CLI harnesses (A.4.8), so this layer is mostly a subprocess driver. |
-| 4. Verification (`merge-queue`, `test-adapters`, `two-axis-review`) | Git, test-runner subprocesses, report parsing | Python | `merge-queue` must run in CI with no agents. A `pipx` or `uv tool` install is enough. Review is a prompt pack, so it needs no language. |
+| 4. Verification (`merge-queue`, `two-axis-review`) | Git, test-runner subprocesses, report parsing | Python | `merge-queue` must run in CI with no agents. A `pipx` or `uv tool` install is enough. Review is a prompt pack, so it needs no language. |
 | 5. Monitoring (`watchdog`, Triage, Patrol, Project Monitors) | Supervision, heartbeats, restarts | Python | The watchdog must outlive what it supervises. Run it under launchd, systemd or a Windows service so the service manager restarts it (A.4.6). AI-judgement callbacks live in the same package. |
 | 6. Human interface (CLI, API, dashboard) | CLI, REST API, static page | Python for the CLI and API (FastAPI); plain HTML for the page | One OpenAPI definition is shared by the CLI and the page. FastAPI is the default framework because the backend is Python. |
 | 7. Multi-agent platform (`agent-platform`, `llm-gateway`) | Provider and harness SDKs, file formats | Python | Wrap the provider SDKs (ADR-0003). |
@@ -1434,7 +1434,7 @@ Today there is no broker. The libs use files (`events.jsonl`, heartbeat files, s
 #### A.4.5 Effects on the existing specs
 
 Done on 2026-10-25 (see `docs/tasks-stack-python-2026-10-25.md`):
-- The Rust code in section 12 of `hook-store` (2 blocks), `budget-meter`, `test-adapters` and `watchdog` is marked legacy: the language is not in the stack and the code is to be ported to Python.
+- The Rust code in section 12 of `hook-store` (2 blocks), `budget-meter` and `watchdog` is marked legacy: the language is not in the stack and the code is to be ported to Python.
 - The implementation-language table in the libs README now says Python for the libs that listed Go, Rust or "Any".
 - The summary document, the stack spec, the build assessment, `UMAS-DNA.md` and the setup guide now state Python as the chosen stack, and keep Rust wording only where it describes the source design.
 
@@ -1454,7 +1454,7 @@ Decided (2026-10-25): **Python only.** TypeScript is allowed per component when 
 
 Consequences:
 - **One toolchain, one release channel.** Libraries ship as Python packages through `uv` or `pipx`. An optional frozen build is allowed for a tool whose users may not have Python.
-- **Callbacks work in-process.** The consuming application wires libraries together in one process: the `metrics-store` source adapters register on `budget-meter`, `event-log` and `test-adapters`; the `task-queue` `admit` rule calls `budget-meter` reservations as function calls. The libs still do not import each other, and the `<name> <command> --json` CLI and file formats stay the contract for any non-Python caller and for external harness CLIs.
+- **Callbacks work in-process.** The consuming application wires libraries together in one process: the `metrics-store` source adapters register on `budget-meter`, `event-log` and a test runner; the `task-queue` `admit` rule calls `budget-meter` reservations as function calls. The libs still do not import each other, and the `<name> <command> --json` CLI and file formats stay the contract for any non-Python caller and for external harness CLIs.
 - **Process supervision.** The watchdog is a Python process. It cannot restart itself, so it runs under the operating system's service manager (launchd on macOS, systemd on Linux, a Windows service on Windows), and that manager is the top of the supervision chain. The watchdog spec should say so.
 - **Database owner.** The API process (Python) is the single owner of the relational store (SQLite in Phase 1, PostgreSQL in Phase 2): RBAC tables, project data and the `metrics-store` relational backend. The libs keep using files only.
 - **Tier 3 glue is Python.** The Scheduler dispatch loop, routing tags, hook creation per task, the `admit` rule and the CLI launcher (gap 3) are Python.

@@ -2,7 +2,7 @@
 
 > Part of the UMAS technical design. Main spec: [TECHNICAL-DESIGN-SPEC.md](../../TECHNICAL-DESIGN-SPEC.md) · Module map: [module map](../../TECHNICAL-DESIGN-SPEC.md#5-component-design)
 > **Owns:** merging ready changes to the target branch, the two-axis review gate and the test coverage policy.
-> **Uses:** [merge-queue](../../../libs/merge-queue/README.md), [test-adapters](../../../libs/test-adapters/README.md), [two-axis-review](../../../packs/two-axis-review/two-axis-review-spec.md), [test-policy](../../../packs/test-policy/test-policy-spec.md)
+> **Uses:** [merge-queue](../../../libs/merge-queue/README.md), [test-adapters](https://github.com/plaktoz/test-adapters), [two-axis-review](../../../packs/two-axis-review/two-axis-review-spec.md), [test-policy](../../../packs/test-policy/test-policy-spec.md)
 > **Depends on modules:** none shown in the moved text. Neighbours are listed in Detailed design, section 6.
 
 ---
@@ -51,7 +51,7 @@ Each finding: `{ location, what, problem, fix, consequence }`. Findings without 
 
 Trivial changes (renaming, formatting, config-only) require no tests under either mode.
 
-> Policy: [packs/test-policy.md](../../../packs/test-policy/test-policy-spec.md) · Execution and results: [libs/test-adapters.md](../../../libs/test-adapters/README.md)
+> Policy: [packs/test-policy.md](../../../packs/test-policy/test-policy-spec.md) · Execution and results: [test-adapters](https://github.com/plaktoz/test-adapters)
 
 ---
 
@@ -129,7 +129,7 @@ Field names come from the libs and packs. Any name not in a source is marked [P]
 | `requeue(id)`, `cancel(id)` | In | Function call [S: merge-queue §4] | `id` of a candidate | merge-queue |
 | `BatchReport` | Out | Return value of `run_once`. The `--json` form [S: merge-queue §4] | Per candidate: the outcome, the reason, the verify log reference, and which verify runs happened [S: merge-queue §4]. Field names are not set in the lib [P] | merge-queue |
 | `status()` | Out | Function call. CLI `merge-queue status` [S: merge-queue §4, §4.1] | `{ state, pending[], last_report }` [S: merge-queue §4] | merge-queue |
-| Verify command | Out, child process | Shell command in the queue worktree. The lib example wraps `test-adapters run --json` [S: merge-queue §5.1, §9] | Exit code 0 only when `status` is `passed`; 1 failed, 3 error, 4 timeout. Stdout is a `TestResult`. `--result-file` writes the full result, including `flaky`, to a path the wrapper keeps [External requirements v0.4, sections 4.2, 5.3, 5.4] | test-adapters (runner); merge-queue (reads the exit code) |
+| Verify command | Out, child process | Shell command in the queue worktree [S: merge-queue §5.1, §9]. It can be a test command such as [test-adapters](https://github.com/plaktoz/test-adapters) | Exit code 0 is green. Any other code is red. Output goes to the verify log | The test command; merge-queue (reads the exit code) |
 | Review request | In | Function call with the Standards and Spec prompts [S: two-axis-review §5.1, §5.2] | `diff`, `intent`, `conventions?`, `test_results?`, `risk_flags?` [S: two-axis-review §4.1] | two-axis-review |
 | Review report | Out | JSON, `schema/review.json` [S: two-axis-review §3] | `pack_version`, `findings[]`, `notes[]`, `gate { recommend, reasons }` [S: two-axis-review §4.3] | two-axis-review |
 | Test-policy request | In | Function call with the classifier prompt [S: test-policy §5.4] | `diff`, `mode`, `existing_tests`, `coverage{line_percent?, changed_lines_percent?}` [S: test-policy §4.1] | test-policy |
@@ -137,14 +137,14 @@ Field names come from the libs and packs. Any name not in a source is marked [P]
 | Target advance | Out | Git: `git update-ref refs/heads/<target> <temp_tip> <base>` [S: merge-queue §5.4] | Target ref, new SHA, expected old SHA (`base`) | merge-queue |
 | Publish | Out | Shell command `publish_command` [S: merge-queue §5.4, §6] | Command string. Default `null` | merge-queue |
 | P1 escalation | Out | Append to `.umas/events.jsonl` [S: section 5.3] | `{"event":"escalate","severity":"P1","reason":"..."}` [S: section 5.3] | Routing owner open (O9) |
-| Flaky record | Out | Event log [S: test-adapters §9] | Flaky test names from the result [S: test-adapters §5.4, §9]. Field shape is open (O4) | event-log |
+| Flaky record | Out | Event log | Flaky test names from the verify run. Field shape is open (O4) | event-log |
 | Approval check | In | Access-control middleware checks the permission [S: A.5.7; A.5.8] | Principal, `resource:action`, decision. Each decision writes an `audit_event` [S: A.5.6] | access-control |
 | Ready status | In | Not defined in the sources [P] (O8) | Candidate `id`, status `ready_to_merge` [S: section 5.4, step 1] | Open (O8) |
 | Worktree creation | In | CLI `umas init --project` [S: section 5.4; merge-queue §9] | Creates the permanent `merge-queue` worktree [S: merge-queue §4, §5.7] (O19) | interfaces |
 
 ### 4. Parameters
 
-Defaults come from the lib, pack and test-adapters configuration blocks. Each "Config file" entry names the file as open (O21).
+Defaults come from the lib and pack configuration blocks. Each "Config file" entry names the file as open (O21).
 
 | Name | Type | Default | Where set | What it changes |
 |------|------|---------|-----------|-----------------|
@@ -162,15 +162,6 @@ Defaults come from the lib, pack and test-adapters configuration blocks. Each "C
 | `classify_culprit` | boolean | `false` | Config file | Adds a run per culprit and tags `fails_alone` or `fails_in_combination`. [S: merge-queue §5.3, §6] (O18) |
 | `publish_command` | string or null | `null` | Config file | Runs after the local advance. A failure gives `publish_failed`. [S: merge-queue §5.4, §6] |
 | `log_dir` | path | `.merge-queue/logs` | Config file | Location of verify logs. [S: merge-queue §6] |
-| `timeout_seconds` (test-adapters) | integer | 600 | Config file | Limit for one test run. Status `timeout` when exceeded. [S: test-adapters §6] (O3) |
-| `kill_grace_seconds` | integer | 5 | Config file | Wait between SIGTERM and SIGKILL. [S: test-adapters §5.3, §6] |
-| `max_output_bytes` | integer | 5242880 | Config file | Output cap for a run. The tail is kept. [S: test-adapters §5.3, §6] |
-| `framework` | enum | `auto` | Config file | `auto`, or a named framework. [S: test-adapters §6] |
-| `parallelism` | enum or integer | `auto` | Config file | Parallel workers for the framework. [S: test-adapters §5.3, §6] |
-| `require_tests` | boolean | `true` | Config file | Zero collected tests gives status `error`. [S: test-adapters §3.1, §6] |
-| `retry_failed` | integer | 0 | Config file | Re-runs failed tests. Tests that pass on a re-run are listed as flaky. [S: test-adapters §5.4, §6] (O4) |
-| `coverage` | boolean | `false` | Config file | Collects coverage into the result. [S: test-adapters §5.5, §6] |
-| `command_overrides.pytest` | string or null | `null` | Config file | Replaces the generated pytest command. [S: test-adapters §6] |
 | `mode` | enum | `selective` | Config file | `selective` tests risky logic only. `strict` tests every feature. [S: test-policy §5.1, §6] |
 | `coverage_target` | number 0 to 100, or null | `null` (O6) | Config file | Coverage threshold. `null` disables it. [S: test-policy §5.6, §6] |
 | `coverage_scope` | enum | `changed_lines` | Config file | `changed_lines` or `project`. [S: test-policy §5.6, §6] (O5) |
@@ -220,12 +211,12 @@ The sync or async column is proposed [P]. Each row gives the carrier named in th
 | [exception-flows](../exception-flows/exception-flows-spec.md) | Entry into sections 6.9 and 6.11 [S: section 6.9; section 6.11] | Human reset with `umas work-bundle retry <id> [--reset-retries]` [S: section 7] | CLI. Event log file | Async |
 | [monitoring](../monitoring/monitoring-spec.md#55-monitoring-system) | `status()` when polled [S: section 5.5] | Poll request from System Patrol [S: section 5.5] | Function call or CLI | Async |
 | [interfaces](../interfaces/interfaces-spec.md#59-cli-design) | Nothing outbound | `umas init --project` creates the worktree [S: section 5.4; merge-queue §9] (O19) | CLI | Sync |
-| [event-log](../../../libs/event-log/README.md) | Flaky history and audit events [S: test-adapters §9; A.5.6] | Nothing | Append to file | Async |
+| [event-log](../../../libs/event-log/README.md) | Flaky history and audit events [S: A.5.6] | Nothing | Append to file | Async |
 
 ### 7. Libraries and packs used
 
 - [merge-queue](../../../libs/merge-queue/README.md): the queue, batches, prefix-bisect, compare-and-swap advance and crash recovery. [S: merge-queue §1, §5]
-- [test-adapters](../../../libs/test-adapters/README.md) (external repository, requirements only so far): runs the test command and returns a `TestResult`. Exit 0 only on pass; 1 failed, 2 usage, 3 error, 4 timeout. [External requirements v0.4, sections 1, 5.4]
+- [test-adapters](https://github.com/plaktoz/test-adapters) (external repository): the test command the verify step runs. The queue reads only its exit code.
 - [two-axis-review](../../../packs/two-axis-review/two-axis-review-spec.md): the Standards and Spec passes, the finding schema and the gate. [S: two-axis-review §1, §4, §5.6]
 - [test-policy](../../../packs/test-policy/test-policy-spec.md): selective and strict modes, risky units and the `missing_tests` gate. [S: test-policy §1, §4, §5.5]
 - [event-log](../../../libs/event-log/README.md): flaky history and audit events. Its interface is not quoted here [P].
@@ -247,7 +238,7 @@ Section 6 item names link to the owning module. Items without a section 6 entry 
 | Candidate conflict | The candidate is blocked as `conflict`. The batch continues. [S: merge-queue §5.2 step 4, §7] | None |
 | Candidate ref missing | The candidate is blocked as `ref_missing`. This reason appears in section 7 only, not in the section 3.3 reason list. [S: merge-queue §7] | None |
 | Verify timeout | The run is treated as red. If it is the culprit run, the candidate is blocked as `timeout`. [S: merge-queue §3.3, §7] | None |
-| Verify tool fault (`status: error`, exit 3; usage exit 2) | Read as red. Candidates can be blamed for a setup fault. [S: merge-queue §5.1; External requirements v0.4, section 5.4]. A wrapper is open (O2) | None |
+| Verify tool fault (missing tool, collection error, usage error) | Read as red. Candidates can be blamed for a setup fault. [S: merge-queue §5.1]. A wrapper is open (O2) | None |
 | Publish fails | The local advance is kept. Reason `publish_failed`. Retried on the next `run_once`. [S: merge-queue §5.4, §7] | None |
 | Git lock busy | Retry with backoff, then fail. Reason `git_busy`. [S: merge-queue §7] | None |
 | Disk full during a git commit | Retry once after 5 seconds, then a P0 escalation. [S: section 6.16]. Applying this to queue commits is [P] | [Disk Space Exhaustion](../exception-flows/exception-flows-spec.md#616-disk-space-exhaustion) (section 6.16) |
@@ -263,10 +254,10 @@ Each item is open. The "Recommendation" column is proposed. No item is resolved 
 | ID | Open point | Source | Decision needed | Recommendation |
 |----|-----------|--------|-----------------|----------------|
 | O1 | `verify.command` has no UMAS value. The section 5.4 text says "run full test suite" with no command. | [section 5.4]; [merge-queue §6] | Command for each project. | Set it per project. Do not copy the lib example `make test` as a UMAS default. |
-| O2 | The queue reads any non-zero code as red. test-adapters now separates its codes: 1 failed, 2 usage, 3 error, 4 timeout. Without a wrapper, a code 2 or 3 would still blame candidates, and a broken tool that also fails the baseline halts the queue. | [External requirements v0.4, section 5.4]; [merge-queue §5.1]; [libs AXI open point 2] | Whether a wrapper halts the queue on 2 and 3. | Add a verify wrapper that reads the exit code only. It halts on 2 and 3, as for `baseline_red`, maps 4 to the `timeout` reason, and passes 0 and 1 through. |
-| O3 | Two timeouts. test-adapters allows 600 seconds per run. The queue allows 1800 seconds per verify. | [test-adapters §6]; [merge-queue §6] | Which limit governs. | Keep both. The test-adapters limit applies per run. The queue limit is the backstop. |
-| O4 | `retry_failed` can turn a flake into a pass, so the queue never sees it. The flaky shape is now settled in the external requirements: a `flaky` list of `{name, attempts, retry_mode}`, with a flaky pass exiting 0. | [External requirements v0.4, sections 4.2, 6.4]; [merge-queue §5.3] | Whether the verify run uses `retry_failed`. | Set `retry_failed` to 0 in the verify run. Use `rerun_on_fail` in the queue. Read `flaky` from the file written by `--result-file`. |
-| O5 | `coverage_scope: changed_lines` needs a changed-line figure. test-adapters gives project and per-file percentages only. | [test-policy §4.1, §5.6]; [External requirements v0.4, section 4.2] | Who computes the changed-line figure. | The caller computes it from the diff and per-file data. Use `project` scope until this exists. |
+| O2 | The queue reads any non-zero code as red. A tool fault (missing tool, collection error, usage error) can blame candidates, and a broken tool that also fails the baseline halts the queue. | [merge-queue §5.1] | Whether a wrapper separates tool faults from test failures. | Add a verify wrapper. It halts on the test command's tool-fault codes, as for `baseline_red`, and passes test failures through to bisect. The codes belong to the test command's own documentation. |
+| O3 | Two timeouts. The test command may carry its own limit, and the queue allows 1800 seconds per verify. | [merge-queue §6] | Which limit governs. | Keep both. The test command's limit applies per run. The queue limit is the backstop. |
+| O4 | A re-run inside the test command can turn a flake into a pass, so the queue never sees it. The field shape of a flaky record is not set. | [merge-queue §5.3] | Whether the verify run retries, and the flaky field shape. | Do not retry inside the test command. Use `rerun_on_fail` in the queue. Choose one flaky shape when the event-log record is defined. |
+| O5 | `coverage_scope: changed_lines` needs a changed-line figure. The test command's result may give project and per-file percentages only. | [test-policy §4.1, §5.6] | Who computes the changed-line figure. | The caller computes it from the diff and per-file data. Use `project` scope until this exists. |
 | O6 | `coverage_target` has no default. test-policy §5.6 notes the source conflict of 80 and 95. The main spec's 90%+ (section 10, unit tests) and 95%+ (section 13, key metric) are different measures. | [test-policy §5.6, §6]; [main spec §10, §13] | Whether either measure becomes `coverage_target`, and its value per project. | Keep `null` until decided. Then set one value per project and name its measure. |
 | O7 | Approval placement. A.5.4.1 puts the Approver gate after the Merge Queue Processor prepares the merge. The queue has no hook between verify and advance. | [A.5.4.1 diagram, G4 then P1]; [merge-queue §5.4] | Approve before `submit`, or add a hook inside the queue run. | Approve before `submit`. Record the change in A.5.4.1. |
 | O8 | Who sets `ready_to_merge`. Section 5.4 uses the status. No Section 4 table holds PR status, and `work_bundles.status` has no such value. | [section 4]; [section 5.4] | The component that sets it, and when. | Orchestration sets it when the review gate is not `block`, the test gate is `ok`, and approval is recorded. Queue membership stays in `queue.json`. |
@@ -295,9 +286,9 @@ Count: 26 open items (O1 to O26).
 
 ## AXI support
 
-This module builds no CLI of its own. It composes two lib CLIs: `merge-queue` and `test-adapters`. Its own code is the verify wrapper in O2 [P]. The two packs have no CLI in their specs. [S: merge-queue §4.1; test-adapters §4.2; two-axis-review §2; test-policy §2]
+This module builds no CLI of its own. It composes the `merge-queue` CLI and a test command. Its own code is the verify wrapper in O2 [P]. The two packs have no CLI in their specs. [S: merge-queue §4.1; two-axis-review §2; test-policy §2]
 
-The snapshot has no output examples for these commands. The "Output today" column comes from each lib's section 4.1 or 4.2 examples, which are illustrative. [S: merge-queue §4.1; test-adapters §4.2]
+The snapshot has no output examples for these commands. The "Output today" column comes from the merge-queue section 4.1 examples, which are illustrative. [S: merge-queue §4.1]
 
 ### Commands in scope
 
@@ -308,8 +299,6 @@ The snapshot has no output examples for these commands. The "Output today" colum
 | `merge-queue run_once` | Process one batch. | Outcome list with reasons [S: merge-queue §4.1] | `BatchReport` [S: merge-queue §4] |
 | `merge-queue requeue`, `cancel` | Return a blocked candidate to pending, or remove a pending one. | `already removed` with exit 0 for cancel of a removed candidate [S: merge-queue §4.1] | Not stated in the sources [P] |
 | `merge-queue report <id>` | Show the verify log reference and bisect steps. | Named in the help line only, not in the section 4 interface [S: merge-queue §4.1] | Not stated in the sources [P] |
-| `test-adapters run` | Run tests, or a subset with `--select`. | Status, summary, failures, flaky line, help lines [S: test-adapters §4.2] | `--json`. Exit 0 only when `status` is `passed` [S: test-adapters §4] |
-| `test-adapters` (no arguments) | Detect the framework and check its reporter. Runs no tests. | Detection and doctor output [S: test-adapters §4.2] | Not stated in the sources [P] |
 
 ### The ten AXI principles
 
@@ -317,44 +306,33 @@ Each line uses the rule text in [CLI Conventions (AXI)](../../../libs/README.md#
 
 | Principle | Status | Reason |
 |-----------|--------|--------|
-| 1. Token-efficient output | Partly met | Both lib examples use the tabular layout. The encoder is not built. TOON is open (AXI open point 1). |
-| 2. Minimal default schema | Partly met | `test-adapters` failures show 4 fields and cap at 20. `merge-queue` rows show 3 fields, but the `pending` list states no default limit. |
-| 3. Truncate long content | Met | `test-adapters` cuts messages at 200 characters with `--full` to lift the cut. `merge-queue` gives a log path and `--full` for the last 40 lines. |
-| 4. Pre-computed aggregates | Met | `test-adapters` gives a summary line and `failures[n of total]`. `merge-queue` gives the state line and `last_batch` counts. |
-| 5. Definitive empty states | Met | `failures: none`, `flaky: none`, `pending: none (...)` and `blocked: none` are specified. |
+| 1. Token-efficient output | Partly met | The `merge-queue` example uses the tabular layout. The encoder is not built. TOON is open (AXI open point 1). |
+| 2. Minimal default schema | Partly met | `merge-queue` rows show 3 fields, but the `pending` list states no default limit. |
+| 3. Truncate long content | Met | `merge-queue` gives a log path and `--full` for the last 40 lines. |
+| 4. Pre-computed aggregates | Met | `merge-queue` gives the state line and `last_batch` counts. |
+| 5. Definitive empty states | Met | `pending: none (...)` and `blocked: none` are specified. |
 | 6. Structured errors, idempotent mutations | Partly met | `cancel` and `requeue` are idempotent. `submit` with a duplicate `id` is rejected, not a no-op (O11). Error output for `merge-queue` is not stated. |
-| 7. Ambient context | Partly met | `merge-queue status` is read-only with no lock. `test-adapters` with no arguments runs no tests. Network use and run time are not stated for either. |
-| 8. Content first | Met | Both no-argument views show live state, not help text. |
+| 7. Ambient context | Partly met | `merge-queue status` is read-only with no lock. Network use and run time are not stated. |
+| 8. Content first | Met | The no-argument view shows live state, not help text. |
 | 9. Contextual disclosure | Met | Help lines with real ids appear after a block, a failure or a truncation. |
-| 10. Consistent help | Partly met | The `merge-queue` no-argument view starts with `bin:` and `description:`. The `test-adapters` example does not show `bin:`. Neither spec names a `--version` behaviour. |
+| 10. Consistent help | Partly met | The `merge-queue` no-argument view starts with `bin:` and `description:`. The spec names no `--version` behaviour. |
 
 ### How to build the lib CLIs for AXI
 
-Build in this order. Each step depends on the one before it. The steps apply to the two lib CLIs. This module needs each step done.
+Build in this order. Each step depends on the one before it. The steps apply to the `merge-queue` CLI. This module needs each step done.
 
-- (a) `--json` contract. Specified for both libs [S: merge-queue §4; test-adapters §4]. The verify command reads this contract.
-- (b) One result type per command. `BatchReport` for `run_once`, the `status()` payload for `status`, and `TestResult` for `run` [S: merge-queue §4; test-adapters §3.2].
-- (c) Default-view renderer over that type. Shown by example in both libs [S: merge-queue §4.1; test-adapters §4.2]. Not built. The encoding is open (AXI open point 1).
-- (d) Exit codes. Documented for both libs [S: merge-queue §4.1; External requirements v0.4, section 5.4]. The open case is O2.
-- (e) No-argument view as the session-start state view. `merge-queue status` and test-adapters with no arguments [S: merge-queue §4.1; test-adapters §4.2]. Installing the session hook belongs to the application (AXI open point 4).
-- (f) Golden-file tests for each default view. The libs README requires them [S: libs/README.md, How to use it]. Neither lib spec names a golden-file test. [P] Add them as acceptance cases for this module.
+- (a) `--json` contract. Specified [S: merge-queue §4]. The verify command reads its exit code only.
+- (b) One result type per command. `BatchReport` for `run_once` and the `status()` payload for `status` [S: merge-queue §4].
+- (c) Default-view renderer over that type. Shown by example [S: merge-queue §4.1]. Not built. The encoding is open (AXI open point 1).
+- (d) Exit codes. Documented [S: merge-queue §4.1]. The open case is O2.
+- (e) No-argument view as the session-start state view. `merge-queue status` [S: merge-queue §4.1]. Installing the session hook belongs to the application (AXI open point 4).
+- (f) Golden-file tests for each default view. The libs README requires them [S: libs/README.md, How to use it]. The merge-queue spec names no golden-file test. [P] Add them as acceptance cases for this module.
 
 ### Exit codes in the merge flow
 
 The queue reads only the exit code of the verify command. Exit 0 is green. Any other code is red. [S: merge-queue §5.1]
 
-test-adapters exits 0 for `passed`, 1 for `failed`, 2 for a usage error, 3 for `error` and 4 for `timeout`. [External requirements v0.4, section 5.4]
-
-| Verify result | test-adapters exit | Queue reads | Effect |
-|---------------|--------------------|-------------|--------|
-| `status: passed` | 0 | Green | Advance the target. |
-| `status: failed` | 1 | Red | Bisect. The culprit is blocked as `test_failure`. Correct use of exit 1. |
-| `status: error` (tool missing, collection error, no tests) | 3 | Red | Bisect can blame candidates for a setup fault unless the verify wrapper halts on 3. [P] (O2) |
-| `status: timeout` | 4 | Red | The queue sees only non-zero. The wrapper maps 4 to the `timeout` reason. [S: merge-queue §3.3, §7] (O2, O3) |
-| Usage error (unknown flag) | 2 | Red | Bisect can blame candidates for a wrong command unless the wrapper halts on 2. [P] (O2) |
-| Flake passes on a re-run (`retry_failed`) | 0 | Green | The flake is hidden from the queue. [P] (O4) |
-
-The exit-code rule matters to the merge flow because the queue reads exit 1 as "a test failed". That reading lets bisect blame the right candidate. In test-adapters, exit 1 means only "a test failed"; a tool fault is 3. Libs AXI open point 2 records this. [S: libs/README.md, open point 2] The external requirements already give `error` and `timeout` their own codes (3 and 4), so the wrapper only has to read the exit code. It no longer needs to parse the JSON.
+The queue reads exit 1 as "a test failed", which lets bisect blame the right candidate. A tool fault (missing tool, collection error, wrong flag) also exits non-zero, so it reads as red and can blame a candidate, or halt the queue as `baseline_red` if it also fails the baseline (O2). The verify wrapper, not the queue, separates the two.
 
 `merge-queue run_once` exits 0 when a batch finishes, even if candidates are blocked. It exits 1 only when the run cannot finish, such as a git error or `baseline_red`. [S: merge-queue §4.1] The scheduler reads `BatchReport` for blocked candidates, not the exit code.
 
@@ -362,9 +340,8 @@ The exit-code rule matters to the merge flow because the queue reads exit 1 as "
 
 | Caller | Command | Output read | Why |
 |--------|---------|-------------|-----|
-| Coding agent in a loop | `test-adapters run --select <files>` | Default view | Fix loop. Use `--full` only when a message is cut mid-explanation [S: test-adapters §4.2]. |
 | Scheduler or hook | `merge-queue run_once --json` | `BatchReport` JSON | Scheduler contract [S: merge-queue §4.1, §9]. |
-| Verify wrapper, run by the queue | `test-adapters run --json` | Exit code, then JSON in the verify log | The queue reads only the exit code [S: merge-queue §5.1]. |
+| Verify wrapper, run by the queue | The test command | Exit code, then output in the verify log | The queue reads only the exit code [S: merge-queue §5.1]. |
 | Agent that submitted a change | `merge-queue status` | Default view | Wait for `merged` or `blocked`, then act on the reason [S: merge-queue §4.1]. |
 
 ### Open points for AXI in this module
@@ -372,8 +349,7 @@ The exit-code rule matters to the merge flow because the queue reads exit 1 as "
 These refer to the open points at the end of the AXI section in `libs/README.md`.
 
 - AXI open point 1: TOON or key-value as the default encoding. Not settled here. The examples in the libs are illustrative. [S: libs/README.md]
-- AXI open point 2: exit 1 for a failed test run. Relevant to O2 and to the exit-code table above. [S: libs/README.md]
 - AXI open point 4: which platforms get the session-start hook. Relevant to step (e). [S: libs/README.md]
 - AXI open point 5: a shared encoder package. This module adds no encoder. [S: libs/README.md]
-- AXI open point 6 (medium-fit libs) does not apply. Neither lib is medium-fit. [S: libs/README.md, Fit table]
+- AXI open point 6 (medium-fit libs) does not apply. `merge-queue` is not medium-fit. [S: libs/README.md, Fit table]
 - merge-queue §4.1 open point: `submit` with a duplicate `id` (O11). [S: merge-queue §4.1]

@@ -19,7 +19,7 @@ A local merge queue. It takes branches that are ready, merges them together on a
 
 **Non-goals**
 - Writing or fixing application code. The queue only merges and reports.
-- Running tests itself. It runs a caller-supplied verify command (which may use [test-adapters](../test-adapters/README.md)).
+- Running tests itself. It runs a caller-supplied verify command (for example [test-adapters](https://github.com/plaktoz/test-adapters)).
 - Talking to GitHub, GitLab, or other PR platforms. A thin adapter may feed `submit` calls; that is outside this spec.
 - Review or approval policy. A candidate is submitted only when the caller considers it ready.
 
@@ -253,7 +253,7 @@ This library keeps its own typed errors and does not import any error library. A
 | Permanent `merge-queue` worktree | `init` once at `umas init --project` |
 | Exception flow 4.9 (no clean subset) | All `blocked(test_failure)`; UMAS re-spawns agents with failure context up to `max_attempts` |
 | Exception flow 4.11 (agent causes regression) | `blocked` plus `flaky_suspected`; UMAS reads its own flaky history from the event log |
-| Verify command | `test-adapters run --json` wrapped so a non-passing result exits non-zero |
+| Verify command | A test command, for example [test-adapters](https://github.com/plaktoz/test-adapters), wrapped so a non-passing result exits non-zero |
 | Blocked reasons and failures | Mapped to records by UMAS; `conflict` becomes a merge-conflict code, `baseline_red` a halt that needs a supervisor. See [error-classifier](../error-classifier/README.md) section 9 |
 
 ## 10. Source Material and Deviations

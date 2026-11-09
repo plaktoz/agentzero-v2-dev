@@ -97,7 +97,6 @@ How documents are written, and how they are kept true to the code.
 - When a decision is needed from the user, always elaborate the details and give an assessment. Give the context and a thorough assessment of every option (section 1), not a name and a recommendation.
 - Do not use the web_search tool.
 - Keep the kc-axi independent and as general as possible so it can be reused outside UMAS.
-- `test-adapters` is an external dependency, kept in its own repository (<https://github.com/plaktoz/test-adapters>). UMAS calls its command line and does not import it. Do not copy its contract into this repo; point to its requirements and record only what UMAS needs from it (`libs/test-adapters/README.md`).
 
 ## Shared skills
 

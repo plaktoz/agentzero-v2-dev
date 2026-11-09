@@ -139,7 +139,7 @@ In priority order:
 | Ruby full-YAML parse of both built-in playbooks | Passed (production-gatekeeper: 6 phases, 2 gates; autonomous-loop: 3 phases, 1 gate) |
 | Repo subset parser (`yaml_subset.py`) on both playbooks | Failed at line 6 for both (flow mappings) |
 | Cross-references: referenced packs exist | Passed for `specialist-agents`, `two-axis-review`, `router-heuristic`, `test-policy`, `anti-slop`. `specialist-agents` and `two-axis-review` have no `PACK.md`. |
-| Cross-references: lib operations | `test-adapters/run` exists. `decision-artifacts/write` does not (`create` does). |
+| Cross-references: lib operations | `decision-artifacts/write` does not (`create` does). |
 | UMAS and vendor wording in spec body (brief grep) | Expected: in §1, §7, §8, §9, §10. Not a PACK.md, so the brief's grep does not apply. |
 | `PACK.md` front matter, path check, schema JSON, fixture YAML, unittest | Not applicable: no build. |
 | Cross-platform | Not applicable: no script written. |
