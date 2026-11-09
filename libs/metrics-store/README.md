@@ -17,7 +17,7 @@ Record scalar measurements — token counts, durations, costs, error rates, cove
 - Querying by name, time window, and tag filters with aggregation (sum, avg, min, max, percentile)
 - 90-day retention policy with pruning
 - Two backends: JSONL file ledger and a relational table (SQLite or PostgreSQL)
-- Adapters that translate existing source ledgers (`budget-meter`, `event-log`, `test-adapters`) into metric rows without requiring those libraries to be modified
+- Adapters that translate existing source ledgers (`budget-meter`, `event-log`, a test runner) into metric rows without requiring those libraries to be modified
 - A thin CLI for the `umas metrics *` commands
 
 **Non-goals**
@@ -57,8 +57,8 @@ UMAS uses these names. The library enforces no catalogue; these are documented f
 | `task.handoff_rate` | 0–1 | `event-log` (handoff_initiated / session count) |
 | `task.escalation_rate` | 0–1 | `event-log` (session_escalated / session count) |
 | `merge_queue.success_rate` | 0–1 | `merge-queue` batch reports |
-| `test.coverage_pct` | % | `test-adapters` result |
-| `test.duration_ms` | ms | `test-adapters` result |
+| `test.coverage_pct` | % | test result |
+| `test.duration_ms` | ms | test result |
 | `error.p0_count` | count | `error-classifier` observe ledger |
 | `error.p1_count` | count | `error-classifier` observe ledger |
 
@@ -130,7 +130,7 @@ Works identically in SQLite (TEXT timestamps, JSON functions) and PostgreSQL (TI
 | `prune(retain_days) -> int` | Delete measurements older than the retention window. Returns count removed. |
 | `ingest_budget_meter(ledger_path, since?) -> int` | Source adapter: read a `budget-meter` ledger and write `token.*` and `token.cost` measurements. Returns count ingested. |
 | `ingest_event_log(log_dir, since?) -> int` | Source adapter: fold a `event-log` directory and derive `task.*` measurements from session events. |
-| `ingest_test_result(result_json_path) -> int` | Source adapter: read a `test-adapters` JSON result and write `test.*` measurements. |
+| `ingest_test_result(result_json_path) -> int` | Source adapter: read a test result JSON file (as written by [test-adapters](https://github.com/plaktoz/test-adapters)) and write `test.*` measurements. |
 | `backend() -> "file" \| "sqlite" \| "postgres"` | Return the active backend. |
 | `migrate_to_relational(db_url) -> int` | One-time migration: read all JSONL segments and write to the relational backend. Returns count migrated. |
 
@@ -162,7 +162,7 @@ The three `ingest_*` operations are idempotent: each source record carries a det
 - `handoff_initiated` events → increments `task.handoff_rate` denominator
 - `session_escalated` events → `error.p1_count` or `error.p0_count` by severity
 
-`ingest_test_result` maps `TestResult` fields:
+`ingest_test_result` maps these fields of the test result:
 - `coverage.line_percent` → `test.coverage_pct`
 - `duration_ms` → `test.duration_ms`
 (tagged with `framework`, `project`)

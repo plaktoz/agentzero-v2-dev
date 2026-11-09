@@ -20,7 +20,7 @@ Decide which changes need tests. Two modes: **selective** (tests only where logi
 - How the coverage target relates to the mode
 
 **Non-goals**
-- Running tests or measuring coverage. See [test-adapters](../../libs/test-adapters/README.md)
+- Running tests or measuring coverage. See [test-adapters](https://github.com/plaktoz/test-adapters)
 - Writing the tests
 - Choosing frameworks
 - Mutation testing or fuzzing
@@ -177,7 +177,7 @@ risky_patterns_file: risky-patterns.yaml
 | `testing.coverage_target` | `coverage_target`; the default is now unset (source: 80 and 95/80 in different files) |
 | "Tests required only for risky logic: branches, loops, parsers, money, security" | 5.2 |
 | Verification agents decide "risky logic" | The classifier prompt, run by a review or verification agent |
-| Test results and coverage | From [test-adapters](../../libs/test-adapters/README.md); passed as `coverage` input |
+| Test results and coverage | From [test-adapters](https://github.com/plaktoz/test-adapters); passed as `coverage` input |
 | Standards review checks coverage of risky logic | [two-axis-review](../two-axis-review/two-axis-review-spec.md) consumes `units` |
 | Merge queue | `gate: missing_tests` can hold a PR in `ready_to_merge` |
 

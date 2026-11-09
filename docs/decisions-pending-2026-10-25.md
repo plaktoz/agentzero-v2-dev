@@ -245,7 +245,7 @@ Full assessment: `docs/assessments/caller-assessment-monitoring-2026-10-25.md`. 
 
 ## D43 to D48. From the verification caller assessment (REJECTED, round 1)
 
-Full assessment: `docs/assessments/caller-assessment-verification-2026-10-25.md`. 22 gaps, 8 blockers.
+22 gaps, 8 blockers.
 
 - **D43. Approval and ready status (O7, O8; gaps 2, 3).** (a) Approve before `submit`; orchestration sets `ready_to_merge`. (b) An approval hook inside the queue run; breaks the library's no-approval non-goal. (c) Approve after verify; holds a verified batch and risks `target_moved`. **Recommendation: (a),** with approval bound to a SHA.
 - **D44. Pinned SHA (gap 4).** (a) Submit a SHA; a fix is a new candidate. (b) Compare the SHA at batch time (needs a library hook). (c) Keep the branch; unreviewed code can merge. **Recommendation: (a).** No library change, and each new SHA is re-reviewed. Relates to O11 (`ref` resolved at batch time).

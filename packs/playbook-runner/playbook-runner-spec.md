@@ -257,7 +257,7 @@ phases:
         required: true
       - id: verify-run-tests
         name: "Run tests"
-        maps_to: {lib_op: "test-adapters/run"}
+        maps_to: {lib_op: "the test command"}
         inputs: {hook_path: "{{hook_path}}"}
         output_key: test_results
         required: true
@@ -355,7 +355,7 @@ phases:
     steps:
       - id: verify-exit
         name: "Evaluate exit predicate"
-        maps_to: {lib_op: "test-adapters/run"}
+        maps_to: {lib_op: "the test command"}
         inputs: {hook_path: "{{hook_path}}"}
         output_key: verify_result
         required: true
@@ -379,7 +379,7 @@ The default UMAS workflow (no playbook) maps onto the production-gatekeeper phas
 | Analyst runs | DEFINE/define-analyst | specialist-agents/analyst |
 | Architect runs | PLAN/plan-architect | specialist-agents/architect |
 | Developer implements | BUILD/build-implement | agent-role: developer |
-| Tests run | VERIFY/verify-run-tests | test-adapters |
+| Tests run | VERIFY/verify-run-tests | the test command |
 | Code review | REVIEW/review-two-axis | two-axis-review |
 | Merge | SHIP (implicit) | merge-queue |
 

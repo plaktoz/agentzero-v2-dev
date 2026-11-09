@@ -286,7 +286,7 @@ Work is sequenced. Starting Phase 2 work while Phase 1 is incomplete is not perm
 
 | Phase | Duration | What ships | Key libs in build order |
 |-------|----------|-----------|------------------------|
-| **1 · Foundation (MVP)** | 8–12 weeks | Git worktree manager, task database, Coordinator, Worker agents, minimalism enforcement, basic merge queue, CLI | `event-log`, `budget-meter`, `hook-store`, `task-queue`, `test-adapters`, `merge-queue`, `error-classifier`, `kc-axi`, `metrics-store` (JSONL) |
+| **1 · Foundation (MVP)** | 8–12 weeks | Git worktree manager, task database, Coordinator, Worker agents, minimalism enforcement, basic merge queue, CLI | `event-log`, `budget-meter`, `hook-store`, `task-queue`, [test-adapters](https://github.com/plaktoz/test-adapters), `merge-queue`, `error-classifier`, `kc-axi`, `metrics-store` (JSONL) |
 | **2 · Specialization** | 6–8 weeks | Specialized agents, grilling, decision artifacts, TDD enforcement, code review | `decision-artifacts`, `agent-session`, `agent-platform` |
 | **3 · Monitoring** | 4–6 weeks | Three-tier watchdog, project monitors, telemetry, minimal HTML dashboard | `watchdog`, `metrics-store` (SQL backend activated) |
 | **4 · Scale** | 6–8 weeks | Scheduler, multi-platform support, session history, advanced merge queue, dashboard push updates (optional) | `llm-gateway` (evaluated, adopted or wrapped) |
