@@ -26,7 +26,7 @@ It does not run the work. A worker process (any language) claims a task, does it
 
 **Non-goals**
 - Executing work, launching processes, or supervising them. See [watchdog](../watchdog/README.md) for supervision. The library only records who claimed what.
-- Deciding how many workers the budget allows. The caller passes that rule as an `admit` callback (for example, one that asks [budget-meter](../budget-meter/README.md)). The library never imports it.
+- Deciding how many workers to run. A caller that needs its own admission rule passes it as an `admit` callback, for example a caller rule about how many workers to run. The library never imports the rule.
 - Routing. A task does not say which kind of worker should take it unless the caller puts a `tags` list in the claim filter.
 - Scheduling across machines, delayed or cron jobs, or exactly-once execution.
 - Message transport. This is a work graph, not a pub/sub bus. See the note on brokers in section 9.
@@ -259,7 +259,7 @@ This library keeps its own typed errors. A consumer that wants one error vocabul
 | UMAS need | Mapping |
 |-----------|---------|
 | Scheduler `ready_queue` | `ready()` |
-| "Dispatches agents up to the concurrency limit" | `max_claimed`, plus an `admit` callback that asks [budget-meter](../budget-meter/README.md) whether the period budget allows another Worker |
+| "Dispatches agents up to the concurrency limit" | `max_claimed`. No `admit` rule is needed: the budget check that used one was removed (ADR-0005) |
 | `unblock_dependents`, `mark_complete` | Inside `complete` (section 5.3) |
 | `check_parent_auto_complete` | Groups (section 3.4) |
 | Task blocked by a task that is already `completed` (self-healing at runtime) | Covered: readiness is computed from dependency state when a task is added and after each completion |
@@ -268,7 +268,7 @@ This library keeps its own typed errors. A consumer that wants one error vocabul
 | Worker kind (coding, review) | `tags`, matched by the claim `filter` |
 | Launching the harness CLI after a claim | Not this library. UMAS's launcher claims a task, starts the harness as a [watchdog](../watchdog/README.md) node, and calls `complete` or `fail` from the commit-message signal. See [TECHNICAL-DESIGN-SPEC.md Appendix A.4.8](../../umas/TECHNICAL-DESIGN-SPEC.md#a48-agent-execution-model-decision) |
 
-**What stays in UMAS.** The dispatch loop that connects `ready` events to the launcher, the routing that sets `tags`, the creation of a hook for each task, and the `admit` rule. That is glue, a few hundred lines, and it is not a library.
+**What stays in UMAS.** The dispatch loop that connects `ready` events to the launcher, the routing that sets `tags`, the creation of a hook for each task, and any `admit` rule the application sets. That is glue, a few hundred lines, and it is not a library.
 
 **Brokers.** A message broker (RabbitMQ) could carry `ready` events to remote workers in Phase 3 or 4. It would sit behind the transport interface and would not replace this library: a broker has no dependency graph and no cap enforcement across the whole set. The queue file stays the source of truth.
 
@@ -283,7 +283,7 @@ Extracted from `TECHNICAL-DESIGN-SPEC.md` section 5.2 (Scheduler: `ready_queue`,
 | Persistent file store | The source does not say where the queue lives; a restart would lose it |
 | Concurrency cap enforced under the claim lock | The source dispatches "up to the limit" without saying how concurrent dispatchers are kept honest |
 | Dependency failure policy | The source does not say what happens to dependents of a failed task |
-| Admission as a callback | Keeps budget accounting in [budget-meter](../budget-meter/README.md) with no import between the two |
+| Admission as a callback | Lets the caller add its own admission rule with no import of that rule |
 
 ### Adopt or build
 

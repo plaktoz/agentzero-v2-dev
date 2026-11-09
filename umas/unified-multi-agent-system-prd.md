@@ -4,6 +4,8 @@
 **Date:** October 17, 2026  
 **Status:** Draft for Review
 
+> **Budget requirements removed 2026-11-09 (ADR-0005).** UMAS records tokens used, model and timestamp for each LLM call. It does not budget, price, pause or alert on usage. The context-window handoff is kept.
+
 ---
 
 ## Executive Summary
@@ -32,7 +34,7 @@ This system addresses these challenges through proven architectural patterns and
 - Produces minimal, high-quality code through systematic verification
 - Keeps humans in control at critical decision points
 - Works across multiple AI runtimes and platforms
-- Measures and optimizes for real impact: code size, cost, time, and quality
+- Measures and optimizes for real impact: code size, tokens, time, and quality
 
 ---
 
@@ -54,7 +56,7 @@ Humans approve at critical junctures; agents propose and execute.
 Solve before writing; measure the impact of not writing code.
 
 ### 6. Measurable Impact
-Track code size, cost, time, test coverage, and production reliability.
+Track code size, tokens, time, test coverage, and production reliability.
 
 ---
 
@@ -158,7 +160,7 @@ Track code size, cost, time, test coverage, and production reliability.
 **Rationale:**
 - Multi-provider support prevents vendor lock-in
 - Local LLM support enables offline development
-- Provider diversity enables cost optimization
+- Provider diversity enables fallback and platform choice per task
 
 ---
 
@@ -227,18 +229,16 @@ Track code size, cost, time, test coverage, and production reliability.
 - Database choice impacts maximum agent capacity
 - Clear tiers enable incremental scaling
 
-### Token Budget Management
+### Token Usage Recording
 
 **Requirements:**
-- **MUST:** Support configurable daily token budget per project
-- **MUST:** Support configurable per-task token budget
-- **MUST:** Gracefully handle budget exhaustion (queue work, don't fail)
-- **MUST:** Alert when approaching budget limits (80%, 90%, 95%)
+- **MUST:** Record tokens used, model and timestamp for each LLM call in the token ledger (`libs/token-ledger`)
+- **MUST:** Show token totals by model (`umas metrics tokens`)
+- Token usage does not limit, reserve, price, pause or alert on work (ADR-0005)
 
 **Rationale:**
-- Prevents runaway costs from agent loops
-- Enables cost predictability and control
-- Alerts enable proactive intervention
+- Usage is measured so the owner can see where tokens go
+- Spend is not capped. Stall supervision (`watchdog`) and the concurrency cap (`task-queue`) limit runaway loops
 
 ### Database Scaling
 
@@ -263,7 +263,7 @@ Track code size, cost, time, test coverage, and production reliability.
 - **Minimalism Level:** `lite`, `full`, `ultra`
 - **Testing Requirements:** Coverage target (%), TDD enforcement (boolean)
 - **Review Policy:** Required reviewers (number), auto-merge rules (boolean)
-- **Token Efficiency:** Compression level, budget limits
+- **Token Efficiency:** Compression level
 - **LLM Provider:** Default provider, fallback provider
 
 **Configuration Format:**
@@ -287,7 +287,6 @@ project:
     auto_merge: boolean
   token_efficiency:
     compression: "lite" | "full" | "ultra"
-    budget_per_task: number
   llm_provider:
     default: string
     fallback: string
@@ -297,33 +296,35 @@ project:
 
 **Required Configuration Options:**
 - **Model Selection:** Per-role model mapping (coordinator, worker, reviewer, etc.)
-- **Token Limits:** Per-agent token budgets
+- **Context Limits:** Per-agent context window size (`context_limit`)
 - **Compression:** Context compression strategy
-- **Handoff Threshold:** When to trigger agent handoff (e.g., 90% token usage)
+- **Handoff Threshold:** When to trigger a graceful agent handoff (e.g., 90% of the context window)
+- **Emergency Threshold:** When to force an agent handoff (e.g., 95% of the context window)
 
 **Configuration Format:**
 ```yaml
 agents:
   coordinator:
     model: string
-    token_limit: number
+    context_limit: number
     compression: "lite" | "full" | "ultra"
   worker:
     model: string
-    token_limit: number
+    context_limit: number
     compression: "lite" | "full" | "ultra"
     handoff_threshold: number (0.0-1.0)
+    emergency_threshold: number (0.0-1.0)
   specialized:
     architect:
       model: string
-      token_limit: number
+      context_limit: number
     reviewer:
       model: string
-      token_limit: number
+      context_limit: number
 ```
 
 **Rationale:**
-- Different projects have different quality/cost trade-offs
+- Different projects have different quality/token-use trade-offs
 - Configuration must be version-controlled alongside code
 - Clear schema prevents configuration errors
 
@@ -359,8 +360,7 @@ agents:
 - `watch` - Watch task progress in real-time
 
 **Monitoring:**
-- `metrics tokens` - Token usage metrics
-- `metrics cost` - Cost metrics
+- `metrics tokens` - Token totals by model
 - `metrics quality` - Quality metrics
 - `metrics agents` - Agent performance metrics
 
@@ -404,16 +404,8 @@ agents:
 **Required Metrics:**
 
 **Token Usage:**
-- Per-agent token consumption
-- Per-task token consumption
-- Per-project daily/weekly/monthly totals
-- Token efficiency (tokens per line of code)
-
-**Cost Tracking:**
-- Per-agent cost (based on LLM provider pricing)
-- Per-task cost
-- Per-project daily/weekly/monthly costs
-- Cost per feature delivered
+- Tokens used per LLM call, with model and timestamp (`token.used` in the metrics store, from `libs/token-ledger`)
+- Totals by model (`umas metrics tokens`)
 
 **Quality Metrics:**
 - Test coverage percentage
@@ -423,7 +415,6 @@ agents:
 
 **Agent Performance:**
 - Task completion time (median, p95, p99)
-- Token efficiency per agent
 - Handoff rate (frequency of agent handoffs)
 - Escalation rate (frequency of escalations)
 
@@ -436,11 +427,6 @@ agents:
 ### Alerting
 
 **Required Alerts:**
-
-**Budget Alerts:**
-- Token budget at 80% (warning)
-- Token budget at 90% (critical)
-- Token budget at 95% (emergency)
 
 **Agent Failure Alerts:**
 - Agent stuck (no progress for 10 minutes)
@@ -627,7 +613,6 @@ Update available!
 Changes in 1.2.0:
   - New: Multi-platform agent support
   - Improved: Error handling and recovery
-  - Fixed: Token budget calculation bug
 
 Run 'umas update' to install.
 
@@ -763,12 +748,7 @@ Validating configuration...
 ✓ Schema valid (all required fields present)
 ✓ API keys configured
 ✓ Database accessible
-✗ Token budget exceeds recommended limit
-
-Warning: Daily token budget (1M) is very high.
-Recommended: 100K tokens/day for typical usage.
-
-Configuration valid with 1 warning.
+Configuration valid.
 ```
 
 ### Compatibility Requirements
@@ -1064,7 +1044,7 @@ agent_selection:
       
     startup:
       preferred_platforms: ["claude-code", "copilot"]
-      required_features: ["speed", "cost-efficiency"]
+      required_features: ["speed", "token-efficiency"]
 ```
 
 ### Cross-Platform Context Transfer
@@ -1180,7 +1160,7 @@ multi_agent_config:
 - **MUST:** Track agent performance by platform
 - **MUST:** Monitor cross-platform handoffs
 - **MUST:** Measure context transfer success rate
-- **MUST:** Compare cost and quality across platforms
+- **MUST:** Compare quality and handoff success across platforms
 
 **Platform Metrics:**
 ```yaml
@@ -1189,19 +1169,16 @@ platform_metrics:
     claude_code:
       tasks_completed: 145
       avg_quality_score: 9.2
-      avg_cost_per_task: $0.45
       handoff_success_rate: 98%
       
     openai_codex:
       tasks_completed: 89
       avg_quality_score: 9.5
-      avg_cost_per_task: $0.52
       handoff_success_rate: 99%
       
     copilot:
       suggestions_accepted: 1247
       avg_quality_score: 8.1
-      cost_per_suggestion: $0.001
       
   cross_platform:
     handoffs_total: 67
@@ -1268,7 +1245,7 @@ security:
 **Why This Matters:**
 - **Flexibility:** Use best agent for each task type
 - **Resilience:** Fallback options if primary platform unavailable
-- **Cost Optimization:** Choose cost-effective platform per task
+- **Fit:** Choose the platform that suits each task
 - **Vendor Independence:** Avoid lock-in to single platform
 - **Replaceability:** Any coding agent platform or LLM provider can be swapped by changing configuration
 
@@ -1380,7 +1357,7 @@ error:
 ```
 Error: AGENT_TOKEN_EXHAUSTED (P1, transient)
 Context: worker-alice, session-789, task: auth-feature
-Token Usage: 145,000 / 150,000 (97%)
+Context Window: 145,000 / 150,000 tokens (97%)
 Operation: Implementing login endpoint
 
 Recovery Actions:
@@ -1450,7 +1427,7 @@ Need help? https://docs.system.com/guides/resolving-conflicts
 1. **Transient Failures:**
    - **Network Timeouts:** Retry with exponential backoff (3 attempts)
    - **Rate Limits:** Queue work, retry after cooldown period
-   - **Token Exhaustion:** Automatic agent handoff
+   - **Context Window Full:** Automatic agent handoff
    - **Temporary File Locks:** Wait and retry (max 30 seconds)
 
 2. **Recoverable Failures:**
@@ -2588,8 +2565,7 @@ Each tier can restart the one below, creating a resilient chain for hierarchical
 
 **Requirements:**
 - Non-intrusive metrics display
-- Cost per task and per turn
-- Token usage and agent time
+- Token totals by model and agent time
 - Code reuse percentage
 - Test status after last change
 - Foldable to one line
@@ -2713,11 +2689,11 @@ Each tier can restart the one below, creating a resilient chain for hierarchical
 
 ### 🚨 CONFLICT 4: Diverse Panel vs. Single Agent Efficiency
 
-**Issue:** Diverse panel (3 models for critical decisions) conflicts with efficiency and cost optimization.
+**Issue:** Diverse panel (3 models for critical decisions) conflicts with efficiency and token optimization.
 
 **Conflict:**
 - Panel: "Three-model panels improve decision quality through diversity"
-- Efficiency: "More models = more cost, more time, more tokens"
+- Efficiency: "More models = more time, more tokens"
 
 **Decision Needed:**
 - **Option A:** Always Panel - Critical decisions always use 3 models
@@ -3085,15 +3061,15 @@ $ system-cli debug context --session session-789 --step 42
 
 ---
 
-## 9. Agent Handoff and Token Management
+## 9. Agent Handoff and Context Window
 
 ### 9.1 Seamless Agent Handoff
 
 **Why This Matters:**
-AI agents have token limits (context windows). When an agent exhausts its tokens mid-task, work must transfer to a fresh agent without losing context or requiring human intervention. The system must support seamless handoff between agents (e.g., Claude → Bob) with zero or minimal changes.
+AI agents have a context window. When an agent's context window fills mid-task, work must transfer to a fresh agent without losing context or requiring human intervention. The system must support seamless handoff between agents (e.g., Claude → Bob) with zero or minimal changes.
 
 **Requirements:**
-- **Automatic Handoff**: Detect token exhaustion and trigger handoff automatically
+- **Automatic Handoff**: Detect a context window nearing its limit and trigger handoff automatically
 - **Context Preservation**: New agent inherits full context from predecessor
 - **Zero Human Intervention**: Handoff happens transparently
 - **Work Continuity**: New agent continues exactly where predecessor left off
@@ -3101,9 +3077,9 @@ AI agents have token limits (context windows). When an agent exhausts its tokens
 
 **How It Works:**
 
-The hook-based architecture makes handoff trivial because **work is tied to the hook, not the agent**. When Claude exhausts tokens:
+The hook-based architecture makes handoff trivial because **work is tied to the hook, not the agent**. When Claude's context window fills:
 
-1. **Detection**: System detects Claude approaching token limit (e.g., 90% usage)
+1. **Detection**: System detects Claude's context window approaching its limit (90%)
 2. **State Commit**: Claude commits current state to hook
 3. **Handoff Trigger**: System spawns Bob with same hook
 4. **Context Recovery**: Bob reads hook state and continues work
@@ -3116,7 +3092,7 @@ Initial State:
 - Task: "Implement authentication system"
 - Hook: /project/.vcs/worktrees/auth-feature
 - Agent: Alice (session-123)
-- Token Usage: 85% (approaching limit)
+- Context Window: 85% (approaching limit)
 
 Handoff Process:
 1. Alice commits progress to hook:
@@ -3124,7 +3100,7 @@ Handoff Process:
    - In Progress: Signup endpoint (50% done)
    - Pending: Password reset, session management
    
-2. System detects token exhaustion imminent
+2. System detects the context window nearly full
 
 3. Claude commits final state:
    ```
@@ -3310,7 +3286,7 @@ system-cli preview arch-auth-system.md
 - ❌ "Empower teams to..."
 
 **Replace with:**
-- ✅ Specific metrics: "Reduces cost by 40%"
+- ✅ Specific metrics: "Reduces token use by 40%"
 - ✅ Concrete examples: "Supports 30 concurrent agents"
 - ✅ Direct statements: "Works with Anthropic, OpenAI, Google"
 - ✅ Real constraints: "Requires 16GB RAM"
@@ -3331,7 +3307,7 @@ problem-solving scenarios with unprecedented efficiency.
 # After (Anti-Slop)
 ## Executive Summary
 This multi-agent system coordinates 20-30+ AI agents to complete 
-software development tasks. Reduces cost by 40%, time by 35%, and 
+software development tasks. Reduces token use by 40%, time by 35%, and 
 code size by 53% compared to single-agent approaches. Works with 
 Anthropic Claude, OpenAI, and Google Gemini (through the OpenAI Codex CLI harness).
 ```
@@ -3529,7 +3505,7 @@ Task: auth-system
 Status: login ✓, signup 50%, reset pending
 Blocker: JWT dependency
 Next: complete signup validation → email verify → tests
-Token: 85% (handoff soon)
+Context: 85% (handoff soon)
 ```
 
 **Human-Facing Documents (Unslop Required):**
@@ -3921,65 +3897,63 @@ work_bundle:
 
 **Handoff Protocol:**
 
-1. **Graceful Handoff** (Token exhaustion detected early):
+1. **Graceful Handoff** (context window nearly full):
    ```
-   Alice: "Approaching token limit. Committing state and requesting handoff."
+   Alice: "Approaching context window limit. Committing state and requesting handoff."
    System: "State committed. Spawning Bob with same hook."
    Bob: "Context recovered. Continuing signup endpoint implementation."
    ```
 
-2. **Emergency Handoff** (Crash or hard limit):
+2. **Emergency Handoff** (Crash or context window full):
    ```
-   Alice: [Crashes or hits hard token limit]
+   Alice: [Crashes or fills its context window]
    System: "Alice unresponsive. Last state committed 30s ago. Spawning Bob."
    Bob: "Recovered from last checkpoint. Resuming work."
    ```
 
-### 9.3 Token Budget Management
+### 9.3 Context Window Management
 
 **Requirements:**
-- **Token Tracking**: Monitor token usage per agent session
-- **Proactive Handoff**: Trigger handoff before hard limit
-- **Budget Allocation**: Allocate token budget per task
-- **Cost Optimization**: Minimize wasted tokens on handoff
+- **Context Tracking**: Monitor each agent session's context window fill
+- **Proactive Handoff**: Trigger handoff before the context window is full
+- **Context Carried Forward**: Minimize the context passed into a handoff
+- Handoff thresholds protect the context window. They do not limit spend and never pause work (ADR-0005)
 
 **Implementation:**
 
 ```yaml
-# Token Budget Configuration
-token_management:
-  per_session_limit: 200000  # Max tokens per session
-  handoff_threshold: 0.90    # Trigger handoff at 90%
-  reserve_tokens: 5000       # Reserve for handoff commit
-  
+# Context Window Configuration
+context_management:
+  context_limit: 200000          # Context window size for this session
+  handoff_threshold: 0.90        # Graceful handoff at 90% of the context window
+  emergency_threshold: 0.95      # Emergency handoff at 95%
+  handoff_headroom_tokens: 5000  # Kept free for the handoff commit
+
   tracking:
-    input_tokens: true
-    output_tokens: true
-    context_tokens: true
-    
+    context_tokens: true         # Context window fill per session
+
   optimization:
-    compress_history: true    # Compress old context
-    summarize_decisions: true # Summarize instead of full history
-    prune_irrelevant: true    # Remove irrelevant context
+    compress_history: true       # Compress old context
+    summarize_decisions: true    # Summarize instead of full history
+    prune_irrelevant: true       # Remove irrelevant context
 ```
 
-**Token Usage Monitoring:**
+**Context Window Monitoring:**
 
 ```bash
-# Real-time token usage
+# Real-time context window fill
 $ system-cli agent status alice
 Agent: alice
 Session: session-123
 Task: signup-endpoint
-Token Usage: 175,000 / 200,000 (87.5%)
+Context Window: 175,000 / 200,000 (87.5%)
 Status: Active
 Handoff: Scheduled at 90% (180,000 tokens)
 
-# Token usage history
-$ system-cli metrics tokens --agent alice
-Session     | Input   | Output  | Total   | Duration | Cost
-session-123 | 120,000 | 55,000  | 175,000 | 45m      | $2.10
-session-122 | 180,000 | 65,000  | 245,000 | 60m      | $2.94
+# Tokens used, totals by model (token ledger)
+$ system-cli metrics tokens
+Model       | Tokens used
+default     | 1,240,000
 ```
 
 ### 9.4 Context Compression for Handoff
@@ -4042,7 +4016,7 @@ Multiple agents can work on different parts of the same work bundle simultaneous
 
 **Scenarios:**
 
-1. **Sequential Handoff** (Token exhaustion):
+1. **Sequential Handoff** (Context window full):
    ```
    Alice (login) → Bob (signup) → Charlie (password-reset)
    ```
@@ -4069,7 +4043,7 @@ Hooks:
 
 Progress:
 Alice: Login endpoint complete, tests passing
-Bob: Signup endpoint 70% done, approaching token limit
+Bob: Signup endpoint 70% done, context window nearly full
 Charlie: Password reset endpoint starting
 
 Handoff Triggered:
@@ -4089,21 +4063,20 @@ Result:
 - ✓ Tie work to hooks, not agents
 - ✓ Commit state frequently (every major step)
 - ✓ Compress context for handoff
-- ✓ Monitor token usage proactively
+- ✓ Monitor context window use proactively
 - ✓ Test handoff scenarios regularly
 
 **For Agents:**
 - ✓ Write clear state summaries
 - ✓ Document decisions in hook
 - ✓ List explicit next steps
-- ✓ Commit before token limit
+- ✓ Commit before the context window fills
 - ✓ Trust hook state over memory
 
 **For Humans:**
 - ✓ Monitor handoff success rate
 - ✓ Review handoff logs for issues
-- ✓ Adjust token thresholds if needed
-- ✓ Track cost per handoff
+- ✓ Adjust context thresholds if needed
 - ✓ Optimize context compression
 
 
@@ -4120,7 +4093,7 @@ Real-time visibility into:
 - Work bundle progress and dependencies
 - Merge queue state and test results
 - Escalations and their resolution status
-- Resource usage (API calls, tokens, cost)
+- Resource usage (API calls, tokens by model)
 
 **Integration with Existing Tools:**
 
@@ -4229,7 +4202,6 @@ Real-time visibility into:
 - **Code reuse percentage:** Track reuse vs. new code written
 
 ### Performance Metrics
-- **Cost reduction:** Target -25% vs. no-skill baseline
 - **Time reduction:** Target -35% vs. no-skill baseline
 - **Token reduction:** Target -40% vs. no-skill baseline
 - **Agent time:** Track total agent time per task
@@ -4330,7 +4302,7 @@ The Federation Layer enables horizontal scaling by distributing work across mult
 
 **Why This Matters:**
 - **Horizontal Scaling**: Scale beyond single workspace limits (30+ agents → 100+ agents)
-- **Resource Distribution**: Spread API costs and rate limits across multiple accounts
+- **Resource Distribution**: Spread API usage and rate limits across multiple accounts
 - **Organizational Boundaries**: Different teams/departments can contribute without sharing credentials
 - **Fault Isolation**: Issues in one workspace don't affect others
 
@@ -4364,7 +4336,7 @@ Workspace A:
 - Cross-workspace work claiming protocol
 - Reputation system for quality tracking
 - Evidence submission and verification
-- Multi-dimensional stamps (quality, speed, cost)
+- Multi-dimensional stamps (quality, speed)
 
 **Success Criteria:**
 - Work distributed across multiple workspaces
@@ -4399,7 +4371,7 @@ Workspace A:
 
 ## Open Questions
 
-1. **Multi-model panel cost:** How do we balance decision quality vs. cost for diverse panels?
+1. **Multi-model panel token use:** How do we balance decision quality vs. token use for diverse panels?
 2. **Grilling frequency:** How often should grilling sessions run vs. direct execution?
 3. **Test coverage threshold:** What's the right balance between selective and comprehensive testing?
 4. **Federation timing:** When is the right time to add Federation Layer?
@@ -4424,9 +4396,9 @@ Workspace A:
 **Risk:** Multiple verification layers slow down development.  
 **Mitigation:** Parallel execution where possible, configurable verification depth.
 
-### Risk 4: Cost Explosion
-**Risk:** Multi-agent coordination and diverse panels increase costs.  
-**Mitigation:** Capacity governance, selective panel usage, cost tracking and alerts.
+### Risk 4: Token Growth
+**Risk:** Multi-agent coordination and diverse panels increase token use. Spend is not capped (ADR-0005).  
+**Mitigation:** Capacity governance (`task-queue` concurrency cap), selective panel usage, `watchdog` stall supervision. Token totals by model are reported by `umas metrics tokens`.
 
 ### Risk 5: Adoption Friction
 **Risk:** System too complex for new users to adopt.  
@@ -4516,7 +4488,7 @@ Workspace A:
   - **P1 (High):** Coordinator intervention needed
   - **P2 (Medium):** System Patrol handles automatically
 
-- **Metrics Display:** Non-intrusive UI component showing real-time performance metrics (cost, tokens, time, code reuse, test status). Foldable to one line.
+- **Metrics Display:** Non-intrusive UI component showing real-time performance metrics (tokens, time, code reuse, test status). Foldable to one line.
 
 - **Telemetry:** Observability framework for structured logs and metrics. Exports to standard protocol-compatible backends.
 
@@ -4580,19 +4552,19 @@ Workspace A:
 
 ### Agent Handoff and Token Management
 
-- **Agent Handoff:** Process of transferring work from one agent to another when the first agent exhausts its token budget. Enabled by hook-based architecture where work is tied to hooks, not agent identity.
+- **Agent Handoff:** Process of transferring work from one agent to another when the first agent's context window fills. Enabled by hook-based architecture where work is tied to hooks, not agent identity.
 
-- **Token Budget:** Maximum number of tokens (context window) allocated to an agent session. When approaching limit (e.g., 90%), system triggers handoff to fresh agent.
+- **Context Window:** Maximum number of tokens a model can hold in one agent session. Handoff thresholds are fractions of it. It is not a spend limit (ADR-0005).
 
-- **Handoff Threshold:** Percentage of token budget at which system proactively triggers handoff (typically 90%) to avoid hard limits and ensure graceful transition.
+- **Handoff Threshold:** Percentage of the context window at which the system proactively triggers a graceful handoff (typically 90%). Emergency handoff applies at 95%.
 
 - **Context Compression:** Technique to reduce token usage during handoff by transferring only essential context (current state, recent decisions, next steps) instead of full conversation history.
 
-- **Graceful Handoff:** Planned handoff triggered when token usage approaches threshold, allowing agent to commit state cleanly before transfer.
+- **Graceful Handoff:** Planned handoff triggered when context window use approaches threshold, allowing agent to commit state cleanly before transfer.
 
-- **Emergency Handoff:** Unplanned handoff triggered by agent crash or hard token limit, recovering from last committed checkpoint.
+- **Emergency Handoff:** Unplanned handoff triggered by agent crash or a full context window, recovering from last committed checkpoint.
 
-- **Sequential Handoff:** Pattern where agents work on same task sequentially (Alice → Bob → Charlie) as each exhausts tokens.
+- **Sequential Handoff:** Pattern where agents work on same task sequentially (Alice → Bob → Charlie) as each fills its context window.
 
 - **Parallel Work:** Pattern where multiple agents work on different hooks simultaneously within same work bundle.
 

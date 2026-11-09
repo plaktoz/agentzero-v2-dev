@@ -5,6 +5,8 @@
 > Read alongside [`TECHNICAL-DESIGN-SUMMARY.md`](./TECHNICAL-DESIGN-SUMMARY.md) for full context.
 > **Re-based 2026-10-25 (provisional):** the stack is Python, with TypeScript only where no Python option exists ([`TECHNICAL-DESIGN-SPEC.md`](./TECHNICAL-DESIGN-SPEC.md#a46-language-decision) Appendix A.4.6), and the dashboard is the static HTML page from [ADR-0001](../docs/decisions/ADR-0001-minimal-html-dashboard.md). The realistic total moved from ~162M to ~154M. The minimum and upper-bound scenarios were not re-based.
 
+> **Runtime budgets removed (ADR-0005, 2026-11-09).** This file estimates the effort to build UMAS, not runtime token budgets. The figures were not recomputed after the budget work was removed: upper bound; library reduced by ADR-0005 (`budget-meter` became `token-ledger`). The file has no per-library row, so the 154M / 86M / 270M totals are unchanged.
+
 ---
 
 ## Basis for Estimates
@@ -84,10 +86,10 @@ Build in phases, each independently testable before proceeding. Validates the co
 **Delivers:** One agent can complete a task end-to-end
 
 - `WorkerAgent` — full execution, `[umas:done]` / `[umas:checkpoint]` signalling, handoff
-- `MinimalismEnforcer` — all 6 ladder rungs implemented
+- `MinimalismEnforcer` — ladder rungs 1, 2 and 6 as a prompt in `packs/minimalism-ladder`; rungs 3 to 5 were stubs in the source code and are covered by the prompt
 - `MergeQueueProcessor` — permanent worktree, batch + bisect algorithm
 - `TestRunner` — pytest/jest/cargo support (port of the Rust source design to Python)
-- Exception flows: §4.1–§4.8 (project deletion, corrupted `.umas/`, stale worktrees, budget exhaustion)
+- Exception flows: §4.1–§4.8 (project deletion, corrupted `.umas/`, stale worktrees)
 
 **Validates:** single-agent task completion, state persistence, and merge queue before adding concurrency.
 
@@ -96,7 +98,7 @@ Build in phases, each independently testable before proceeding. Validates the co
 ### Phase 3 — Multi-agent + monitoring (~50M tokens)
 **Delivers:** Parallelism and crash recovery validated
 
-- `Scheduler` — concurrent dispatch, semaphore, token budget enforcement
+- `Scheduler` — concurrent dispatch, semaphore
 - `Daemon` — complete heartbeat + restart logic (port of the Rust source design to Python, run under the OS service manager)
 - `TriageAgent` + `SystemPatrol` — full stub-to-implementation
 - `ProjectMonitor` — stuck detection, graceful/emergency handoff
@@ -112,7 +114,7 @@ Build in phases, each independently testable before proceeding. Validates the co
 
 - All 5 specialised agents — real prompt engineering, structured outputs
 - `CodeReviewAgent` — two-axis review implementation
-- Read-only HTML dashboard (ADR-0001) — agents, work bundles, merge queue and cost, polled from the REST API
+- Read-only HTML dashboard (ADR-0001) — agents, work bundles, merge queue and token totals by model, polled from the REST API
 - Remaining CLI commands (`watch`, `agents handoff`, `debug replay`, `metrics *`)
 - OpenTelemetry integration + Prometheus/Jaeger exporters
 - Production hardening: PostgreSQL migration path, JWT auth, RBAC

@@ -84,7 +84,7 @@ What a skill cannot guarantee, and what the engine would:
 2. **Durable state.** `events.jsonl`, `playbook_state` and the bundle status survive sessions, machines and handoffs. A skill can write the same files, but nothing reads them back consistently.
 3. **Load-time validation (F6, F7).** This is deterministic and needs no model. It can be a stdlib Python script first, before any engine exists. The spec defines it, so it qualifies as a pack script under the brief.
 4. **Timeouts and retry counts.** Auto-gate timeouts and "retry once, then escalate" need a clock and a counter outside the model.
-5. **Escape hatch that can be trusted.** Failure counts from the runner, not from the model. Context-limit detection needs token counts from a budget source (budget-meter in the libs).
+5. **Escape hatch that can be trusted.** Failure counts from the runner, not from the model. Context-limit detection needs token counts from the session's own context counter ([agent-session](../../libs/agent-session/README.md)).
 6. **Real dispatch.** `agent_role` and `pack` steps run in their own contexts, with the output schemas enforced by code.
 7. **Gate notification.** A runner can notify a human at a gate, even when they are not watching. A skill cannot, because skills carry no harness APIs.
 8. **Version pinning** per bundle.

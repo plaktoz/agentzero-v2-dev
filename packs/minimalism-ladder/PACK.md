@@ -1,6 +1,6 @@
 ---
 name: minimalism-ladder
-description: Minimalism ladder: reads the relevant code, climbs six rungs from not needed to minimum code, stops at the first rung that holds, and records the rung with its evidence. Use when a task asks for code, a file or a dependency to be added, before the first line is written.
+description: Minimalism ladder: reads the relevant code, climbs six rungs from not needed to minimum code, stops at the first rung that holds, and records the rung with its evidence. Use when a task asks for code, a file or a dependency to be added or changed, including a bug fix, before the first line is written.
 ---
 
 # Minimalism ladder
@@ -22,17 +22,25 @@ Do not use this skill for:
 Run these in order. Do not start a step until the completion criterion of the previous one is met.
 
 1. **Read.** Follow "Read first". Done when every file the change touches and each call site it would affect has been read in this run, or is in `code_context`.
-2. **Climb.** Ask the six questions in the Prompt, following the Stop rule. Done when you have stopped at one rung, with a `notes` reason for each rung you moved past.
-3. **Check evidence.** Follow "Evidence". Done when each entry for rungs 1 to 4 is confirmed to exist. An entry you cannot confirm means you have not reached that rung: return to step 2.
-4. **Write.** Write what the stopping rung needs, and the behaviour the task requires. Done when the change is written and each deferral has a shortcut comment and a `shortcuts` entry.
-5. **Apply the level.** Follow "Enforcement levels". Done when its extra requirements are met, or none apply.
-6. **Record.** Follow "Output record". Done when every field is set and `rung_name` and `decision` are the pair for the stopping rung.
+2. **Scope.** Follow "Scope". Done when you have listed every place the change must reach and what it could break, in your answer.
+3. **Climb.** Ask the six questions in the Prompt, following the Stop rule. Done when you have stopped at one rung, with a `notes` reason for each rung you moved past.
+4. **Check evidence.** Follow "Evidence". Done when each entry for rungs 1 to 4 is confirmed to exist. An entry you cannot confirm means you have not reached that rung: return to step 3.
+5. **Write.** Write what the stopping rung needs, and the behaviour the task requires, keeping everything in "Never cut". For a bug fix, follow "Bug fixes". Done when the change is written and each deferral has a shortcut comment and a `shortcuts` entry.
+6. **Check new logic.** Follow "Tests for new logic". Done when each piece of new non-trivial logic has a test or self-check, or none is needed.
+7. **Apply the level.** Follow "Enforcement levels". Done when its extra requirements are met, or none apply.
+8. **Record.** Follow "Output record". Done when every field is set and `rung_name` and `decision` are the pair for the stopping rung.
 
 ## Read first
 
 The ladder runs only after you have read the files the change touches and the call sites it would affect. Before you answer rung 2, you must have read them. If `code_context` in your input is empty, or you have not read those files, read them now.
 
 Reading and scope analysis are never skipped. The ladder is lazy about the solution, not about the investigation.
+
+## Scope
+
+After reading and before you climb, list in your answer every place the change must reach: callers, tests, fixtures, config, exports and public interfaces. Also list what it could break for users, such as data it could destroy or expose, or callers that would stop working. The list is not part of the record.
+
+Scope is the reach the task needs. It is not extra features: those fall at rung 1. The ladder bounds the solution, never the reach: finish every part of the change the task needs, including the callers, tests and fixtures it breaks.
 
 ## Prompt
 
@@ -66,7 +74,28 @@ Rung 1 applies only to work that was not asked for. A requested feature is never
 
 If the task or a plan mentions something it did not ask for (for example "also add caching"), do not build it, and record it in `notes` as dropped.
 
-Behaviour the task requires is part of "minimum code that works". Input validation, error handling and any behaviour the task names are written. The ladder bounds new code; it does not remove required behaviour.
+Behaviour the task requires is part of "minimum code that works". Input validation, error handling and any behaviour the task names are written. The ladder bounds new code; it does not remove required behaviour. "Never cut" lists what is kept even when the task does not name it.
+
+## Bug fixes
+
+Bug fix: before you edit a function, search for every caller of it. Fix the root cause once, in the shared code, not at each call site. If the callers need different behaviour, say so in your answer and fix only what the task asks for. When the shared code is reused, list the search result in `evidence` as the file that holds it.
+
+## Tests for new logic
+
+New non-trivial logic needs one small test or an assert-based self-check. Non-trivial means any of: a branch beyond a trivial guard, a loop, a parser, money, security, state that depends on ordering or retries, or a whole new script or app. A trivial change needs none. Name the test or the check in `notes`. A test policy, where one is in use, decides whether a missing test blocks the change. This rule only says new logic is not left without a check.
+
+## Never cut
+
+Whatever rung you stop at, keep these, even when the task does not name them:
+
+- validation at trust boundaries;
+- error handling that prevents data loss;
+- security;
+- accessibility in user interfaces: labels, keyboard use, contrast;
+- values that real hardware or an external system needs, such as timing or calibration;
+- anything the task asked for.
+
+Code you move or merge keeps its error handling and validation.
 
 ## Evidence
 
@@ -99,6 +128,8 @@ The level comes from the input field `level`: `lite`, `full` or `ultra`. If none
 | `lite` | Check rungs 1 and 2 and emit the record. Rungs 3 to 6 are advice only. Do not block on them. |
 | `full` | Check all six rungs. Emit the record. Adding code where an earlier rung holds is a finding. |
 | `ultra` | As `full`. In addition, a new file, dependency or public abstraction needs a one-line justification in `notes`. Before adding one, propose a deletion or simplification of existing code if that reduces the change. |
+
+At every level, "Scope", "Bug fixes", "Tests for new logic" and "Never cut" apply in full. A level changes how strictly rungs 3 to 6 are enforced. It never lets you skip reading, scope, a check on new logic or an item in "Never cut".
 
 ## Output record
 
@@ -133,3 +164,29 @@ When done, state in your answer the rung, its `rung_name` and each `evidence` en
 | 4 | `installed_dependency` | `use_dependency` | An installed dependency does the job |
 | 5 | `one_line` | `write_one_line` | One readable line |
 | 6 | `minimum_code` | `write_minimum` | Minimum code that works |
+
+## Credits and licence
+
+The "Scope", "Bug fixes", "Tests for new logic" and "Never cut" rules are adapted from the ponytail skill by DietrichGebert (https://github.com/DietrichGebert/ponytail, commit 96608e0). The wording is this pack's own. Ponytail is released under the MIT licence, reproduced here because this file may be installed on its own:
+
+    MIT License
+    
+    Copyright (c) 2026 DietrichGebert
+    
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+    
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+    
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.

@@ -23,7 +23,7 @@ Agents talk to each other often and to people rarely, and those two audiences ne
 
 **Non-goals**
 - Removing generic AI patterns from plain text. See [anti-slop](../anti-slop/anti-slop-spec.md); plain mode composes with it.
-- Context packing and summarisation. See [budget-meter](../../libs/budget-meter/README.md) `pack()`.
+- Context packing and summarisation. See [agent-session](../../libs/agent-session/README.md), section "Context packing".
 - Translating between human languages
 
 ## 3. Pack Contents and Format
@@ -52,8 +52,7 @@ The register applies to the text. For status messages an optional shape keeps co
 
 ```json
 { "task": "auth-system", "status": "login ok, signup 50%, reset pending",
-  "blocker": "JWT dependency", "next": "signup validation -> email verify -> tests",
-  "budget_used": "85%" }
+  "blocker": "JWT dependency", "next": "signup validation -> email verify -> tests" }
 ```
 
 ## 5. The Rules and Prompt

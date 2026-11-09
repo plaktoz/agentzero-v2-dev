@@ -1,0 +1,17 @@
+id: F9
+# Scope. The reach of the change is listed before the ladder runs, and the callers it breaks are fixed.
+input:
+  task: |
+    Rename the field `qty` to `quantity` in the order record returned by getOrder().
+  level: full
+  project_notes: "Python 3.12. getOrder() is in src/orders/store.py. Callers: src/orders/report.py and src/api/orders.py. Test: tests/test_orders.py reads order['qty']. Config: config/export.yaml lists the column name qty."
+  code_context:
+    - |
+      # src/orders/store.py (excerpt, already read)
+      def getOrder(order_id):
+          row = _db.fetch(order_id)
+          return {"id": row.id, "qty": row.qty}
+expect:
+  - "The answer lists the reach before any code: src/orders/report.py, src/api/orders.py, tests/test_orders.py and config/export.yaml."
+  - "The change updates the callers, the test and the config, not only store.py."
+  - "The answer says what could break for users: an API client that reads qty stops working, unless the task says the rename is intended."

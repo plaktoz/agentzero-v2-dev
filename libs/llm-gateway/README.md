@@ -23,7 +23,7 @@ One interface for calling LLMs across providers, with a defined retry policy, bo
 **Non-goals**
 - Agent loops, tool execution, prompt construction, or memory
 - Task-level resume after failover. The caller re-supplies the conversation or checkpoint; the gateway is stateless about tasks. (See 5.4.)
-- Budget enforcement. The gateway reports usage through a callback; see [budget-meter](../budget-meter/README.md).
+- Limiting spend. The gateway never limits spend. It reports usage through a callback, and the consumer records it in [token-ledger](../token-ledger/README.md).
 - Caching, evaluation, or prompt management
 
 ## 3. Concepts and Data Model
@@ -158,7 +158,7 @@ The wrapper must pass every "yes" row. The nice-to-have rows are optional.
 | Error classes and retry table | Same policy expressed as [error-classifier](../error-classifier/README.md) catalog entries (section 9 there); the gateway still enforces its own policy |
 | P0 on auth error; P1 on exhausted | UMAS maps `AuthError` -> P0 escalation, `ProviderExhausted` -> P1 and `provider_failed` session status |
 | Per-role model mapping and panels | UMAS resolves a role to an alias; a panel is N `complete` calls plus synthesis (not gateway logic) |
-| Token accounting | `on_usage` -> `budget-meter.record` |
+| Token accounting | `on_usage` -> `token-ledger.record(model, tokens)`. `model` = the payload's `alias`. `tokens` = `usage.input_tokens + usage.output_tokens`; cached-token fields are not added. Every attempt that reports usage is recorded, failed attempts included. An attempt with no usage report produces no entry (token-ledger section 9) |
 
 ## 10. Source Material and Deviations
 

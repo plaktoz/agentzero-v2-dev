@@ -99,7 +99,7 @@ These come from the PRD and override every implementation convenience. They are 
   5. Can it be one readable line?
   6. Otherwise: minimum code that works.
 - Shortcut comments (`// SHORTCUT: <what> — <when to fix>`) are the only permitted form of deliberate deferral. They must be tracked in the project's debt ledger. All other comments must justify *why* the code exists.
-- Key targets: −40% lines of code, 40% fewer tokens, 25% lower cost.
+- Key targets: −40% lines of code, 40% fewer tokens.
 
 **What this rules out:**
 - Writing a new utility before confirming it does not already exist.
@@ -110,12 +110,12 @@ These come from the PRD and override every implementation convenience. They are 
 
 ### P6 · Measurable Impact
 
-**Statement:** Track code size, cost, time, test coverage, and production reliability. Everything is measurable or it is a guess.
+**Statement:** Track code size, tokens, time, test coverage, and production reliability. Everything is measurable or it is a guess.
 
 **What this means in practice:**
-- The metrics store records every meaningful measurement: tokens used, cost, duration, test coverage delta, error rates.
+- The metrics store records every meaningful measurement: tokens used (by model), duration, test coverage delta, error rates.
 - Metrics targets are hard numbers in the spec (§13). If a module cannot be measured against one of these targets, the metric must be added before the module ships.
-- The `budget-meter` library is the single source of truth for token and cost accounting. No module does its own accounting.
+- The `token-ledger` library is the single source of truth for token usage. No module does its own accounting.
 
 **What this rules out:**
 - "We believe this is faster" without a measurement.
@@ -161,7 +161,7 @@ API keys live in environment variables or a vault (HashiCorp Vault, IBM Key Prot
 
 ### A8 · Graceful degradation over hard failure
 
-Budget exhausted → queue work, do not fail in-progress sessions. Provider fails → retry with backoff, then failover, then escalate. Disk low → warn at 2 GB, pause dispatch at 500 MB, emergency checkpoint at 100 MB. **Machine shutdown → pause at step boundary, write `PAUSE.md`, resume on next boot.** No failure mode results in silent data loss.
+Provider fails → retry with backoff, then failover, then escalate. Disk low → warn at 2 GB, pause dispatch at 500 MB, emergency checkpoint at 100 MB. **Machine shutdown → pause at step boundary, write `PAUSE.md`, resume on next boot.** No failure mode results in silent data loss.
 
 ### A9 · Machine is a first-class interruption
 
@@ -206,7 +206,7 @@ Every module, every commit message, every log line, every error record uses thes
 | **worktree** | A Git worktree under `.umas/worktrees/<hook-path>/`. One agent, one worktree, one branch at a time. |
 | **STATE.md** | The recovery file in the worktree root. Always current. Contains: current task, last 10 decisions, explicit next steps, relevant file pointers. |
 | **events.jsonl** | The append-only structured event log at `.umas/events.jsonl`. The inter-process message bus for Phase 1–2. |
-| **handoff packet** | Compressed context (~15k tokens) built from `STATE.md` at session end. The incoming agent reads this, not the full conversation. |
+| **handoff packet** | Compressed context (~15k tokens) built from `STATE.md` at session end, for a context-window handoff. The incoming agent reads this, not the full conversation. |
 | **playbook** | A Markdown + YAML front-matter file defining phases, gates, steps, exit predicates, and escape hatches. Lives in `.umas/playbooks/`. |
 | **phase** | One named stage in a playbook. Contains ordered steps. Has an optional gate at its end. |
 | **gate** | A human approval or automated check that must pass before the next phase starts. A hard stop. |
@@ -219,7 +219,7 @@ Every module, every commit message, every log line, every error record uses thes
 | **coordinator** | The Python agent that owns the Coordinator state machine. Never writes application code. |
 | **scheduler** | The component that maintains the ready queue, enforces the concurrency cap, and dispatches agents. Uses `task-queue`. |
 | **watchdog** | The three-tier supervision chain: Daemon (Python) → Triage Agent → System Patrol → Project Monitors. |
-| **project monitor** | One Python process per active project. Polls every 60 seconds. Detects stuck, crashed, and over-budget agents. |
+| **project monitor** | One Python process per active project. Polls every 60 seconds. Detects stuck and crashed agents. |
 | **machine_paused** | Session status set when the host machine shuts down. The session is resumable; it is never treated as crashed. Recovery is automatic on next `umas start-all` if the OIDC token is still valid. |
 | **auth_expired** | Session status set when `machine_paused` is detected on boot and the OIDC token has expired. Requires `umas auth login` before the session can resume. Has no timeout. |
 | **PAUSE.md** | A file written by `agent-session.pause()` to the worktree root on clean shutdown. Identical content to `STATE.md` plus `paused_reason` and `paused_at`. Presence of this file is the definitive signal that the session was paused cleanly (not crashed). |
@@ -235,7 +235,6 @@ All agent signals use these exact strings. No synonym, no abbreviation. The Sche
 |--------|-----------|--------|--------|
 | Task complete | Git commit message | `[umas:done] <task-id>` | Scheduler |
 | Checkpoint | Git commit message | `[umas:checkpoint] <summary>` | Project Monitor |
-| Budget pause | Git commit message | `[umas] budget-pause — state committed` | Project Monitor |
 | Task blocked / escalate | Append to `events.jsonl` | `{"event":"escalate","severity":"P1","reason":"..."}` | Coordinator |
 | Handoff request | Append to `events.jsonl` | `{"event":"handoff_request","session_id":"...","reason":"..."}` | Scheduler |
 | Step complete | Append to `events.jsonl` | `{"event":"step_complete","agent":"...","hook":"...","summary":"..."}` | Project Monitor |
@@ -286,7 +285,7 @@ Work is sequenced. Starting Phase 2 work while Phase 1 is incomplete is not perm
 
 | Phase | Duration | What ships | Key libs in build order |
 |-------|----------|-----------|------------------------|
-| **1 · Foundation (MVP)** | 8–12 weeks | Git worktree manager, task database, Coordinator, Worker agents, minimalism enforcement, basic merge queue, CLI | `event-log`, `budget-meter`, `hook-store`, `task-queue`, [test-adapters](https://github.com/plaktoz/test-adapters), `merge-queue`, `error-classifier`, `kc-axi`, `metrics-store` (JSONL) |
+| **1 · Foundation (MVP)** | 8–12 weeks | Git worktree manager, task database, Coordinator, Worker agents, minimalism enforcement, basic merge queue, CLI | `event-log`, `token-ledger`, `hook-store`, `task-queue`, [test-adapters](https://github.com/plaktoz/test-adapters), `merge-queue`, `error-classifier`, `kc-axi`, `metrics-store` (JSONL) |
 | **2 · Specialization** | 6–8 weeks | Specialized agents, grilling, decision artifacts, TDD enforcement, code review | `decision-artifacts`, `agent-session`, `agent-platform` |
 | **3 · Monitoring** | 4–6 weeks | Three-tier watchdog, project monitors, telemetry, minimal HTML dashboard | `watchdog`, `metrics-store` (SQL backend activated) |
 | **4 · Scale** | 6–8 weeks | Scheduler, multi-platform support, session history, advanced merge queue, dashboard push updates (optional) | `llm-gateway` (evaluated, adopted or wrapped) |
@@ -326,7 +325,6 @@ These are not aspirational. They are acceptance criteria for the project.
 | Code quality | Lines of code reduction vs. baseline | −40% |
 | Code quality | Test coverage | 95%+ |
 | Code quality | Code reuse percentage | tracked from day 1 |
-| Performance | Cost reduction vs. baseline | −25% |
 | Performance | Time reduction vs. baseline | −35% |
 | Performance | Token reduction per task | −40% |
 | Reliability | Agent uptime | 99%+ |

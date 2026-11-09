@@ -54,7 +54,7 @@ umas cleanup [--dry-run]
 umas project register <name>
 umas project list
 umas project switch <name>
-umas project config <name> --budget <tokens>
+# Removed (ADR-0005): umas project config --budget
 
 # Agents
 umas agents list
@@ -78,7 +78,7 @@ umas worktrees recover <name>
 
 # Metrics
 umas metrics tokens
-umas metrics cost
+# Removed (ADR-0005): umas metrics cost
 umas metrics quality
 umas metrics agents
 
@@ -110,7 +110,7 @@ POST   /api/v1/work-bundles
 GET    /api/v1/work-bundles/{id}
 
 GET    /api/v1/metrics/tokens
-GET    /api/v1/metrics/cost
+# Removed (ADR-0005): GET /api/v1/metrics/cost
 GET    /api/v1/metrics/quality
 
 WebSocket: /ws/events   (Phase 4 only)
@@ -126,7 +126,7 @@ Each claim is marked **from source** (with a section reference) or **proposed**.
 
 This module is the entry point to the other modules. It parses a `umas` command or a REST request, checks the permission, calls one owner function and renders the result. (From source: §2.1 Human Interface Layer. [ADR-0001](../../../docs/decisions/ADR-0001-minimal-html-dashboard.md) says the page "reads from the same API definition the CLI uses".)
 
-It owns no state, no schedule, no agent process, no merge and no budget. Section 6 names the owner of each neighbouring responsibility. (Proposed.)
+It owns no state, no schedule, no agent process and no merge. Section 6 names the owner of each neighbouring responsibility. (Proposed.)
 
 Each command calls one function in an owner module. That function can call several libs. (Proposed.)
 
@@ -201,7 +201,7 @@ Carrier types follow the sibling specs: CLI command, REST endpoint, file, event,
 | Token cache | in and out | `~/.umas/token-cache` (from source: §7 Auth; §6.17 Auth expiry recovery). Written by `umas auth login` | Format not defined. Open 13 | [access-control](../access-control/access-control-spec.md) |
 | Audit event | out | Append through `event-log` (from source: A.5.7 Audit) | `id`, `ts`, `actor_id`, `acting_for_id`, `action`, `resource_type`, `resource_id`, `scope`, `decision`, `reason`, `correlation_id` (from source: A.5.6 `audit_event`) | [access-control](../access-control/access-control-spec.md) |
 | Daemon state | in | File `~/.umas/daemon.pid` (from source: §6.13). Writes `status: paused` on a clean stop (from source: §6.17) | `pid`, `status` (monitoring section 3 proposal) | This module reads. [monitoring](../monitoring/monitoring-spec.md) writes |
-| Read-only state | in | Read-only connection to `~/.umas/database.db` (from source: §1.2 location) and `.umas/` files (proposed) | `agent_sessions` (from source: §4), budget status, merge-queue status | This module |
+| Read-only state | in | Read-only connection to `~/.umas/database.db` (from source: §1.2 location) and `.umas/` files (proposed) | `agent_sessions` (from source: §4), merge-queue status | This module |
 
 #### 3.1 Command groups
 
@@ -222,7 +222,7 @@ Each row gives one result type. The same type feeds the default view, the `--jso
 | `umas start-all` | `POST /api/v1/system/start-all` (proposed) | UMAS `daemon_start(resume)`. Resumes `machine_paused` sessions when the token is valid (from source: §7 comment) | `daemon: started` or `daemon: running (pid N)`; `resumed: n` | `DaemonStartResult`: `pid`, `status`, `resumed[]` | 0 for started and already running; 1 | Yes. Idempotent: a second call exits cleanly (from source: §6.13) |
 | `umas start-all --resume` | Same route, body `resume: true` | Same, and re-checks `auth_expired` sessions after sign-in (from source: §7 comment; §6.17 Auth expiry recovery) | Same | Same | 0, 1 | Yes. Same as `start-all` |
 | `umas stop-all` | `POST /api/v1/system/stop-all` (proposed) | UMAS `daemon_stop(grace_seconds)`. Calls agent-session `pause(session, reason)` for each active session (from source: agent-session §4). Grace is 30 seconds (from source: §6.17 Pre-shutdown: clean pause) | `daemon: stopped`; `checkpointed: n` | `DaemonStopResult`: `checkpointed[]`, `timed_out[]` | 0, 1 | Yes. Repeat call not defined (Open 9) |
-| `umas status` | `GET /api/v1/status` (proposed) | UMAS `status_summary()`. Reads `daemon.pid` and `agent_sessions`. Calls budget-meter `status(budget)` and merge-queue `status()` (from source: lib section 4) | `daemon`; `agents[n of m]`; `budgets`; `merge_queue` | `SystemStatus`: `daemon`, `agents`, `budgets[]`, `merge_queue` | 0 | No |
+| `umas status` | `GET /api/v1/status` (proposed) | UMAS `status_summary()`. Reads `daemon.pid` and `agent_sessions`. Calls merge-queue `status()` (from source: lib section 4) | `daemon`; `agents[n of m]`; `merge_queue` | `SystemStatus`: `daemon`, `agents`, `merge_queue` | 0 | No |
 | `umas health-check` | `GET /api/v1/health` (proposed) | UMAS `health_check()`. Calls watchdog `check_once()`, which has no side effects (from source: [watchdog](../../../libs/watchdog/README.md) §4). Adds the checks of §6.1 (orphaned projects), §6.3 (`.umas/` state) and §6.8 (stale worktrees). Disk checks are §6.16 and are not part of this command | `checks[n]`; `problems: n` | `HealthReport`: `checks[]`, `problems[]` with severity | 0, 1 | Conflict. §6.1 says the command escalates to P2 after 30 days. That write is Open 14 |
 | `umas update` | `POST /api/v1/system/update` (proposed) | UMAS `update(now)`. Waits for sessions by default. `--now` checkpoints and pauses them (from source: §6.14). Writes `database.db.bak` first (from source: §6.14, §6.12) | `update: deferred (n active sessions)` or `update: applied` | `UpdateResult`: `applied`, `deferred_reason`, `active_sessions` | 0, 1 | Yes. Repeat call not defined (Open 9) |
 | `umas cleanup [--dry-run]` | `POST /api/v1/system/cleanup` (proposed) | UMAS `cleanup(dry_run)`. Calls hook-store `gc(policy, dry_run=true)` and event-log `prune(retain_days)` (from source: lib section 4). Never removes decision artifacts or the last 90 days of events (from source: §6.16) | Dry run: `would remove: n worktrees, n segments`. Otherwise `removed: ...` | `CleanupReport`: `dry_run`, `worktrees[]`, `segments[]`, `bytes_recoverable` | 0, 1 | Yes, unless dry run. Default is Open 20 |
@@ -234,15 +234,15 @@ Each row gives one result type. The same type feeds the default view, the `--jso
 | `umas project register <name>` | `POST /api/v1/projects` (proposed) | UMAS `register_project(name, path)`. Writes the `projects` row only. Does not touch the filesystem (from source: §5.9). `path` is `UNIQUE` (from source: §4 Projects) | `project: name`; `status: active` | `Project`: `id`, `name`, `status`, `path` | 0. 1 with `help: umas init --project` when init is missing (from source: §5.9) | Yes. A repeat call with the same path fails on the unique key. Idempotence not defined (Open 9) |
 | `umas project list` | `GET /api/v1/projects` (proposed) | UMAS `list_projects(status)`. Detects orphans on use (from source: §6.1 Detection) | `projects[n of m]{id,status}`; `by_status` | `ProjectList`: `projects[]`, `count`, `total`, `by_status` | 0 | Detection can set `orphaned`. Open 14 |
 | `umas project switch <name>` | None | No function in the sources (Open 11) | Not defined | Not defined | Not defined | Not defined (Open 11) |
-| `umas project config <name> --budget <tokens>` | `PATCH /api/v1/projects/{id}` (proposed) | UMAS `set_budget(project, limit)`. Calls budget-meter `define(budget)` (from source: lib section 4). Dispatch resumes within 60 seconds (from source: §6.6) | `budget: <project>/day  limit: n  used: n` | `Project` with `budget{id, limit, used, reserved, percent}` | 0, 1 | Yes. An identical budget exits 0 with `unchanged` (from source: [budget-meter](../../../libs/budget-meter/README.md) §4.1) |
+| `umas project config <name> --budget <tokens>` | `PATCH /api/v1/projects/{id}` | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) |
 
 **Agents**
 
 | Command | REST | Calls | Default view | `--json` result and fields | Exit | Mutates, idempotent |
 |---------|------|-------|--------------|----------------------------|------|---------------------|
 | `umas agents list` | `GET /api/v1/agents` (from source: §7) | UMAS `list_agents(filter)`. Reads `agent_sessions` (from source: §4) | `agents[n of m]{id,status,bundle_id,token_used}`; `by_status` | `AgentList`: `agents[]`, `count`, `total`, `by_status` | 0 | No |
-| `umas agents spawn --task <id>` | `POST /api/v1/agents` (from source: §7) | UMAS `dispatch(task_id)`. Calls hook-store `create(name, base_branch, owner, task?)` and agent-session `create(config, task, hook_path, event_log_dir)` (from source: lib section 4). Admission is task-queue `set_admit` with budget-meter `reserve` (from source: task-queue §4; budget-meter §4) | `agent: id  status: spawned`; or `deferred: reason` | `AgentSession`. A deferral returns `SpawnResult` with `deferred_reason` | 0 for spawned and for deferred (a deferral is an answer, from source: budget-meter §4.1); 1 for an unknown task | Yes. Not idempotent. Each call creates a session (proposed) |
-| `umas agents status <agent-id>` | `GET /api/v1/agents/{id}` (from source: §7) | agent-session `status(hook_path)` (from source: §4). The `hook_path` source is Open 28 | `agent: id  status  token used/limit  last_heartbeat` | `AgentSession` | 0; 1 for an unknown id | No |
+| `umas agents spawn --task <id>` | `POST /api/v1/agents` (from source: §7) | UMAS `dispatch(task_id)`. Calls hook-store `create(name, base_branch, owner, task?)` and agent-session `create(config, task, hook_path, event_log_dir)` (from source: lib section 4). Dispatch is gated by the task-queue concurrency cap `max_claimed` (from source: task-queue §4, §5.1) | `agent: id  status: spawned`; or `claimed: none (at_capacity)` | `AgentSession`. At the cap no session is created | 0 for spawned and for `at_capacity` (an answer, from source: task-queue §4.1); 1 for an unknown task | Yes. Not idempotent. Each call creates a session (proposed) |
+| `umas agents status <agent-id>` | `GET /api/v1/agents/{id}` (from source: §7) | agent-session `status(hook_path)` (from source: §4). The `hook_path` source is Open 28 | `agent: id  status  token used  last_heartbeat` | `AgentSession` | 0; 1 for an unknown id | No |
 | `umas agents handoff <from> <to>` | None in §7 (proposed `POST /api/v1/agents/{id}/handoff`) | agent-session `handoff(session)` (from source: §4). The function has no successor argument (Open 23) | `handoff: from to to`; `packet: HANDOFF.md` | `HandoffResult`: `packet_path`, `from`, `to` | 0, 1 | Yes. Repeat call not defined (Open 9) |
 | `umas agents reconcile` | None in §7 (proposed `POST /api/v1/agents/reconcile`) | Reconciles stale sessions on demand. The Project Monitor runs the same check within 60 seconds (from source: §6.15). Owner: [monitoring](../monitoring/monitoring-spec.md) | `reconciled: n`; `stale: n` | `ReconcileResult`: `reconciled[]`, `stale[]` | 0, 1 | Yes. Repeat call not defined (Open 9) |
 | `umas agents resume <session-id>` | None in §7 (proposed `POST /api/v1/agents/{id}/resume`) | agent-session `recover(hook_path, event_log_dir, task_id)` (from source: §4, §5.5). Recovery is human-initiated (from source: §6.7). A session in `auth_expired` is not promoted without a fresh token (from source: §6.17 Auth expiry recovery) | `agent: id  status: active`; or `status: auth_expired (run umas auth login)` | `AgentSession` | 0; 1 when the status is not resumable | Yes |
@@ -273,8 +273,8 @@ The metrics-store lib gives the query for each `umas metrics` command (from sour
 
 | Command | REST | Calls | Default view | `--json` result and fields | Exit | Mutates, idempotent |
 |---------|------|-------|--------------|----------------------------|------|---------------------|
-| `umas metrics tokens` | `GET /api/v1/metrics/tokens` (from source: §7) | `query` on `token.input` and `token.output`, sum, grouped by `agent_id`, `since` 7 days (from source: metrics-store §9) | `token.input n`; `token.output n` per group; `window` | `TokenMetrics`: `window`, `groups[]` with `tags`, `count` and values | 0 | No |
-| `umas metrics cost` | `GET /api/v1/metrics/cost` (from source: §7) | `query` on `token.cost` in USD, grouped by `project` and `model` (from source: metrics-store §9) | `cost: n USD` per group; `window` | `CostMetrics`: `window`, `groups[]` | 0 | No |
+| `umas metrics tokens` | `GET /api/v1/metrics/tokens` (from source: §7) | `query` on `token.used`, sum, grouped by `model`, `since` 7 days (from source: metrics-store §9) | `token.used n` per `model`; `window` | `TokenMetrics`: `window`, `groups[]` with `tags`, `count` and values | 0 | No |
+| `umas metrics cost` | `GET /api/v1/metrics/cost` | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) |
 | `umas metrics quality` | `GET /api/v1/metrics/quality` (from source: §7) | `query` on `test.coverage_pct`, `merge_queue.success_rate` and `error.p1_count`, average (from source: metrics-store §9) | One line per metric; `window` | `QualityMetrics`: `window`, `metrics[]` | 0 | No |
 | `umas metrics agents` | None in §7 (proposed `GET /api/v1/metrics/agents`) | `query` on `task.duration_ms`, p95, grouped by `agent_id` (from source: metrics-store §9) | One row per agent | `AgentMetrics`: `window`, `groups[]` | 0 | No |
 
@@ -307,7 +307,7 @@ Rows marked **src** come from the REST list in §7. All other rows are **propose
 | `POST /api/v1/system/cleanup` | `umas cleanup [--dry-run]` | proposed | Body `dry_run`, default not set (Open 20) | `system:admin` (proposed) | `CleanupReport` |
 | `GET /api/v1/projects` | `umas project list` | proposed | Query `status`: `active`, `orphaned` or `archived` (from source: §4 Projects) | `project:read` (proposed) | `ProjectList` |
 | `POST /api/v1/projects` | `umas project register <name>` | proposed | Body `name`; `path` (Open 11) | `project:write` (proposed) | `Project` |
-| `PATCH /api/v1/projects/{id}` | `umas project config <name> --budget` | proposed | Path `id`; body `budget_tokens` | `budget:write` (proposed) | `Project` |
+| `PATCH /api/v1/projects/{id}` | `umas project config <name> --budget` | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) |
 | `GET /api/v1/agents` | `umas agents list` | src | Query `status`, `project_id`, `limit` (proposed) | `agent:read` (proposed) | `AgentList` |
 | `POST /api/v1/agents` | `umas agents spawn --task <id>` | src | Body `task_id` (name proposed) | `agent:spawn` (named in A.5.6; the route mapping is proposed) | `AgentSession` |
 | `GET /api/v1/agents/{id}` | `umas agents status <agent-id>` | src | Path `id` | `agent:read` (proposed) | `AgentSession` |
@@ -332,7 +332,7 @@ Rows marked **src** come from the REST list in §7. All other rows are **propose
 | `POST /api/v1/worktrees/clean` | `umas worktrees clean --stale` | proposed | Body `stale`, default `true`; `dry_run` | `worktree:write` (proposed; Open 16) | `CleanReport` |
 | `POST /api/v1/worktrees/{name}/recover` | `umas worktrees recover <name>` | proposed | Path `name` | `worktree:write` (proposed; Open 16) | `RecoverResult` |
 | `GET /api/v1/metrics/tokens` | `umas metrics tokens` | src | Query `since`, `until`, `group_by` (proposed; metrics-store §4 `query` fields) | `metrics:read` (proposed) | `TokenMetrics` |
-| `GET /api/v1/metrics/cost` | `umas metrics cost` | src | Query `since`, `until`, `group_by` (proposed) | `metrics:read` (proposed) | `CostMetrics` |
+| `GET /api/v1/metrics/cost` | `umas metrics cost` | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) |
 | `GET /api/v1/metrics/quality` | `umas metrics quality` | src | Query `since`, `until`, `group_by` (proposed) | `metrics:read` (proposed) | `QualityMetrics` |
 | `GET /api/v1/metrics/agents` | `umas metrics agents` | proposed | Query `since`, `until`, `group_by` (proposed) | `metrics:read` (proposed) | `AgentMetrics` |
 | `GET /api/v1/me` | `umas auth status` | proposed | None | Any authenticated principal (proposed) | `AuthStatus` |
@@ -371,7 +371,7 @@ The view is fast. Its output has a fixed set of fields, so an agent can read it 
 | `--now` | Flag | Off (from source: §6.14 default is wait) | CLI flag, `umas update` | Checkpoints and pauses active sessions before the update |
 | `--dry-run` | Flag | Not set (Open 20) | CLI flag, `umas cleanup`, `umas worktrees clean` | Reports what would be removed. Removes nothing |
 | `--stale` | Flag | Not set | CLI flag, `umas worktrees clean` (from source: §7) | Selects stale hooks |
-| `--budget` | Integer, tokens | Not set. Required by `umas project config` (from source: §7) | CLI flag | Project budget limit, written through budget-meter `define` |
+| `--budget` | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) |
 | `--task`, `--session`, `--agent` | Identifier | None. Required by the command | CLI flags (from source: §7) | Target of the command |
 | `--project` | Flag | Off | CLI flag, `umas init` (from source: §5.9) | Runs the per-repo init instead of the machine-wide init |
 | Home folder | Path | `~/.umas/` (from source: §5.9) | Fixed | Machine-wide state |
@@ -400,13 +400,13 @@ The "Who" column gives the A.5.4 roles that hold the capability. `S` means syste
 | Capability | Who (from source: A.5.4) | Permission | Commands |
 |-----------|--------------------------|-----------|----------|
 | View agents, tasks, work bundles and the merge queue | Admin S, Project Owner P, Developer P, Approver P, Operator S, Viewer S. Auditor no | None named. Proposed `agent:read` and `work:read` | `status`, `watch`, `agents list`, `agents status`, `work-bundle show` |
-| View metrics and cost | Admin S, Project Owner P, Developer P, Approver P, Operator S, Auditor S, Viewer S | None named. Proposed `metrics:read` | `metrics *` |
+| View metrics | Admin S, Project Owner P, Developer P, Approver P, Operator S, Auditor S, Viewer S | None named. Proposed `metrics:read` | `metrics *` |
 | Submit a work request | Admin S, Project Owner P, Developer P | None named. Proposed `work:submit` | `request` |
 | Spawn an agent | Admin S, Project Owner P, Developer P. Only the Coordinator role spawns agents in the agent roles (from source: A.5.5) | `agent:spawn` | `agents spawn`, `agents resume`, `agents handoff` |
 | Stop or pause an agent | Admin S, Project Owner P, Developer P (own agents), Operator S. The Coordinator and Monitors stop agents in the agent roles (from source: A.5.5) | None named. Proposed `agent:stop` | `agents pause`, `agents reconcile`, `DELETE` route |
 | Approve a merge | Admin S, Project Owner P, Approver P | `merge:approve` | Not in this module. Owned by [verification](../verification/verification-spec.md) |
 | Approve one's own change | No built-in role. Granted by an Admin or Project Owner (from source: A.5.4 Self-approval) | `merge:approve_own` | Not in this module |
-| Set a project budget | Admin S (any project), Project Owner P (up to the system cap) | None named. Proposed `budget:write` | `project config --budget` |
+| Set a project budget | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) |
 | Change project configuration | Admin S, Project Owner P | `config:write` (named in A.5.6 example) | Not used by a command in §7. Open 29 |
 | Change system configuration | Admin S only (from source: A.5.4 row "Change system configuration") | None named. Proposed `config:write` at system scope (Open 29) | `umas update` |
 | Create or delete a project | Admin S only | None named. Proposed `project:write` | `project register` |
@@ -436,8 +436,8 @@ The "Who" column gives the A.5.4 roles that hold the capability. `S` means syste
 | [context-persistence](../context-persistence/context-persistence-spec.md) | Reads hooks with `list` and `recover`. Runs `gc` for clean. Reads events for replay and logs | Function call, hook-store and event-log libs | Sync for commands. `watch` reads on each refresh |
 | [verification](../verification/verification-spec.md) | Reads queue state with `status`. Sends `requeue` for retry. Creates the merge-queue worktree with `init` (Open 6) | Function call, merge-queue lib | Sync |
 | [monitoring](../monitoring/monitoring-spec.md) | Starts and stops the daemon. Runs watchdog `check_once` for health. Reads heartbeats for the staleness warning. Requests reconcile | IPC to the daemon (Open 1), function call, file read | Sync for commands. The daemon runs async |
-| [budget-and-models](../budget-and-models/budget-and-models-spec.md) | Sends the project budget with `define`. Reads budget status for `status` and metrics | Function call, budget-meter lib | Sync. A new limit applies on the next call (from source: §6.6) |
 | [exception-flows](../exception-flows/exception-flows-spec.md) | Shows the states and next commands that section 6 defines. The flows own the rules | Reads only | Sync |
+| budget-and-models (now [models-and-usage](../models-and-usage/models-and-usage-spec.md)) | Removed (ADR-0005) | | |
 | [access-control](../access-control/access-control-spec.md) | Runs the permission check on every route. Writes audit events. Owns sign-in for `auth login` | Function call, event append | Sync |
 
 ### 7. Libraries and packs used
@@ -445,10 +445,10 @@ The "Who" column gives the A.5.4 roles that hold the capability. `S` means syste
 - **[event-log](../../../libs/event-log/README.md):** `read` for `debug replay` and `logs`. `prune(retain_days)` for `cleanup` (from source: event-log §4 and §5.3).
 - **[hook-store](../../../libs/hook-store/README.md):** `list`, `recover`, `gc` and `remove` for the worktree commands. `create` for `agents spawn` (from source: hook-store §4).
 - **[agent-session](../../../libs/agent-session/README.md):** `create`, `status`, `pause`, `handoff` and `recover` for the agent commands and `debug context` (from source: agent-session §4).
-- **[task-queue](../../../libs/task-queue/README.md):** `get`, `graph` and `list` for `work-bundle show` and the task routes. `set_admit` gates `agents spawn` (from source: task-queue §4).
+- **[task-queue](../../../libs/task-queue/README.md):** `get`, `graph` and `list` for `work-bundle show` and the task routes. The concurrency cap `max_claimed` gates `agents spawn` (from source: task-queue §4).
 - **[merge-queue](../../../libs/merge-queue/README.md):** `status` for the queue line in `status`. `requeue` for retry. `init` for the merge-queue worktree (from source: merge-queue §4).
-- **[budget-meter](../../../libs/budget-meter/README.md):** `define` for `project config --budget`. `status` for budget lines. `reserve` in the admission callback (from source: budget-meter §4).
-- **[metrics-store](../../../libs/metrics-store/README.md):** `query` for all `metrics` commands (from source: metrics-store §9).
+- **budget-meter:** Removed (ADR-0005).
+- **[metrics-store](../../../libs/metrics-store/README.md):** `query` for all `metrics` commands, and `token.used` for `metrics tokens` (from source: metrics-store §9).
 - **[watchdog](../../../libs/watchdog/README.md):** `check_once` for `health-check`. It has no side effects (from source: watchdog §4).
 - **[error-classifier](../../../libs/error-classifier/README.md):** The error record and typed codes for the error block (from source: error-classifier §3.3).
 - **[kc-axi](../../../libs/kc-axi/README.md):** Not used by `umas`. It is the Keycloak set-up tool for the Admin (from source: A.5.7 Identity provider). Its output and exit codes do not apply here (see [AXI support](#axi-support)).
@@ -465,7 +465,7 @@ The "Who" column gives the A.5.4 roles that hold the capability. `S` means syste
 | Stale or dirty worktree | §6.8 | `worktrees list` shows `dirty`. `clean --stale` keeps `stale-dirty` hooks |
 | Update while sessions are active | §6.14 | `update` waits unless `--now` is given. The output lists the active sessions |
 | Disk full | §6.16 | A write command exits 1 with the disk error. `cleanup --dry-run` shows the recoverable space |
-| Budget exhausted | §6.6 | `project config --budget` raises the limit. Dispatch resumes within 60 seconds |
+| Budget exhausted | §6.6 | Removed (ADR-0005) |
 | Provider failure with no fallback | §6.7 | `agents resume` is the human recovery. It exits 1 when the session is not resumable |
 | Merge bisect finds no clean subset | §6.9 | `work-bundle retry --reset-retries` resets the failure count (Open 25) |
 | Dependency deadlock or rejected bundle | §6.10 | `request` exits 1 and names the cycle or the dangling reference |
@@ -540,7 +540,7 @@ Each item states the decision it needs and a recommendation. No item is decided 
 
 **Open 29.** Permission for `umas update` and system configuration. A.5.4 gives "Change system configuration" to Admin only, with no name. `config:write` is named in A.5.6 without a scope. Decision (owner: access-control): the name and scope. Recommendation: `config:write` at system scope.
 
-**Open 30.** Dispatch resumes within 60 seconds after a budget change (from source: §6.6). Decision: none. This item records that the 60-second rule is an upper bound from the Project Monitor poll. Recommendation: keep the rule as the spec states it.
+**Open 30.** Removed (ADR-0005).
 
 **Open 31.** The shutdown grace window is 30 seconds (from source: §6.17), and "configurable". The config key is not named. Decision: the key and its file. Recommendation: `grace_seconds` in `umas.config.yaml`, under a `daemon` block.
 
@@ -556,11 +556,11 @@ Scope: every command in §7 and the no-argument view. The rules come from [CLI C
 | `init`, `init --project` | Set up the machine or the project | None. Idempotence is stated (§5.9) | None |
 | `start-all`, `stop-all`, `update`, `cleanup` | Daemon and maintenance | None. Prompts appear only in the flows (Open 7) | None |
 | `status`, `health-check` | State and health | None. §6.15 names a staleness warning but no format | None |
-| `project register`, `list`, `switch`, `config` | Project records and budget | None. §6.1 shows an orphan prompt | None |
+| `project register`, `list`, `switch`, `config` | Project records | None. §6.1 shows an orphan prompt | None |
 | `agents list`, `spawn`, `status`, `handoff`, `reconcile`, `resume`, `pause` | Agent sessions | None | None |
 | `request`, `work-bundle show`, `approve`, `retry`, `watch` | Work | None. §6.15 names a staleness warning | None |
 | `worktrees list`, `clean --stale`, `recover` | Worktrees | `stale-dirty` tag only (from source: §6.8) | None |
-| `metrics tokens`, `cost`, `quality`, `agents` | Metrics | None. Metric names are in [metrics-store](../../../libs/metrics-store/README.md) §3.2 | None |
+| `metrics tokens`, `quality`, `agents` | Metrics | None. Metric names are in [metrics-store](../../../libs/metrics-store/README.md) §3.2 | None |
 | `auth login`, `auth status` | Sign-in and token | `auth status` shows "current token validity and expiry time" with no format (from source: §7) | None |
 | `debug replay`, `debug context`, `logs` | Event and context review | None | None |
 
@@ -585,17 +585,17 @@ Scope: every command in §7 and the no-argument view. The rules come from [CLI C
 
 (c) A default-view renderer over each result type. Build one encoder at the output boundary (from source: libs "Two output modes"). The encoder lives in UMAS, because a lib cannot import UMAS (from source: libs independence rules 1 and 2). Libs open point 5 covers a shared package.
 
-(d) Exit codes. Use 0, 1 and 2 only. A command that answers a decision, such as `deferred`, exits 0 (from source: budget-meter §4.1). Do not copy the kc-axi codes 3 to 7 (from source: kc-axi §4.2).
+(d) Exit codes. Use 0, 1 and 2 only. A command that answers with a state, such as `claimed: none` from a full concurrency cap, exits 0 (from source: task-queue §4.1). Do not copy the kc-axi codes 3 to 7 (from source: kc-axi §4.2).
 
 (e) The no-argument view as the session-start state view. Build it before the other default views. The consuming application runs it from a session hook (from source: libs "How to use it"). Section 3.3 gives its rules.
 
-(f) Golden-file tests for each default view. Use fixtures for an empty state and a non-empty state. Cover `umas`, `status`, `agents list`, `worktrees list` and `metrics cost`. Each fixture stores the default view text (from source: libs "How to use it").
+(f) Golden-file tests for each default view. Use fixtures for an empty state and a non-empty state. Cover `umas`, `status`, `agents list`, `worktrees list` and `metrics tokens`. Each fixture stores the default view text (from source: libs "How to use it").
 
 **Open points for the AXI review.** These refer to [libs/README.md open points](../../../libs/README.md#open-points-for-the-axi-review).
 
 1. Encoding, TOON or plain key-value. This is libs open point 1. It is Open 4 in this spec. The default view encoding is not settled.
 2. Exit 1 for a judging command. This is libs open point 2. `health-check` is the judging command here (Open 14). Not decided.
-3. Deferred admission. This is libs open point 3. `agents spawn` returns `deferred` as an answer with exit 0 (section 3.1). Not decided.
+3. Removed (ADR-0005). This was libs open point 3.
 4. Session-start hook platforms. This is libs open point 4. The consuming application installs the hook. Which agent platform gets it is not decided here.
 5. Shared encoder package. This is libs open point 5. For UMAS, build step (c) uses a local encoder.
 6. Medium-fit libs adopting the rules. This is libs open point 6. Not relevant to this module.

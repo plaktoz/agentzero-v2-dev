@@ -1,5 +1,7 @@
 # minimalism-ladder: skill assessment
 
+> **Note 2026-11-09 ([ADR-0006](../../docs/decisions/ADR-0006-minimalism-ladder-adds-ponytail-rules.md)).** `PACK.md` gained four rules (scope, bug fixes, tests for new logic, never cut) adapted from ponytail (MIT). Fixtures F9 to F12 were added and are expected, not run. `pack_version` stays 0.1.0. The findings below are dated 2026-10-25 and are kept as history. This file is a record for this repository and is not part of the portable set.
+
 Date: 2026-10-25. Pack version: 0.1.0. Assessed files: `PACK.md`, `schema/ladder-record.json`, `fixtures/F1.yaml` to `F8.yaml`, `fixtures/RESULTS.md`, `scripts/check_evidence.py`, `tests/test_check_evidence.py`, `config.yaml`, `minimalism-ladder-spec.md`.
 
 ## 1. Verdict

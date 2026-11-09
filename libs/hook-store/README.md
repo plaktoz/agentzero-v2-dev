@@ -546,7 +546,7 @@ worktree_config:
 
 Source: `TECHNICAL-DESIGN-SPEC.md` §3.2.5
 
-> **Note:** `libs/hook-store.md` §3 defines a file-based data model (`STATE.md`, lease files). This SQL schema is retained here as a historical reference. It represents the original design that stored worktree state in a database rather than in the worktree directory itself.
+> **Note:** `libs/hook-store/README.md` §3 defines a file-based data model (`STATE.md`, lease files). This SQL schema is retained here as a historical reference. It represents the original design that stored worktree state in a database rather than in the worktree directory itself.
 
 ```sql
 -- Worktrees table

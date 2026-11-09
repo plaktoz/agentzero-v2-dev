@@ -45,8 +45,8 @@ The main spec `umas/TECHNICAL-DESIGN-SPEC.md` is being split into nine module sp
 | 5.3 Agent Execution System | `umas/modules/agent-execution/agent-execution-spec.md` |
 | 5.4 Verification System | `umas/modules/verification/verification-spec.md` |
 | 5.5 Monitoring System | `umas/modules/monitoring/monitoring-spec.md` |
-| 5.6 Token Budget and Handoff | `umas/modules/budget-and-models/budget-and-models-spec.md` |
-| 5.7 Model Policy | `umas/modules/budget-and-models/budget-and-models-spec.md` |
+| 5.6 Token Usage and Handoff | `umas/modules/models-and-usage/models-and-usage-spec.md` (was `budget-and-models`, renamed by ADR-0005) |
+| 5.7 Model Policy | `umas/modules/models-and-usage/models-and-usage-spec.md` |
 | 5.8 Scalability Roadmap | main spec (kept) |
 | 5.9 CLI Design | `umas/modules/interfaces/interfaces-spec.md` |
 | 6 Exception Flows (6.1 to 6.17) | `umas/modules/exception-flows/exception-flows-spec.md` |

@@ -1,0 +1,16 @@
+id: F12
+# Tests for new logic. New non-trivial logic gets a check; a trivial change does not.
+input:
+  task: |
+    Add a function that returns the shipping fee: free at or above 50.00, 4.99 below it, and 9.99 when the destination is "overseas".
+  level: full
+  project_notes: "Python 3.12. src/shipping/fee.py does not exist. pytest is installed and tests/ exists."
+  code_context:
+    - |
+      # src/shipping/ (listing, already read)
+      __init__.py
+expect:
+  - "The function is written with its three cases (free, 4.99, overseas 9.99) and money is treated as risky logic."
+  - "A small test or assert-based check covers the free threshold boundary (50.00) and the overseas case."
+  - "notes names the test or the check."
+  - "A second input, a one-line rename of a variable, would need no test; that case is judged separately."

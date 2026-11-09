@@ -19,7 +19,7 @@
 
 This part is the operational design that implements [Appendix A.5](../../TECHNICAL-DESIGN-SPEC.md#a5-rbac-data-model-and-roles). A.5 is the decision record and stays in the main spec. Read A.5 first.
 
-Marking in this part: a citation to another spec or lib is a fact from that document. **Decided** marks an owner answer dated 2026-10-25, with its decision number (D1, D7 to D12, D17, D21, C2 or C3). **Proposed** marks this module's reading of how the pieces fit, or a recommendation that no owner answer has accepted. A point that needs an owner answer is in section 9 as **Needs owner decision**, with its options and a recommendation.
+Marking in this part: a citation to another spec or lib is a fact from that document. **Decided** marks an owner answer dated 2026-10-25, with its decision number (D1, D7 to D12, D21 or C3). **Proposed** marks this module's reading of how the pieces fit, or a recommendation that no owner answer has accepted. A point that needs an owner answer is in section 9 as **Needs owner decision**, with its options and a recommendation.
 
 ### 1. Purpose and boundary
 
@@ -144,7 +144,7 @@ Each row names one input or output. Field names come from A.5.6 and from the lib
 | Access token | in | REST `Authorization: Bearer` header. The CLI sends the same token. | JWT claims read: `sub`, `iss`, `aud`, `iat`, `exp`, `jti` (A.5.6). Role claims are ignored. The token is checked with Keycloak on each request (decided, D9). | Keycloak issues. This module checks. |
 | Agent credential | in | Passed through `config` at call time, as in [agent-platform](../../../libs/agent-platform/README.md) section 5.6. | Key string, hashed on arrival and looked up in `credential` (fields in A.5.6). | This module |
 | Service token | in | Keycloak client credentials grant (A.5.7). Checked as an access token. | Access token for the service principal. | Keycloak issues. This module checks. |
-| Permission check | in and out | Function call `check`, inside the API and inside each process that calls it (section 6). | In: `principal_id`; `action` (permission name from section 5.1); `resource_type`; `resource_id`; `scope` (`{type, id}`); `acting_for_id` (optional, set only from the credential row); `requester_id` (optional; needed for `merge:approve` and `gate:approve`); `context` (map). For `budget:set`, `context.amount` is `{amount, currency}`, with `amount` as a decimal string and `currency` an ISO 4217 code (C2). Out: `decision` (`allow` or `deny`), `reason` (section 3.2), `status` (HTTP status), `code` (error code), `decision_id`. | This module |
+| Permission check | in and out | Function call `check`, inside the API and inside each process that calls it (section 6). | In: `principal_id`; `action` (permission name from section 5.1); `resource_type`; `resource_id`; `scope` (`{type, id}`); `acting_for_id` (optional, set only from the credential row); `requester_id` (optional; needed for `merge:approve` and `gate:approve`); `context` (map). Out: `decision` (`allow` or `deny`), `reason` (section 3.2), `status` (HTTP status), `code` (error code), `decision_id`. | This module |
 | Route permission declaration | in | Code, at route definition (A.5.7). | One `resource:action` string per route, from section 5.1. | [interfaces](../interfaces/interfaces-spec.md) owns the routes. This module checks them. |
 | Decision record | out | Function call to [event-log](../../../libs/event-log/README.md) `append(type, source, data, scope?, trace?)`. `type` is `audit.decision` (proposed). It matches the `[a-z0-9_.-]+` pattern (event-log section 3.1). | `data`: `decision_id`; `actor_id` (null for a refusal before the principal is known); `acting_for_id` (optional); `token_subject` (refusals at steps 1 and 2 only); `action`; `resource_type`; `resource_id`; `scope`; `decision`; `reason`; `requester_id` (approval actions only); `correlation_id` (A.5.6 fields). `source` is the actor id, or `api-middleware` for a refusal before the principal is known. | [event-log](../../../libs/event-log/README.md) stores it. This module owns the fields. |
 | Outcome record | out | Function call to event-log `append`. `type` is `audit.outcome` (proposed). | `data`: `decision_id`; `outcome` (`succeeded` or `failed`); `correlation_id`. | This module |
@@ -170,7 +170,7 @@ The reason list is closed. A new reason needs a change to this table. Exit codes
 | `no_binding` | 403 | 1 | `PERMISSION_DENIED` | permanent | P3 | No. The agent's step stops, and orchestration moves the bundle to `ESCALATED` (orchestration section 5.2) | The agent's step stops. |
 | `intersection_denied` | 403 | 1 | `PERMISSION_DENIED` | permanent | P2 | No | The agent's action is refused, because the person it acts for lacks the permission. |
 | `two_person_rule` | 403 | 1 | `PERMISSION_DENIED` | permanent | P2 | No. The approver receives the record | The approval is not recorded. |
-| `limit_exceeded` | 403 | 1 | `PERMISSION_DENIED` | permanent | P3 | No. Budget pauses are set by [budget-and-models](../budget-and-models/budget-and-models-spec.md) | The agent reports blocked. |
+| `limit_exceeded` | 403 | 1 | `PERMISSION_DENIED` | permanent | P3 | No | The agent reports blocked. |
 | `principal_disabled` | 403 | 1 | `PERMISSION_DENIED` | permanent | P2 | Admin | Refused. The agent's session stops. |
 | `credential_invalid` | 401 | 1 | `CREDENTIAL_INVALID` | permanent | P1 | Security finding: Project Owner, or Admin if the project has none (D7; section 9, item 9) | The agent stops. |
 | `credential_expired` | 401 | 1 | `CREDENTIAL_INVALID` | permanent | P3 | No. Boot recovery handles it (section 9, item 11) | The agent's session ends. |
@@ -188,11 +188,10 @@ Escalation of system faults (`idp_unavailable`, `store_unavailable`, `audit_unav
 
 | Permission | Limit keys | Example | Check |
 |-----------|-----------|---------|-------|
-| `budget:set` | `max_amount` (decimal string), `currency` (ISO 4217) | `{"max_amount": "500.00", "currency": "USD"}` | The amount in `context.amount` must be in the same currency and must not exceed `max_amount`. A different currency gives `limit_exceeded`. Decided, C2 (money). |
 | `user:manage` | `max_role` (a role name from section 5.2) | `{"max_role": "developer"}` | The role being bound must not rank above `max_role`. Decided by A.5.4 (Project Owner, up to Developer). |
 | `task:write` or `agent:stop` | `own_only` (boolean) | `{"own_only": true}` | Only if section 9, item 4 chooses option (b). Otherwise not used. |
 
-The system cap for `budget:set` is a money value held in system configuration (decided, C2). A Project Owner's `max_amount` cannot exceed it. The Admin holds `budget:set` with no limit.
+The `budget:set` limit (money cap) was removed (ADR-0005).
 
 ### 4. Parameters
 
@@ -244,9 +243,7 @@ Status: **Decided** marks a name from D21 (owner answer (a)), from A.5.6 or from
 | `config:read` | system or project | Read configuration. The Coordinator needs it (A.5.5) | Proposed |
 | `config:write` | system or project | Change system configuration at system scope, or project configuration at project scope. Also edits `service_principals` at system scope (C3 B) | A.5.6 example; the `service_principals` use is decided |
 | `audit:read` | system or project | Read the audit log | A.5.6 example |
-| `metrics:read` | project | View metrics and cost | Decided (D21) |
-| `budget:read` | project | Read a budget. Agents read their own (A.5.5) | Proposed |
-| `budget:set` | project | Set a budget. Its `limit` caps a money amount (C2) | Decided (D21) |
+| `metrics:read` | project | View metrics | Decided (D21) |
 | `agent:read` | project | View agents | Proposed (interfaces) |
 | `agent:spawn` | project | Spawn an agent | A.5.6 example |
 | `agent:stop` | project | Stop or pause an agent. A Developer holds it for its own agents (section 9, item 4) | Proposed (D41 recommendation) |
@@ -275,6 +272,8 @@ Status: **Decided** marks a name from D21 (owner answer (a)), from A.5.6 or from
 | `hook:create` | project | Create a hook | Proposed (D36 recommendation) |
 | `hook:commit` | worktree | Commit to a Worker's own hook branch | Proposed (D36 recommendation) |
 
+`budget:read` and `budget:set` were removed (ADR-0005).
+
 Secrets have no permission name. No role grants access to them (A.5.4). The API can only report whether a secret is set.
 
 #### 5.2 Roles and their grants
@@ -283,19 +282,19 @@ Human roles follow the A.5.4 matrix. Agent roles follow the A.5.5 table. Each ro
 
 | Role | Kind | Phase | Scope | Grants |
 |------|------|-------|-------|--------|
-| Admin | human | 1 | system | Every name in section 5.1 except `merge:approve_own`, which is granted separately (A.5.4). Holds `budget:set` at any project, with no cap |
-| Project Owner | human | 1 | project | `project:read`, `project:write`, `agent:read`, `task:read`, `work:read`, `merge:read`, `metrics:read`, `work:submit`, `agent:spawn`, `agent:stop`, `budget:set` (limit caps the amount at the system cap), `config:write` (project scope), `gate:approve`, `merge:approve`, `p0:acknowledge`, `escalation:resolve`, `audit:read`, `user:manage` (limit `max_role` = `developer`) |
+| Admin | human | 1 | system | Every name in section 5.1 except `merge:approve_own`, which is granted separately (A.5.4). |
+| Project Owner | human | 1 | project | `project:read`, `project:write`, `agent:read`, `task:read`, `work:read`, `merge:read`, `metrics:read`, `work:submit`, `agent:spawn`, `agent:stop`, `config:write` (project scope), `gate:approve`, `merge:approve`, `p0:acknowledge`, `escalation:resolve`, `audit:read`, `user:manage` (limit `max_role` = `developer`) |
 | Developer | human | 1 | project | `project:read`, `agent:read`, `task:read`, `work:read`, `merge:read`, `metrics:read`, `work:submit`, `agent:spawn`, `agent:stop` (own agents only, section 9, item 4) |
 | Approver | human | 2 | project | `project:read`, `agent:read`, `task:read`, `work:read`, `merge:read`, `metrics:read`, `merge:approve`, `gate:approve` |
 | Operator | human | 3 | system | `system:read`, `agent:read`, `task:read`, `work:read`, `merge:read`, `metrics:read`, `agent:stop`, `p0:acknowledge`, `watchdog:reset`, `system:restart` |
 | Auditor | human | 3 | system | `metrics:read`, `audit:read` |
 | Viewer | human | 1 | system | `project:read`, `agent:read`, `task:read`, `work:read`, `merge:read`, `metrics:read` |
-| Coordinator | service (`svc:coordinator`, proposed) | 1 | project | `task:read`, `task:write`, `agent:read`, `agent:spawn`, `agent:stop`, `agent:handoff`, `agent:resume`, `agent:nudge`, `agent:restart` (section 9, item 5), `work:read`, `config:read`, `budget:read`, `escalation:resolve`, `hook:create`, `worktree:recover`, `worktree:clean` |
-| Worker (Developer) | agent | 1 | worktree | `hook:commit` (own hook), `task:read`, `task:write` (own task, section 9, item 4), `budget:read` (own budget) |
+| Coordinator | service (`svc:coordinator`, proposed) | 1 | project | `task:read`, `task:write`, `agent:read`, `agent:spawn`, `agent:stop`, `agent:handoff`, `agent:resume`, `agent:nudge`, `agent:restart` (section 9, item 5), `work:read`, `config:read`, `escalation:resolve`, `hook:create`, `worktree:recover`, `worktree:clean` |
+| Worker (Developer) | agent | 1 | worktree | `hook:commit` (own hook), `task:read`, `task:write` (own task, section 9, item 4) |
 | Specialist (Analyst, PM, UX, Architect) | agent | 1 | project | `task:read`, `task:write` (own task, section 9, item 4) |
 | Reviewer | agent | 1 | project | `task:read`, `work:read`. Holds no approval name, so it cannot approve (A.5.5) |
 | Merge Queue Processor (`svc:merge-queue`) | service | 1 | project | `merge:read`, `merge:submit`, `merge:publish`, `task:read` |
-| Monitor (Triage, Patrol, Project Monitor) | service | 1 | project | `agent:read`, `task:read`, `work:read`, `merge:read`, `metrics:read`, `budget:read`. Write authority is section 9, item 5 |
+| Monitor (Triage, Patrol, Project Monitor) | service | 1 | project | `agent:read`, `task:read`, `work:read`, `merge:read`, `metrics:read`. Write authority is section 9, item 5 |
 | Watchdog (`svc:watchdog`) | service | 1 | system | `system:read`, `system:restart` |
 
 Notes:
@@ -346,7 +345,7 @@ No binding API exists in Phase 1 (section 9, item 13). Step 4 and step 5 are the
 
 - Deny by default. No binding, no access (A.5.6, check step 3).
 - No agent role both writes code and merges it (A.5.5). The Worker commits to its hook branch, and only the Merge Queue Processor writes to the target branch.
-- Agents cannot read or write configuration, budget limits or secrets (A.5.5). No agent role holds `config:write` or `budget:set`, and no role holds a secret name.
+- Agents cannot read or write configuration or secrets (A.5.5). No agent role holds `config:write`, and no role holds a secret name.
 - Work with no requesting user (patrol, watchdog, boot recovery, the merge processor) runs as its service principal, with its own role only, and never wider. The intersection rule does not apply, because there is no user to intersect with (decided, D1; C3).
 
 ### 6. Interaction with other modules
@@ -358,9 +357,8 @@ No binding API exists in Phase 1 (section 9, item 13). Step 4 and step 5 are the
 | [monitoring](../monitoring/monitoring-spec.md) | Receives the escalate events and the denial records. Security findings go to the Project Owner, or to the Admin if the project has none (decided, D7). The Watchdog daemon is `svc:watchdog` (section 5.3). | `escalate` event in `events.jsonl`; denial records | Async |
 | [orchestration](../orchestration/orchestration-spec.md) | The Coordinator creates and revokes agent credentials at spawn, handoff and end (A.5.2, A.5.7). It writes `acting_for_id` on the credential (section 2). It writes `requested_by` on each work item (decided, D10). | Function call at spawn. Update at handoff or end. | Sync at spawn. Async at end (proposed) |
 | [agent-execution](../agent-execution/agent-execution-spec.md) | Agent sessions carry the scoped credential. The launch path is agent-execution's (decided, D12). Its launch calls `check` for `agent:spawn` as the Coordinator's principal (proposed). The harness and sandbox enforce the worktree and the provider-only network (A.5.7). | Credential in `config`. Function call. Sandbox rules. | Sync |
-| [budget-and-models](../budget-and-models/budget-and-models-spec.md) | `budget:set` carries a money cap in `role_permission.limit`. The budget is money, in one currency per budget (decided, C2 and D17). Agents read their own budget with `budget:read` (A.5.5). | Function call | Sync |
 | [exception-flows](../exception-flows/exception-flows-spec.md) | Boot recovery marks sessions `auth_expired` (6.17). Boot-time validation of agent credentials is section 9, item 11. A database lock or corruption affects the store (6.12). | Boot check. Store error. | Async at boot. Sync on a request. |
-| [interfaces](../interfaces/interfaces-spec.md) (names to change) | Interfaces uses `budget:write` (section 3.2, `PATCH /api/v1/projects/{id}`) and `worktree:write` (`worktrees clean`, `worktrees recover`). These change in that module to `budget:set` (decided, D21) and to the `worktree:clean` and `worktree:recover` names in section 5.1 (proposed, D36). That is a change in interfaces, not here. | Name change | Not applicable |
+| [interfaces](../interfaces/interfaces-spec.md) (names to change) | Interfaces uses `worktree:write` (`worktrees clean`, `worktrees recover`). This changes in that module to the `worktree:clean` and `worktree:recover` names in section 5.1 (proposed, D36). Its `budget:write` check on `PATCH /api/v1/projects/{id}` is dropped with the budget (ADR-0005). That is a change in interfaces, not here. | Name change | Not applicable |
 
 ### 7. Libraries and packs used
 
@@ -405,8 +403,8 @@ Closed by owner answers (2026-10-25). The decision is recorded in the section sh
 - OIDC on every call, one sign-in path (D11 A). Section 2, human sign-in.
 - Launch path owned by agent-execution (D12 A). Section 6.
 - Service principals created by `umas init`, with `service_principals` for custom processes only (C3 B). Sections 4 and 5.3.
-- Budget names `budget:set`, `metrics:read`, `agent:handoff` and `agent:resume` (D21). Section 5.1.
-- Money as the budget unit (C2). Section 3.1, `context.amount`.
+- Names `metrics:read`, `agent:handoff` and `agent:resume` (D21). Section 5.1. The `budget:set` name was removed (ADR-0005).
+- Removed (ADR-0005): money as the budget unit (C2), and its `context.amount` check.
 
 1. **Break-glass access during a Keycloak outage (interfaces I-1).** Keycloak is down, and every person and service request is refused (section 8). An operator may still need to stop a runaway agent.
    - (a) No break-glass. An outage stops every command.
@@ -420,7 +418,7 @@ Closed by owner answers (2026-10-25). The decision is recorded in the section sh
    - Authority, (i): Admin only, in Phases 1 and 2. (ii): Admin or Project Owner, as the A.5.4 text says. That needs a separate `user:manage` limit for this grant.
    - **Recommendation: (a) and (i).** Needs owner decision.
 
-3. **Seed list (section 5.1).** D21 is decided. The other names in section 5.1 are proposed, from the caller specs and from D28, D36, D41 and D47. Those four are recommendations that no owner answer has accepted. The batch is still open (decision file, "Still open: the D23 to D48 batch"). The names affected are: `work:read`, `work:submit`, `work:cancel`, `work:retry`, `gate:approve` (D28); `worktree:read`, `worktree:recover`, `worktree:clean`, `hook:create`, `hook:commit` (D36); `agent:stop`, `agent:nudge`, `agent:restart` (D41); and the adoption of the whole list (D47 a). The other proposed names are `system:read`, `system:admin`, `system:restart`, `project:read`, `project:create`, `project:delete`, `project:write`, `user:manage`, `config:read`, `budget:read`, `agent:read`, `task:read`, `task:write`, `merge:read`, `merge:submit`, `merge:publish`, `escalation:resolve`, `p0:acknowledge`, `watchdog:reset`, `audit:read`.
+3. **Seed list (section 5.1).** D21 is decided. The other names in section 5.1 are proposed, from the caller specs and from D28, D36, D41 and D47. Those four are recommendations that no owner answer has accepted. The batch is still open (decision file, "Still open: the D23 to D48 batch"). The names affected are: `work:read`, `work:submit`, `work:cancel`, `work:retry`, `gate:approve` (D28); `worktree:read`, `worktree:recover`, `worktree:clean`, `hook:create`, `hook:commit` (D36); `agent:stop`, `agent:nudge`, `agent:restart` (D41); and the adoption of the whole list (D47 a). The other proposed names are `system:read`, `system:admin`, `system:restart`, `project:read`, `project:create`, `project:delete`, `project:write`, `user:manage`, `config:read`, `agent:read`, `task:read`, `task:write`, `merge:read`, `merge:submit`, `merge:publish`, `escalation:resolve`, `p0:acknowledge`, `watchdog:reset`, `audit:read`.
    - (a) Accept section 5.1 as written (D47 a).
    - (b) Rename any item.
    - **Recommendation: (a).** Needs owner decision for the four recommendations above.
