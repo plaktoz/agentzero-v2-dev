@@ -58,7 +58,6 @@ These are in the spec, not the format. Each one would stop a build, or a fixture
 5. **`route` and the other seeded keys are undeclared.** `skip_when: "route == 'simple'"` and the `{{work_bundle.*}}`, `{{hook_path}}`, `{{project.testing.mode}}` placeholders need a seeded-key table. F7 rejects references to keys that are not prior outputs, so under F7 `route` would fail to load.
 6. **`agent_role: "analyst"` is not in the enum.** §4.3 lists `worker | architect | pm | ux | developer | reviewer`. §6.1 `define-impact` uses `analyst`.
 7. **`decision-artifacts/write` is not a lib operation.** `libs/decision-artifacts/README.md` has `create(kind, title, sections{}, ...)` (line 94). There is no `write`.
-8. **Pack independence (packs/README.md, rule 3).** "A pack does not import or require another." The built-in playbooks name four packs (`specialist-agents`, `test-policy`, `two-axis-review`, `anti-slop`) and two libs (`decision-artifacts`, `test-adapters`). The runner itself may be independent. Its built-in playbooks are consumer-side content.
 9. **No Coordinator in this repo.** The spec's consumer is UMAS's Coordinator. It is described in `umas/*.md` (64 mentions). No code exists for it here (search of `*.py`, `*.ts`, `*.go`, `*.java` found none). The engine has no home yet.
 10. **Built-in playbooks fail the pack YAML subset.** The test-policy parser (`yaml_subset.py`) rejects them. If packs are meant to stay in that subset (its docstring says every data file does), the playbooks need block style.
 

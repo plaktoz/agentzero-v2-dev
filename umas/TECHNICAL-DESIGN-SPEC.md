@@ -1433,7 +1433,7 @@ Today there is no broker. The libs use files (`events.jsonl`, heartbeat files, s
 
 #### A.4.5 Effects on the existing specs
 
-Done on 2026-10-25 (see `docs/tasks-stack-python-2026-10-25.md`):
+Done on 2026-10-25:
 - The Rust code in section 12 of `hook-store` (2 blocks), `budget-meter` and `watchdog` is marked legacy: the language is not in the stack and the code is to be ported to Python.
 - The implementation-language table in the libs README now says Python for the libs that listed Go, Rust or "Any".
 - The summary document, the stack spec, the build assessment, `UMAS-DNA.md` and the setup guide now state Python as the chosen stack, and keep Rust wording only where it describes the source design.
