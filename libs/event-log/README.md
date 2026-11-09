@@ -221,7 +221,8 @@ This library keeps its own typed errors and does not import any error library. A
 |----------|---------|
 | `.umas/events.jsonl` | `dir = .umas`, file name configurable (see deviation below) |
 | Escalation: `{"event":"escalate","severity":"P1","reason":"..."}` | `append(type="escalate", source=<agent>, data={severity, reason})`. Coordinator uses `poll` with its own cursor |
-| Handoff request | `append(type="handoff_request", data={task_id})`; the Scheduler polls |
+| Handoff request | `append(type="handoff_request", data={session_id, task_id, reason, context_used, context_limit, packet})`; the Scheduler polls. See N1 in the round-2 assessment for the packet size |
+| Monitor escalation | `append(type="monitor_escalation", data={session_id, task_id, context_used, context_limit})`; the Coordinator polls |
 | Session history (`SessionHistoryInterface`) | Event types `session_started`, `session_ended`, `decision_made`, `file_modified`, `commit_created`, `token_usage`, ... with `fold` reducers for `query_sessions` and `get_session_context` |
 | Audit retention, 90 days | `retain_days = 90` |
 | `umas debug replay` | `read(scope=<session>)` or `fold` |
@@ -514,11 +515,10 @@ event_types:
       message: string
       files: array[string]
       
-  escalation_triggered:
+  escalate:
     data:
       severity: enum[P0, P1, P2, P3]
       reason: string
-      escalated_to: string
 
   monitor_escalation:
     data:

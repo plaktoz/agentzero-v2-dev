@@ -162,7 +162,7 @@ Written atomically to the worktree root after every step. Plain Markdown; both h
 | `execute(session, execute_step_fn) -> SessionResult` | Run the session loop: call `execute_step_fn` repeatedly until `done`, `blocked`, or a threshold is reached. Section 5.1. |
 | `checkpoint(session, step) -> CommitRef` | Write `STATE.md`, commit the worktree with a checkpoint message, append a `step_complete` event. Called automatically by `execute` per `checkpoint_every`; also callable directly. |
 | `done(session, step) -> CommitRef` | Write final `STATE.md`, commit the worktree with the done message, append a `session_ended` event with `status: done`. |
-| `escalate(session, blocked) -> ()` | Append a `session_escalated` event with the severity and reason. Does not stop execution; the caller decides whether to continue or abort. |
+| `escalate(session, blocked) -> ()` | Append an `escalate` event (`data: {severity, reason}`) with the severity and reason. Does not stop execution; the caller decides whether to continue or abort. |
 | `pack(sections, limit, counter) -> Packed` | Fit sections into `limit` tokens. Section 5.9. |
 | `handoff(session, reason) -> HandoffPacket` | Call `pack()` itself (section 5.9) on the sections the caller registered, write `HANDOFF.md`, commit with handoff message, append a `handoff_request` event (section 5.8). Returns the packet. `reason` is `context_graceful` or `context_emergency`. The caller does not call `pack()` for a handoff; it only registers sections. On failure see section 5.1. |
 | `pause(session, reason) -> CommitRef` | Write `PAUSE.md` and `STATE.md`, commit with pause message, set status `machine_paused`, append a `session_paused` event. Safe to call from a signal handler. Section 5.6. |
@@ -307,7 +307,7 @@ All events are appended via [event-log](../event-log/README.md) `append()`. The 
 |------|-------------|-------------------|
 | `session_started` | `create()` | `task_id`, `hook_path`, `context_limit` |
 | `step_complete` | `checkpoint()` | `step_n`, `summary`, `token_used`, `decisions[]` |
-| `session_escalated` | `escalate()` | `severity`, `reason` |
+| `escalate` | `escalate()` | `severity`, `reason` |
 | `handoff_request` | `handoff()` | `session_id`, `task_id`, `reason` (`context_graceful` or `context_emergency`), `context_used`, `context_limit`, `packet` (the HandoffPacket, section 3.5) |
 | `session_paused` | `pause()` | `reason`, `token_used`, `pause_file: "PAUSE.md"` |
 | `session_resumed` | boot recovery in consuming app | `resumed_from: "machine_paused"\|"auth_expired"`, `session_id` |

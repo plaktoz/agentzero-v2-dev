@@ -53,7 +53,7 @@ UMAS uses these names. The library enforces no catalogue; these are documented f
 | `token.used` | tokens | `token-ledger` entries (tagged `model`) |
 | `task.duration_ms` | ms | `event-log` (session_started → session_ended) |
 | `task.handoff_rate` | 0–1 | `event-log` (handoff_request / session count) |
-| `task.escalation_rate` | 0–1 | `event-log` (session_escalated / session count) |
+| `task.escalation_rate` | 0–1 | `event-log` (escalate / session count) |
 | `merge_queue.success_rate` | 0–1 | `merge-queue` batch reports |
 | `test.coverage_pct` | % | test result |
 | `test.duration_ms` | ms | test result |
@@ -160,7 +160,7 @@ The three `ingest_*` operations are idempotent: each source record carries a det
 `ingest_event_log` derives computed metrics:
 - Pairs of `session_started` + `session_ended` → `task.duration_ms` (tagged with `agent_id`, `task_id`)
 - `handoff_request` events → increments `task.handoff_rate` denominator
-- `session_escalated` events → `error.p1_count` or `error.p0_count` by severity
+- `escalate` events → `error.p1_count` or `error.p0_count` by severity
 
 `ingest_test_result` maps these fields of the test result:
 - `coverage.line_percent` → `test.coverage_pct`
