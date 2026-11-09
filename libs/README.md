@@ -14,7 +14,7 @@
 | [hook-store](./hook-store/README.md) | Durable git-worktree "hooks" that hold a unit of work's state across crashes and handoffs | Crash-safe workspaces for any agent harness or long-running script |
 | [event-log](./event-log/README.md) | Append-only JSONL event log with cursor-based reading, rotation, and corruption recovery | Audit trail, replay, or lightweight message bus between local processes |
 | [merge-queue](./merge-queue/README.md) | Batch merge with prefix-bisect, driven by any verify command | A local or CI merge queue for any repo, with no agents involved |
-| [test-adapters](./test-adapters/README.md) | Run pytest, jest, or cargo test and get one normalised result | Any tool that needs test results without per-framework parsing |
+| [test-adapters](./test-adapters/README.md) (external repo, 2026-11-09) | Run pytest or jest and get one normalised result, with exit codes that separate a test failure from a tooling fault and from a timeout | Any tool that needs test results without per-framework parsing. UMAS uses it as an external dependency |
 | [budget-meter](./budget-meter/README.md) | Token and cost budgets, threshold events, admission control, handoff-packet packing | Budget control for any LLM application |
 | [llm-gateway](./llm-gateway/README.md) | Provider-neutral LLM calls with retry, failover, and rate limiting | Provider portability. Wraps the provider SDKs ([ADR-0003](../docs/decisions/ADR-0003-llm-gateway-wraps-provider-sdks.md)) |
 | [watchdog](./watchdog/README.md) | Heartbeat and progress supervision with a restart and escalation ladder | Supervising any set of long-running local processes |
@@ -90,7 +90,7 @@ The language is decided: Python, per [TECHNICAL-DESIGN-SPEC.md Appendix A.4](../
 | kc-axi | Python, installed as a package (`pip`, `uv` or `pipx`). Package name `kc-axi`; minimum Python version 3.11 (decided 2026-10-27, kc-axi spec section 11 item 26) | Must run with no shell, `jq` or `grep`, so that it can also run on Windows later; the source script was Bash |
 | task-queue | Python | File locking, an append-only log, and graph walks. A queue shared by many processes |
 | event-log, budget-meter | Python | File I/O and arithmetic |
-| test-adapters | Python | Subprocess and report parsing |
+| test-adapters | Python, in its own repository ([plaktoz/test-adapters](https://github.com/plaktoz/test-adapters)) | Subprocess and report parsing |
 | watchdog | Python, supervised by the OS service manager (launchd or systemd) | Needs to outlive the things it supervises |
 | decision-artifacts | Python or TypeScript | Text processing, easy skill packaging |
 | error-classifier | Python | Pure functions over data files; the record schema must be identical in every language |
@@ -132,10 +132,10 @@ The default view is produced from the same data as `--json`, by an encoder at th
 | 9. Contextual disclosure | Up to three `help` lines with real ids filled in, only when a next step exists: after a truncated list, an error, or a state change. Omitted when the output is self-contained |
 | 10. Consistent help | The no-argument view starts with `bin:` and `description:`. Each subcommand has a short `--help`. `--version` answers without loading any data |
 
-**Exit codes.** `0` success, including a no-op and an empty result. `1` the command failed (the typed code is in the output). `2` usage error. A library MAY add codes only if its spec explains why; none of the five libs below does.
+**Exit codes.** `0` success, including a no-op and an empty result. `1` the command failed (the typed code is in the output). `2` usage error. A library MAY add codes only if its spec explains why. Only `test-adapters` does (3 for a tooling fault, 4 for a timeout), and its external requirements explain why.
 
 **Two kinds of answer.**
-- A command whose job is to *judge* (`test-adapters run`) exits 1 when the verdict is not a pass, because callers branch on the exit code.
+- A command whose job is to *judge* (`test-adapters run`) exits non-zero when the verdict is not a pass, because callers branch on the exit code. It uses 1 for a failed test, 3 for a tooling fault and 4 for a timeout.
 - A command whose job is to *decide admission* (`task-queue claim`, `budget-meter reserve`) exits 0 for both answers, and the output says which. "Nothing to claim" and "deferred" are normal answers, not failures.
 
 **TOON note.** AXI names TOON as the encoding. The project's landing page says uniform arrays carry a `[N]{fields}` header, then rows, and that structure is by indentation; I did not read the full specification and did not check for a Python implementation. The examples in the libs use that shape and are illustrative. Our libraries only emit flat objects and uniform arrays, so a small hand-written encoder for that subset is a fallback if no maintained Python package fits.
@@ -151,14 +151,14 @@ The default view is produced from the same data as `--json`, by an encoder at th
 
 | Library | Fit | Why |
 |---------|-----|-----|
-| [test-adapters](./test-adapters/README.md), [task-queue](./task-queue/README.md), [event-log](./event-log/README.md) (reads), [merge-queue](./merge-queue/README.md) (`status`), [budget-meter](./budget-meter/README.md) (`status`) | Strong | Agents read their output often and it can be large. These five carry an AXI subsection in section 4 |
+| [test-adapters](./test-adapters/README.md), [task-queue](./task-queue/README.md), [event-log](./event-log/README.md) (reads), [merge-queue](./merge-queue/README.md) (`status`), [budget-meter](./budget-meter/README.md) (`status`) | Strong | Agents read their output often and it can be large. The four in this repository carry an AXI subsection in section 4; `test-adapters` carries it in its own repository |
 | hook-store, metrics-store, decision-artifacts (`check`), watchdog (`check`), agent-session, error-classifier | Medium | Reviewed later |
 | llm-gateway, agent-platform | Low | Used by programs, not by an agent at a prompt |
 
 ### Open points for the AXI review
 
 1. Is TOON the default encoding? [kc-axi](./kc-axi/README.md) v0.4 uses its own compact list form (uniform arrays with a `shown of total` header) and does not claim TOON. It follows the exit codes 0, 1 and 2, puts errors on stdout and has a default limit of 20. It records one deviation: no `--full` flag (kc-axi section 10).
-2. Exit code 1 for `test-adapters run` when tests fail, versus AXI's reading of 1 as "the tool errored". Kept as 1 here because [merge-queue](./merge-queue/README.md) depends on it.
+2. Exit code 1 for `test-adapters run` when tests fail, versus AXI's reading of 1 as "the tool errored". Settled in the external requirements (section 5.4): 1 is a failed test, 3 is a tooling fault, 4 is a timeout, so the queue can tell them apart. Open for AXI only as a deviation to record.
 3. Whether `reserve` should exit non-zero on `Deferred` for shell callers. Kept at 0 here.
 4. Which agent platforms get the session-start hook (AXI names Claude Code, Codex and OpenCode), and whether to also ship a skill file per lib.
 5. A shared Python package for the encoder and the flag rules, or each lib carrying its own copy. A shared package would be a dependency between libraries (rule 2), so the likely answer is a copy per lib, or a separate tiny library.
@@ -172,7 +172,7 @@ This order minimises blocked work for any consumer.
 
 1. **event-log** and **budget-meter** — smallest, and almost every other library emits to or reads from them.
 2. **hook-store** — the durable state foundation everything else builds on.
-3. **test-adapters**, then **merge-queue**.
+3. **test-adapters** (external repo; requirements only so far), then **merge-queue**.
 4. **watchdog**.
 5. **error-classifier** — small, no dependencies. Build early so all other libraries' typed errors can map to one shared record.
 6. **decision-artifacts** — independent, can be built in parallel at any point.
