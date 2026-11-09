@@ -259,7 +259,7 @@ This library keeps its own typed errors. A consumer that wants one error vocabul
 | UMAS need | Mapping |
 |-----------|---------|
 | Scheduler `ready_queue` | `ready()` |
-| "Dispatches agents up to the concurrency limit" | `max_claimed`. No `admit` rule is needed: the budget check that used one was removed (ADR-0005) |
+| "Dispatches agents up to the concurrency limit" | `max_claimed`. No `admit` rule is needed |
 | `unblock_dependents`, `mark_complete` | Inside `complete` (section 5.3) |
 | `check_parent_auto_complete` | Groups (section 3.4) |
 | Task blocked by a task that is already `completed` (self-healing at runtime) | Covered: readiness is computed from dependency state when a task is added and after each completion |

@@ -2,8 +2,6 @@
 
 > **Stack note (2026-10-25):** The language choices in this document are superseded. The stack is Python (TypeScript only where no Python option exists). Rust and Go references describe the source design. See umas/TECHNICAL-DESIGN-SPEC.md Appendix A.4.
 
-> **Budget requirements removed (2026-11-09, ADR-0005):** UMAS records tokens used, model and timestamp for each LLM call in the token ledger. It does not budget, limit, price, pause or alert on spend. The context-window handoff (90% graceful, 95% emergency) is kept.
-
 **Version:** 2.0
 **Date:** October 21, 2026
 **Status:** Active — Unified
@@ -28,7 +26,7 @@ Reusable parts of the design are specified separately. Each one is usable withou
 | Set | Index | Contents |
 |-----|-------|----------|
 | Tier 1, libraries (13) | [libs/README.md](../libs/README.md) | [hook-store](../libs/hook-store/README.md), [event-log](../libs/event-log/README.md), [merge-queue](../libs/merge-queue/README.md), [test-adapters](https://github.com/plaktoz/test-adapters), [token-ledger](../libs/token-ledger/README.md), [llm-gateway](../libs/llm-gateway/README.md), [watchdog](../libs/watchdog/README.md), [decision-artifacts](../libs/decision-artifacts/README.md), [error-classifier](../libs/error-classifier/README.md), [agent-platform](../libs/agent-platform/README.md), [agent-session](../libs/agent-session/README.md), [metrics-store](../libs/metrics-store/README.md), [task-queue](../libs/task-queue/README.md) |
-| Tier 2, content packs (9) | [packs/README.md](../packs/README.md) | [minimalism-ladder](../packs/minimalism-ladder/minimalism-ladder-spec.md), [anti-slop](../packs/anti-slop/anti-slop-spec.md), [communication-modes](../packs/communication-modes/communication-modes-spec.md), [two-axis-review](../packs/two-axis-review/two-axis-review-spec.md), [specialist-agents](../packs/specialist-agents/specialist-agents-spec.md), [router-heuristic](../packs/router-heuristic/router-heuristic-spec.md), [grilling](../packs/grilling/grilling-spec.md), [test-policy](../packs/test-policy/test-policy-spec.md), [playbook-runner](../packs/playbook-runner/playbook-runner-spec.md) |
+| Tier 2, content packs (7 here, 2 pointers to agent-garage) | [packs/README.md](../packs/README.md) | [minimalism-ladder](https://github.com/plaktoz/agent-garage), [anti-slop](https://github.com/plaktoz/agent-garage), [communication-modes](../packs/communication-modes/communication-modes-spec.md), [two-axis-review](../packs/two-axis-review/two-axis-review-spec.md), [specialist-agents](../packs/specialist-agents/specialist-agents-spec.md), [router-heuristic](../packs/router-heuristic/router-heuristic-spec.md), [grilling](../packs/grilling/grilling-spec.md), [test-policy](../packs/test-policy/test-policy-spec.md), [playbook-runner](../packs/playbook-runner/playbook-runner-spec.md) |
 
 ### Key changes in v2.0
 
@@ -333,7 +331,7 @@ Daemon (Python) ← heartbeat every 3 min
 
 **Key Concepts:**
 - Hook-based work assignment (work tied to hook, not agent)
-- Graceful handoff at 90% of the model's context window; emergency handoff at 95%. Handoff is not a spend limit
+- Graceful handoff at 90% of the model's context window; emergency handoff at 95%.
 - Context compression for efficiency
 - Sequential, parallel, and collaborative handoff patterns
 
@@ -469,7 +467,6 @@ WebSocket: /ws/events
 
 ### Token Usage and Context Window
 - Tokens used, model and timestamp recorded per LLM call (token ledger)
-- No budgets, limits, prices or pauses on usage
 - Context-window handoff at 90% (graceful) and 95% (emergency) of the model's context window
 
 ---

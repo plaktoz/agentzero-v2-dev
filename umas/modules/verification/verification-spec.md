@@ -220,7 +220,7 @@ The sync or async column is proposed [P]. Each row gives the carrier named in th
 - [two-axis-review](../../../packs/two-axis-review/two-axis-review-spec.md): the Standards and Spec passes, the finding schema and the gate. [S: two-axis-review §1, §4, §5.6]
 - [test-policy](../../../packs/test-policy/test-policy-spec.md): selective and strict modes, risky units and the `missing_tests` gate. [S: test-policy §1, §4, §5.5]
 - [event-log](../../../libs/event-log/README.md): flaky history and audit events. Its interface is not quoted here [P].
-- [anti-slop](../../../packs/anti-slop/anti-slop-spec.md): not in the merge flow. The Standards pass can cite its code rules. [S: two-axis-review §9; anti-slop §5.4]
+- anti-slop (removed pack; skill now [unslop](https://github.com/plaktoz/agent-garage), prose only): not in the merge flow. The Standards pass can cite the former pack's code rules, which are in this repo's history at `44c1ef6`. [S: two-axis-review §9; anti-slop §5.4]
 
 Language: Python for every component. [S: A.4.6; A.5.9 stack table]
 

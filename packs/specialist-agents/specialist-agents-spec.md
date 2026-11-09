@@ -52,7 +52,7 @@ alignment:      string?       summary from a grilling session, if one occurred
 | Product Manager | `press_release` (headline, summary, problem, solution, quote?), `faq[{q, a}]`, `user_stories[{as_a, i_want, so_that, acceptance[]}]`, `success_metrics[{metric, target, how_measured}]` |
 | UX Designer | `flows[{name, steps[]}]`, `wireframes[{screen, text_layout}]`, `components[{name, states[], notes}]`, `interactions[]`, `accessibility_notes[]` |
 | Architect | `decision` (ADR: context, decision, consequences, alternatives), `stack[{choice, reason, installed_already: bool}]`, `api_contracts[]`, `data_models[]`, `risks[]` |
-| Developer | `plan[]`, `ladder_record` (see [minimalism-ladder](../minimalism-ladder/minimalism-ladder-spec.md)), `changes[]`, `tests[{target, why}]`, `shortcuts[]`, `unresolved[]` |
+| Developer | `plan[]`, `ladder_record` (see [minimalism-ladder](https://github.com/plaktoz/agent-garage)), `changes[]`, `tests[{target, why}]`, `shortcuts[]`, `unresolved[]` |
 
 Every output includes `role`, `pack_version`, and `based_on` (IDs of prior outputs it used).
 

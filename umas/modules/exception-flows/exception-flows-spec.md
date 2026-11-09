@@ -1,7 +1,7 @@
 # Exception flows — module spec
 
 > Part of the UMAS technical design. Main spec: [TECHNICAL-DESIGN-SPEC.md](../../TECHNICAL-DESIGN-SPEC.md) · Module map: [module map](../../TECHNICAL-DESIGN-SPEC.md#5-component-design)
-> **Owns:** The 17 exception flows in section 6, as one cross-cutting view of trigger, detection, recovery and the state each flow leaves.
+> **Owns:** The 16 exception flows in section 6 (there is no 6.6; the other numbers are kept), as one cross-cutting view of trigger, detection, recovery and the state each flow leaves.
 > **Uses:** [agent-session](../../../libs/agent-session/README.md) · [watchdog](../../../libs/watchdog/README.md) · [llm-gateway](../../../libs/llm-gateway/README.md) · [agent-platform](../../../libs/agent-platform/README.md)
 > **Depends on modules:** [monitoring](../monitoring/monitoring-spec.md) · [verification](../verification/verification-spec.md) · [orchestration](../orchestration/orchestration-spec.md) · [models-and-usage](../models-and-usage/models-and-usage-spec.md)
 
@@ -77,12 +77,6 @@ Worktree branches committed before deletion still exist in the Git object store.
 | `binary` | Cannot chain — warn, skip, polling-only mode |
 
 On `umas update`, only the `# umas-managed` marker line is replaced; all other hook entries are left untouched.
-
----
-
-### 6.6 Removed (ADR-0005)
-
-This flow is removed: UMAS has no token budget, so no flow starts on one.
 
 ---
 
@@ -281,7 +275,7 @@ Each claim is **from source** (the section or lib README is cited) or **proposed
 
 ### 1. Purpose and boundary
 
-- This module gives one view of the 17 flows in section 6: trigger, detection, recovery and state. **From source:** section 6.
+- This module gives one view of the 16 flows in section 6 (there is no 6.6): trigger, detection, recovery and state. **From source:** section 6.
 - It sets one shared recovery pattern that each flow follows (see 2.2 below). **Proposed.**
 - It does not change any flow. Each flow stays in section 6. Each owner module runs its own detection and recovery (Part A, section 6). **Proposed.**
 - It does not classify with a model. Classification is rule-based. **From source:** [error-classifier](../../../libs/error-classifier/README.md) section 5.1.
@@ -299,7 +293,6 @@ Severity comes from section 6 where section 6 names one. Recoverability comes fr
 | 6.3 Corrupted `.umas/` directory | Missing or corrupt files | `umas init --project`; `umas health-check` | `umas init --project`, which is idempotent | Missing files recreated. Bad `config.yaml` saved as `.bak`. Bad `events.jsonl` saved, and an empty log started | Not given |
 | 6.4 Project moved or renamed | Project path changed | As 6.1 | Re-register at the new path | `path` column updated. History kept | Not given |
 | 6.5 Git hook conflict | Existing hook manager found | `umas init --project`; `umas update` | UMAS installs or chains its hook by hook type | `# umas-managed` line in the hook file. Polling-only mode for `binary` | Not given |
-| 6.6 Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) |
 | 6.7 LLM provider failure mid-task | 429, 5xx, timeout over 30 s, or 401/403 | [llm-gateway](../../../libs/llm-gateway/README.md) error classes | Retry, then failover. With no fallback, human runs `umas agents resume <session-id>` | `STATE.md` in the worktree. P0 escalation (401/403) or P1 escalation (no fallback) | 401/403: P0. No fallback: P1. 429, 5xx and timeout: transient. 401/403: permanent (from source: llm-gateway section 3.3) |
 | 6.8 Stale worktrees after agent crash | Agent crash leaves a worktree. Age 24 h, then 7 days | `umas health-check`, by age | Human, or `umas worktrees recover <name>` (triage agent) | Worktree marked `stale`. Tagged `stale-dirty` if uncommitted changes. Never cleaned automatically when dirty | Not given |
 | 6.9 Merge queue bisect finds no clean subset | Bisect finds no passing subset | Merge queue bisect | Originating agents re-spawned. After 3 consecutive failures per PR: P1 escalation. Human resets with `--reset-retries` | PR `blocked: failed_in_isolation`. Retry count | P1 beyond 3 failures. Recoverability not given |
@@ -376,7 +369,6 @@ Every value comes from section 6 or from a lib that section 6 uses. A value with
 | Lock wait | duration | 5 s | Text only (6.12, 6.13) | Time a write waits for `~/.umas/.lock` before it fails |
 | ENOSPC retry delay | duration | 5 s | Text only (6.16) | Wait before the one retry of a failed `git commit` |
 | Disk thresholds | size | 2 GB, 500 MB, 100 MB | Text only (6.16) | Free space that raises P2, P1 and P0 |
-| 6.6 Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) |
 | Provider backoff | seconds | 5, 15, 45 | [llm-gateway](../../../libs/llm-gateway/README.md) policy (section 3.3) | Delay between 429 retries |
 | Provider timeout | seconds | 30 | [llm-gateway](../../../libs/llm-gateway/README.md) `timeout` (section 3.3) | Wait before the 2 timeout retries |
 | Provider 5xx retries | count | 3 | [llm-gateway](../../../libs/llm-gateway/README.md) policy (section 3.3) | Immediate retries before failover |
@@ -400,7 +392,6 @@ No permission name in the snapshot covers most of these actions. The table gives
 | Acknowledge a P0 escalation | Admin, Project Owner, Operator (A.5.4) | Not named |
 | Reset a failed watchdog node or restart a service | Admin, Operator (A.5.4) | Not named |
 | Retry a work bundle with `--reset-retries` | Human (not in the A.5.4 table) | Not named |
-| 6.6 Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) |
 | Recover a stale worktree: `umas worktrees recover <name>` | Human, through a triage agent (6.8) | Not named |
 | Commit a checkpoint and write `PAUSE.md` on pause | Agent, in its own worktree (A.5.5) | Agent role scope. No permission name |
 
@@ -430,7 +421,6 @@ Owner assignments are **proposed** unless the section 6 text names the owner. Ca
 - [error-classifier](../../../libs/error-classifier/README.md): record shape, P0 to P3, recoverability, `retry_plan`. Sections 3.1 to 3.3, 5.3.
 - [hook-store](../../../libs/hook-store/README.md): `STATE.md`, the `stale` status and `dirty` flag, `recover`, `gc`. Sections 3.2, 3.4, 5.4, 5.5. Used by 6.8.
 - [event-log](../../../libs/event-log/README.md): `events.jsonl` appends, `repair`, retention. Sections 5.3, 5.4, 9. Used by 6.3, 6.16.
-- budget-meter: Removed (ADR-0005). It was used only by 6.6.
 - [merge-queue](../../../libs/merge-queue/README.md): block reasons, `rerun_on_fail`, `flaky_suspected`. Sections 3.3, 5.3. Used by 6.9, 6.11.
 - [task-queue](../../../libs/task-queue/README.md): cycle and unknown-dependency rejection. Section 5.4. Used by 6.10.
 

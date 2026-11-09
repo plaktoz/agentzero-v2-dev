@@ -279,12 +279,6 @@ phases:
           test_results: "test_results"
         output_key: review_output
         required: true
-      - id: review-anti-slop
-        name: "Anti-slop pass"
-        maps_to: {pack: "anti-slop"}
-        inputs: {content: "build_result.diff"}
-        output_key: slop_check
-        required: true
 
   - name: SHIP
     label: "Phase 6: Ship"

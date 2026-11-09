@@ -54,7 +54,6 @@ umas cleanup [--dry-run]
 umas project register <name>
 umas project list
 umas project switch <name>
-# Removed (ADR-0005): umas project config --budget
 
 # Agents
 umas agents list
@@ -78,7 +77,6 @@ umas worktrees recover <name>
 
 # Metrics
 umas metrics tokens
-# Removed (ADR-0005): umas metrics cost
 umas metrics quality
 umas metrics agents
 
@@ -110,7 +108,6 @@ POST   /api/v1/work-bundles
 GET    /api/v1/work-bundles/{id}
 
 GET    /api/v1/metrics/tokens
-# Removed (ADR-0005): GET /api/v1/metrics/cost
 GET    /api/v1/metrics/quality
 
 WebSocket: /ws/events   (Phase 4 only)
@@ -234,7 +231,6 @@ Each row gives one result type. The same type feeds the default view, the `--jso
 | `umas project register <name>` | `POST /api/v1/projects` (proposed) | UMAS `register_project(name, path)`. Writes the `projects` row only. Does not touch the filesystem (from source: §5.9). `path` is `UNIQUE` (from source: §4 Projects) | `project: name`; `status: active` | `Project`: `id`, `name`, `status`, `path` | 0. 1 with `help: umas init --project` when init is missing (from source: §5.9) | Yes. A repeat call with the same path fails on the unique key. Idempotence not defined (Open 9) |
 | `umas project list` | `GET /api/v1/projects` (proposed) | UMAS `list_projects(status)`. Detects orphans on use (from source: §6.1 Detection) | `projects[n of m]{id,status}`; `by_status` | `ProjectList`: `projects[]`, `count`, `total`, `by_status` | 0 | Detection can set `orphaned`. Open 14 |
 | `umas project switch <name>` | None | No function in the sources (Open 11) | Not defined | Not defined | Not defined | Not defined (Open 11) |
-| `umas project config <name> --budget <tokens>` | `PATCH /api/v1/projects/{id}` | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) |
 
 **Agents**
 
@@ -273,8 +269,7 @@ The metrics-store lib gives the query for each `umas metrics` command (from sour
 
 | Command | REST | Calls | Default view | `--json` result and fields | Exit | Mutates, idempotent |
 |---------|------|-------|--------------|----------------------------|------|---------------------|
-| `umas metrics tokens` | `GET /api/v1/metrics/tokens` (from source: §7) | `query` on `token.used`, sum, grouped by `model`, `since` 7 days (from source: metrics-store §9) | `token.used n` per `model`; `window` | `TokenMetrics`: `window`, `groups[]` with `tags`, `count` and values | 0 | No |
-| `umas metrics cost` | `GET /api/v1/metrics/cost` | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) |
+| `umas metrics tokens` | `GET /api/v1/metrics/tokens` (from source: §7) | `query` on `token.used`, sum, grouped by `model` (the LLM model name), over all time by default; `since` narrows it | `token.used n` per `model`; `window` | `TokenMetrics`: `window`, `groups[]` with `tags`, `count` and values | 0 | No |
 | `umas metrics quality` | `GET /api/v1/metrics/quality` (from source: §7) | `query` on `test.coverage_pct`, `merge_queue.success_rate` and `error.p1_count`, average (from source: metrics-store §9) | One line per metric; `window` | `QualityMetrics`: `window`, `metrics[]` | 0 | No |
 | `umas metrics agents` | None in §7 (proposed `GET /api/v1/metrics/agents`) | `query` on `task.duration_ms`, p95, grouped by `agent_id` (from source: metrics-store §9) | One row per agent | `AgentMetrics`: `window`, `groups[]` | 0 | No |
 
@@ -307,7 +302,6 @@ Rows marked **src** come from the REST list in §7. All other rows are **propose
 | `POST /api/v1/system/cleanup` | `umas cleanup [--dry-run]` | proposed | Body `dry_run`, default not set (Open 20) | `system:admin` (proposed) | `CleanupReport` |
 | `GET /api/v1/projects` | `umas project list` | proposed | Query `status`: `active`, `orphaned` or `archived` (from source: §4 Projects) | `project:read` (proposed) | `ProjectList` |
 | `POST /api/v1/projects` | `umas project register <name>` | proposed | Body `name`; `path` (Open 11) | `project:write` (proposed) | `Project` |
-| `PATCH /api/v1/projects/{id}` | `umas project config <name> --budget` | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) |
 | `GET /api/v1/agents` | `umas agents list` | src | Query `status`, `project_id`, `limit` (proposed) | `agent:read` (proposed) | `AgentList` |
 | `POST /api/v1/agents` | `umas agents spawn --task <id>` | src | Body `task_id` (name proposed) | `agent:spawn` (named in A.5.6; the route mapping is proposed) | `AgentSession` |
 | `GET /api/v1/agents/{id}` | `umas agents status <agent-id>` | src | Path `id` | `agent:read` (proposed) | `AgentSession` |
@@ -331,10 +325,9 @@ Rows marked **src** come from the REST list in §7. All other rows are **propose
 | `GET /api/v1/worktrees` | `umas worktrees list` | proposed | Query `status`, `project_id` | `worktree:read` (proposed) | `WorktreeList` |
 | `POST /api/v1/worktrees/clean` | `umas worktrees clean --stale` | proposed | Body `stale`, default `true`; `dry_run` | `worktree:write` (proposed; Open 16) | `CleanReport` |
 | `POST /api/v1/worktrees/{name}/recover` | `umas worktrees recover <name>` | proposed | Path `name` | `worktree:write` (proposed; Open 16) | `RecoverResult` |
-| `GET /api/v1/metrics/tokens` | `umas metrics tokens` | src | Query `since`, `until`, `group_by` (proposed; metrics-store §4 `query` fields) | `metrics:read` (proposed) | `TokenMetrics` |
-| `GET /api/v1/metrics/cost` | `umas metrics cost` | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) |
-| `GET /api/v1/metrics/quality` | `umas metrics quality` | src | Query `since`, `until`, `group_by` (proposed) | `metrics:read` (proposed) | `QualityMetrics` |
-| `GET /api/v1/metrics/agents` | `umas metrics agents` | proposed | Query `since`, `until`, `group_by` (proposed) | `metrics:read` (proposed) | `AgentMetrics` |
+| `GET /api/v1/metrics/tokens` | `umas metrics tokens` | src | Query `since`, `until`, `group_by` (proposed; metrics-store §4 `query` fields) | `metrics:read` (decided, D21) | `TokenMetrics` |
+| `GET /api/v1/metrics/quality` | `umas metrics quality` | src | Query `since`, `until`, `group_by` (proposed) | `metrics:read` (decided, D21) | `QualityMetrics` |
+| `GET /api/v1/metrics/agents` | `umas metrics agents` | proposed | Query `since`, `until`, `group_by` (proposed) | `metrics:read` (decided, D21) | `AgentMetrics` |
 | `GET /api/v1/me` | `umas auth status` | proposed | None | Any authenticated principal (proposed) | `AuthStatus` |
 | `WS /ws/events` | None | src (Phase 4 only) | None | None defined | Event stream |
 | `GET /` | None | proposed. Serves the static page (from source: §1.5; ADR-0001) | None | None | HTML page |
@@ -371,7 +364,6 @@ The view is fast. Its output has a fixed set of fields, so an agent can read it 
 | `--now` | Flag | Off (from source: §6.14 default is wait) | CLI flag, `umas update` | Checkpoints and pauses active sessions before the update |
 | `--dry-run` | Flag | Not set (Open 20) | CLI flag, `umas cleanup`, `umas worktrees clean` | Reports what would be removed. Removes nothing |
 | `--stale` | Flag | Not set | CLI flag, `umas worktrees clean` (from source: §7) | Selects stale hooks |
-| `--budget` | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) |
 | `--task`, `--session`, `--agent` | Identifier | None. Required by the command | CLI flags (from source: §7) | Target of the command |
 | `--project` | Flag | Off | CLI flag, `umas init` (from source: §5.9) | Runs the per-repo init instead of the machine-wide init |
 | Home folder | Path | `~/.umas/` (from source: §5.9) | Fixed | Machine-wide state |
@@ -400,13 +392,12 @@ The "Who" column gives the A.5.4 roles that hold the capability. `S` means syste
 | Capability | Who (from source: A.5.4) | Permission | Commands |
 |-----------|--------------------------|-----------|----------|
 | View agents, tasks, work bundles and the merge queue | Admin S, Project Owner P, Developer P, Approver P, Operator S, Viewer S. Auditor no | None named. Proposed `agent:read` and `work:read` | `status`, `watch`, `agents list`, `agents status`, `work-bundle show` |
-| View metrics | Admin S, Project Owner P, Developer P, Approver P, Operator S, Auditor S, Viewer S | None named. Proposed `metrics:read` | `metrics *` |
+| View metrics | Admin S, Project Owner P, Developer P, Approver P, Operator S, Auditor S, Viewer S | `metrics:read` (decided, D21) | `metrics *` |
 | Submit a work request | Admin S, Project Owner P, Developer P | None named. Proposed `work:submit` | `request` |
 | Spawn an agent | Admin S, Project Owner P, Developer P. Only the Coordinator role spawns agents in the agent roles (from source: A.5.5) | `agent:spawn` | `agents spawn`, `agents resume`, `agents handoff` |
 | Stop or pause an agent | Admin S, Project Owner P, Developer P (own agents), Operator S. The Coordinator and Monitors stop agents in the agent roles (from source: A.5.5) | None named. Proposed `agent:stop` | `agents pause`, `agents reconcile`, `DELETE` route |
 | Approve a merge | Admin S, Project Owner P, Approver P | `merge:approve` | Not in this module. Owned by [verification](../verification/verification-spec.md) |
 | Approve one's own change | No built-in role. Granted by an Admin or Project Owner (from source: A.5.4 Self-approval) | `merge:approve_own` | Not in this module |
-| Set a project budget | Removed (ADR-0005) | Removed (ADR-0005) | Removed (ADR-0005) |
 | Change project configuration | Admin S, Project Owner P | `config:write` (named in A.5.6 example) | Not used by a command in §7. Open 29 |
 | Change system configuration | Admin S only (from source: A.5.4 row "Change system configuration") | None named. Proposed `config:write` at system scope (Open 29) | `umas update` |
 | Create or delete a project | Admin S only | None named. Proposed `project:write` | `project register` |
@@ -437,7 +428,6 @@ The "Who" column gives the A.5.4 roles that hold the capability. `S` means syste
 | [verification](../verification/verification-spec.md) | Reads queue state with `status`. Sends `requeue` for retry. Creates the merge-queue worktree with `init` (Open 6) | Function call, merge-queue lib | Sync |
 | [monitoring](../monitoring/monitoring-spec.md) | Starts and stops the daemon. Runs watchdog `check_once` for health. Reads heartbeats for the staleness warning. Requests reconcile | IPC to the daemon (Open 1), function call, file read | Sync for commands. The daemon runs async |
 | [exception-flows](../exception-flows/exception-flows-spec.md) | Shows the states and next commands that section 6 defines. The flows own the rules | Reads only | Sync |
-| budget-and-models (now [models-and-usage](../models-and-usage/models-and-usage-spec.md)) | Removed (ADR-0005) | | |
 | [access-control](../access-control/access-control-spec.md) | Runs the permission check on every route. Writes audit events. Owns sign-in for `auth login` | Function call, event append | Sync |
 
 ### 7. Libraries and packs used
@@ -447,7 +437,6 @@ The "Who" column gives the A.5.4 roles that hold the capability. `S` means syste
 - **[agent-session](../../../libs/agent-session/README.md):** `create`, `status`, `pause`, `handoff` and `recover` for the agent commands and `debug context` (from source: agent-session §4).
 - **[task-queue](../../../libs/task-queue/README.md):** `get`, `graph` and `list` for `work-bundle show` and the task routes. The concurrency cap `max_claimed` gates `agents spawn` (from source: task-queue §4).
 - **[merge-queue](../../../libs/merge-queue/README.md):** `status` for the queue line in `status`. `requeue` for retry. `init` for the merge-queue worktree (from source: merge-queue §4).
-- **budget-meter:** Removed (ADR-0005).
 - **[metrics-store](../../../libs/metrics-store/README.md):** `query` for all `metrics` commands, and `token.used` for `metrics tokens` (from source: metrics-store §9).
 - **[watchdog](../../../libs/watchdog/README.md):** `check_once` for `health-check`. It has no side effects (from source: watchdog §4).
 - **[error-classifier](../../../libs/error-classifier/README.md):** The error record and typed codes for the error block (from source: error-classifier §3.3).
@@ -465,7 +454,6 @@ The "Who" column gives the A.5.4 roles that hold the capability. `S` means syste
 | Stale or dirty worktree | §6.8 | `worktrees list` shows `dirty`. `clean --stale` keeps `stale-dirty` hooks |
 | Update while sessions are active | §6.14 | `update` waits unless `--now` is given. The output lists the active sessions |
 | Disk full | §6.16 | A write command exits 1 with the disk error. `cleanup --dry-run` shows the recoverable space |
-| Budget exhausted | §6.6 | Removed (ADR-0005) |
 | Provider failure with no fallback | §6.7 | `agents resume` is the human recovery. It exits 1 when the session is not resumable |
 | Merge bisect finds no clean subset | §6.9 | `work-bundle retry --reset-retries` resets the failure count (Open 25) |
 | Dependency deadlock or rejected bundle | §6.10 | `request` exits 1 and names the cycle or the dangling reference |
@@ -540,8 +528,6 @@ Each item states the decision it needs and a recommendation. No item is decided 
 
 **Open 29.** Permission for `umas update` and system configuration. A.5.4 gives "Change system configuration" to Admin only, with no name. `config:write` is named in A.5.6 without a scope. Decision (owner: access-control): the name and scope. Recommendation: `config:write` at system scope.
 
-**Open 30.** Removed (ADR-0005).
-
 **Open 31.** The shutdown grace window is 30 seconds (from source: §6.17), and "configurable". The config key is not named. Decision: the key and its file. Recommendation: `grace_seconds` in `umas.config.yaml`, under a `daemon` block.
 
 ## AXI support
@@ -595,7 +581,7 @@ Scope: every command in §7 and the no-argument view. The rules come from [CLI C
 
 1. Encoding, TOON or plain key-value. This is libs open point 1. It is Open 4 in this spec. The default view encoding is not settled.
 2. Exit 1 for a judging command. This is libs open point 2. `health-check` is the judging command here (Open 14). Not decided.
-3. Removed (ADR-0005). This was libs open point 3.
+3. Removed. This was libs open point 3.
 4. Session-start hook platforms. This is libs open point 4. The consuming application installs the hook. Which agent platform gets it is not decided here.
 5. Shared encoder package. This is libs open point 5. For UMAS, build step (c) uses a local encoder.
 6. Medium-fit libs adopting the rules. This is libs open point 6. Not relevant to this module.

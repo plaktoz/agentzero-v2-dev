@@ -1,11 +1,9 @@
-# UMAS Build Token Budget Assessment
+# UMAS Build Token Estimate
 
 > Estimate of LLM token cost to fully implement the Unified Multi-Agent Development System.
 > Based on the reconciled document set as of this assessment.
 > Read alongside [`TECHNICAL-DESIGN-SUMMARY.md`](./TECHNICAL-DESIGN-SUMMARY.md) for full context.
 > **Re-based 2026-10-25 (provisional):** the stack is Python, with TypeScript only where no Python option exists ([`TECHNICAL-DESIGN-SPEC.md`](./TECHNICAL-DESIGN-SPEC.md#a46-language-decision) Appendix A.4.6), and the dashboard is the static HTML page from [ADR-0001](../docs/decisions/ADR-0001-minimal-html-dashboard.md). The realistic total moved from ~162M to ~154M. The minimum and upper-bound scenarios were not re-based.
-
-> **Runtime budgets removed (ADR-0005, 2026-11-09).** This file estimates the effort to build UMAS, not runtime token budgets. The figures were not recomputed after the budget work was removed: upper bound; library reduced by ADR-0005 (`budget-meter` became `token-ledger`). The file has no per-library row, so the 154M / 86M / 270M totals are unchanged.
 
 ---
 
@@ -86,7 +84,7 @@ Build in phases, each independently testable before proceeding. Validates the co
 **Delivers:** One agent can complete a task end-to-end
 
 - `WorkerAgent` — full execution, `[umas:done]` / `[umas:checkpoint]` signalling, handoff
-- `MinimalismEnforcer` — ladder rungs 1, 2 and 6 as a prompt in `packs/minimalism-ladder`; rungs 3 to 5 were stubs in the source code and are covered by the prompt
+- `MinimalismEnforcer` — ladder rungs 1, 2 and 6 as a prompt in agent-garage `skills/minimalism-ladder`; rungs 3 to 5 were stubs in the source code and are covered by the prompt
 - `MergeQueueProcessor` — permanent worktree, batch + bisect algorithm
 - `TestRunner` — pytest/jest/cargo support (port of the Rust source design to Python)
 - Exception flows: §4.1–§4.8 (project deletion, corrupted `.umas/`, stale worktrees)
@@ -134,17 +132,14 @@ Build in phases, each independently testable before proceeding. Validates the co
 
 ---
 
-## Token Cost Reference (Anthropic Claude)
+## Token Totals by Phase
 
-Estimates above assume Claude 3.5 Sonnet at approximately $3/M input + $15/M output tokens, with an average 60/40 input/output split across a development session. The model and prices are the source's basis and are stale; the cost column is only a ratio.
+| Phase | Realistic tokens |
+|-------|-----------------|
+| Phase 1 | 40M |
+| Phase 2 | 45M |
+| Phase 3 | 50M |
+| Phase 4 | 19M |
+| **Total (realistic)** | **154M** |
+| Upper bound (not re-based) | 270M |
 
-| Phase | Realistic tokens | Approximate cost |
-|-------|-----------------|-----------------|
-| Phase 1 | 40M | ~$340 |
-| Phase 2 | 45M | ~$380 |
-| Phase 3 | 50M | ~$425 |
-| Phase 4 | 19M | ~$162 |
-| **Total (realistic)** | **154M** | **~$1,309** |
-| Upper bound (not re-based) | 270M | ~$2,295 |
-
-> Costs are indicative only. Actual cost depends on provider, model choice, context window reuse, and caching.

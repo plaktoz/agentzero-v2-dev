@@ -1,1 +1,0 @@
-The new cache greatly improves performance. Users notice that the service is much more reliable now.

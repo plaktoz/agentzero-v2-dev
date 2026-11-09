@@ -1,6 +1,6 @@
 # Content Packs
 
-> Nine reusable prompt-and-rule packs. Each is plain text (Markdown, YAML, JSON Schema) that any agent harness can load without modification. None assumes a specific model, tool, or consuming application.
+> Seven reusable prompt-and-rule packs live in this repo; two more (minimalism-ladder, anti-slop) are pointers to agent-garage. Each is plain text (Markdown, YAML, JSON Schema) that any agent harness can load without modification. None assumes a specific model, tool, or consuming application.
 >
 > **Status:** Draft v0.1 · **Date:** October 21, 2026
 > **Used by:** [UMAS](../umas/TECHNICAL-DESIGN-SUMMARY.md) and any agent workflow that needs these capabilities independently.
@@ -12,8 +12,8 @@
 
 | Pack | One-line purpose | Standalone use |
 |------|------------------|----------------|
-| [minimalism-ladder](./minimalism-ladder/minimalism-ladder-spec.md) | A six-rung check an agent runs after reading the code and before writing any, plus scope, bug-fix, test and never-cut rules | Cuts needless code in any coding agent. Portable skill set listed in its spec section 3 (ADR-0006) |
-| [anti-slop](./anti-slop/anti-slop-spec.md) | **KIV (parked 2026-10-27).** Built but not accepted; see [docs/tasks-skills-claude-mods-2026-10-25.md](../docs/tasks-skills-claude-mods-2026-10-25.md), task 3. Writing and code rules plus a two-pass review that removes generic AI patterns without touching facts | A review skill for docs and code in any repo |
+| [minimalism-ladder](https://github.com/plaktoz/agent-garage) | A six-rung check an agent runs after reading the code and before writing any, plus scope, bug-fix, test and never-cut rules. Lives in agent-garage (`skills/minimalism-ladder`) since 2026-11-09; its source pack was removed from this repo (ADR-0006 Q1(a) reversed) | Cuts needless code in any coding agent |
+| [anti-slop](https://github.com/plaktoz/agent-garage) | **Superseded (2026-11-09)** by `unslop` in agent-garage (`skills/unslop`); the pack folder was removed and is in git history at `44c1ef6` (earlier status: KIV, see [docs/tasks-skills-claude-mods-2026-10-25.md](../docs/tasks-skills-claude-mods-2026-10-25.md), task 3). `unslop` covers prose only; the code rules, linter and two-pass review were not carried over | A review skill for docs and code in any repo |
 | [communication-modes](./communication-modes/communication-modes-spec.md) | **KIV (parked 2026-10-27).** Two registers (compact for agents, plain for humans) with intensity levels. The routing table is removed by owner decision; the spec text still lists it until revised. See [docs/tasks-communication-modes.md](../docs/tasks-communication-modes.md) | Token savings in agent-to-agent text, clarity in human-facing text |
 | [two-axis-review](./two-axis-review/two-axis-review-spec.md) | **KIV (parked 2026-10-28).** Replaced by the installed `code-review` skill. Independent Standards and Spec review passes, one finding format, severity-based gating | A PR review skill for any team |
 | [specialist-agents](./specialist-agents/specialist-agents-spec.md) | Prompts and output contracts for Analyst, Product Manager, UX Designer, Architect, Developer | A lightweight planning-to-code pipeline |
@@ -56,7 +56,7 @@ A pack that breaks one of these is defective.
 
 ```text
 <pack>/
-  <pack>-spec.md   # the spec: design record (for example anti-slop/anti-slop-spec.md)
+  <pack>-spec.md   # the spec: design record (for example grilling/grilling-spec.md)
   PACK.md          # metadata + the prompt/rules text (the deliverable)
   schema/*.json    # input and output JSON Schemas
   fixtures/*.yaml  # { id, input, expect: [property ...] }
@@ -101,13 +101,13 @@ request --> grilling --> alignment summary --+
         |                                  |                       |
         |            uses                  | uses    phase loop:   |
         v                                  v         gates + escape|
- communication-modes (artifact register)   minimalism-ladder + test-policy
+ communication-modes (artifact register)   minimalism-ladder (agent-garage) + test-policy
         |
         v
- anti-slop (second pass over human-facing text and code)
+ unslop (agent-garage; second pass over human-facing text, prose only)
 
  diff --> two-axis-review --> findings (severity gate)
-                 uses: anti-slop code rules (Standards axis), test-policy (Standards axis)
+                 uses: test-policy (Standards axis); anti-slop code rules were not carried into unslop
 
  playbook-runner wraps the pipeline above; each playbook step calls one pack or agent role.
  Without a playbook, the pipeline runs in the default implicit sequence (unchanged).
@@ -117,7 +117,7 @@ request --> grilling --> alignment summary --+
 
 ## Suggested Build Order
 
-1. **minimalism-ladder** and **anti-slop**: highest value, smallest, and the others reference them.
+1. **minimalism-ladder** and **anti-slop**: done. Both moved to agent-garage on 2026-11-09 (`minimalism-ladder`; anti-slop superseded by `unslop`).
 2. **two-axis-review**: KIV (parked 2026-10-28); `code-review` replaces it. Needs fixtures from the first two to test the Standards axis.
 3. **test-policy** and **communication-modes**.
 4. **router-heuristic** and **grilling**: both are only useful once there is something to route to.
