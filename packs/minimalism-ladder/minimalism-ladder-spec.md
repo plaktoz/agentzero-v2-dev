@@ -1,7 +1,7 @@
 # minimalism-ladder
 
 > Standalone content-pack spec · Draft v0.1 · Part of [packs/README.md](../README.md)
-> **Independence:** no dependency on UMAS or any tool. A prompt, a rule set, and a record format.
+> **Independence:** no dependency on any other project or tool. A prompt, a rule set, and a record format. `PACK.md` is the portable skill; sections 9 and 12 of this spec are consumer notes and are not part of it (see 3).
 > `pack_version: 0.1.0`
 
 ---
@@ -16,24 +16,28 @@ Make a coding agent solve the problem before it writes code. The agent reads the
 - The six-rung ladder and its stop rule
 - The "read first" precondition
 - The shortcut comment format for deliberate deferrals
+- Four rules adapted from ponytail (MIT): scope, bug fixes, tests for new logic, never cut
 - Three enforcement levels (lite, full, ultra)
 - A short record the agent emits so a reviewer can check the reasoning
 - Metrics definitions
 
 **Non-goals**
-- Reading, scoping, or analysing the task. The ladder is explicitly lazy about the solution and never about reading or scope analysis.
+- Doing the reading or scoping for the agent. The ladder requires both before it runs (5.3, 5.7) but does not define how a codebase is searched.
 - Judging design quality. That is the Architect's and the reviewers' job.
-- Tracking debt. The format is defined here; a scanner is [decision-artifacts](../../libs/decision-artifacts/README.md).
+- Tracking debt. The format is defined here; a scanner is a separate tool.
 - Guaranteeing savings. See 10 for the unverified claims.
 
 ## 3. Pack Contents and Format
 
 | File | Purpose |
 |------|---------|
-| `PACK.md` | Prompt (5.1), rules (5.2 to 5.4), level definitions (5.5) |
+| `PACK.md` | Prompt (5.1), rules (5.2 to 5.4, 5.7 to 5.10), level definitions (5.5), credits and the MIT text |
 | `schema/ladder-record.json` | Output record (4.2) |
-| `fixtures/*.yaml` | F1 to F8 (8) |
+| `fixtures/*.yaml` | F1 to F12 (12). F9 to F12 are expected, not run |
 | `config.yaml` | `level`, `enforce`, `record` (section 6) |
+| `scripts/check_evidence.py`, `tests/` | Evidence check and its tests |
+
+**Portable set.** `PACK.md`, `config.yaml`, `schema/`, `fixtures/*.yaml`, `scripts/`, `tests/`. This spec, `fixtures/RESULTS.md` and `SKILL-ASSESSMENT.md` are records for the project that owns the pack and are not copied (ADR-0006).
 
 ## 4. Contract
 
@@ -126,6 +130,22 @@ The source names the levels but does not define them. This pack defines them as 
 
 `code_avoided` is an estimate and is labelled as one wherever it is shown.
 
+### 5.7 Scope
+
+After reading and before the ladder, the agent lists every place the change must reach (callers, tests, fixtures, config, exports, public interfaces) and what it could break for users. The list is in the answer, not in the record. The ladder bounds the solution, never the reach.
+
+### 5.8 Bug fixes
+
+Before editing a function to fix a bug, the agent searches for every caller and fixes the root cause once in the shared code. If callers need different behaviour it says so and fixes only what was asked.
+
+### 5.9 Tests for new logic
+
+New non-trivial logic (a branch beyond a trivial guard, a loop, a parser, money, security, state that depends on ordering or retries, or a new script or app) needs one small test or assert-based check, named in `notes`. A trivial change needs none. Where a test policy is in use, it decides whether a missing test blocks; this rule only says new logic is not left unchecked. The kinds are worded to match the risky-logic kinds of the test-policy pack.
+
+### 5.10 Never cut
+
+Kept at every rung and level: validation at trust boundaries; error handling that prevents data loss; security; accessibility in user interfaces; values real hardware or an external system needs; anything the task asked for. Moved or merged code keeps its error handling and validation.
+
 ## 6. Configuration
 
 ```yaml
@@ -161,6 +181,10 @@ require_evidence_rungs: [1, 2, 3, 4]
 | F6 | Feature not asked for appears in the plan ("also add caching") | Rung 1: dropped, recorded in `notes` |
 | F7 | Task requires input validation | Validation is written; the ladder does not remove it |
 | F8 | A deferral is needed | Comment matches the shortcut format; a version lacking "when to fix" is rejected |
+| F9 | Rename a field used by two callers, a test and a config file | Reach is listed first; callers, test and config are updated. Expected, not run |
+| F10 | Bug in a shared function with two callers | Callers searched; fixed once in the shared code; test covers the failing input. Expected, not run |
+| F11 | Move a function that writes a file atomically | Temp file and replace are kept; the import is updated. Expected, not run |
+| F12 | New fee function with a threshold and a special case | Written with a test or check on the boundary; `notes` names it. Expected, not run |
 
 ### 8.2 Acceptance criteria
 
@@ -195,6 +219,9 @@ Extracted from `UMAS-TECH-DESIGN-SPEC.md` §3.3, `TECHNICAL-DESIGN-SPEC-PART3.md
 | Evidence required | A claim of reuse with no pointer is the typical hallucination |
 | "Rung 1 never skips a requested feature" stated | Prevents the ladder being used to refuse work |
 | Savings figures marked unverified | The 53, 26, and 41 percent figures have no stated baseline or sample |
+| Scope, bug-fix, test and never-cut rules added (5.7 to 5.10) | Adapted from ponytail (MIT, DietrichGebert, commit 96608e0). The wording is this pack's own and the licence text is in `PACK.md`. Ponytail's levels and slash commands are not adopted; its reply closing line is not added |
+| Rules have no record field | The scope list and the test cannot be checked from the record. A field would change the schema and `check_evidence.py` |
+| `pack_version` stays 0.1.0 | A 0.2.0 stamp would claim rules no fixture run shows (ADR-0006) |
 | Enforcer code not specified | Rungs 3 to 5 were stubs; an LLM prompt covers them. A future static checker can be added without changing this pack |
 
 ## 11. Open Questions

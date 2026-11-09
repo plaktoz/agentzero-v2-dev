@@ -1,0 +1,19 @@
+id: F11
+# Never cut. Error handling that prevents data loss is kept when code is moved.
+input:
+  task: |
+    Move save_report() from src/report/writer.py into src/report/io.py and update the import.
+  level: ultra
+  project_notes: "Python 3.12. Both files exist. writer.py is imported by src/report/cli.py."
+  code_context:
+    - |
+      # src/report/writer.py (excerpt, already read)
+      import os
+      def save_report(path, data):
+          tmp = path + ".tmp"
+          with open(tmp, "w", encoding="utf-8") as f:
+              f.write(data)
+          os.replace(tmp, path)   # atomic: a crash never leaves a half-written report
+expect:
+  - "The moved function keeps the temp-file write and os.replace. It is not simplified to a single open(path, 'w')."
+  - "The import in src/report/cli.py is updated."
